@@ -349,3 +349,94 @@ Aucun ne bloque le lot 1. Tous doivent être tranchés avant les lots qu'ils con
 **Knip et jscpd peuvent produire du bruit.** Traité par la déclaration explicite des points d'entrée et par la consignation des faux positifs. Si le bruit persiste au lot 2, la configuration se corrige — l'outil ne se désactive pas.
 
 **Une dépendance du harnais peut devenir non maintenue.** Dependabot le signale ; le franchissement détecte le jour même qu'un contrôle a cessé de mordre.
+
+---
+
+## 14. Le workflow agentique
+
+### 14.1 Un seul point d'entrée de vérification
+
+`npm run verify` enchaîne lint, format, types, tests, couverture, Knip et build. **C'est la seule commande qu'appellent le hook pre-push et la CI** — pas une liste dupliquée dans le workflow GitHub, sous peine de voir les deux diverger et la CI vérifier autre chose que le local.
+
+Motif : une suite qui a deux points d'entrée dont un seul est lancé par habitude n'est pas une suite. Le risque n'est pas théorique — un contrôle qui existe, fonctionne, et que rien n'appelle laisse passer des chantiers entiers en affichant « zéro échec ».
+
+`verify` **affiche sa durée**. Au-delà de **45 secondes en local**, c'est un défaut à traiter au même titre qu'un test rouge : `08-workflow.md` § 5 pose que « si le build prend deux minutes, l'agent tourne en rond », mais rien ne mesure ce temps, donc personne ne le verrait dériver.
+
+### 14.2 Journal des décisions
+
+`docs/decisions.md`, **lu au démarrage de chaque session, pas rempli à la fin**. Un enregistrement par décision : ce qui a été tranché, le motif, et **ce qui la rouvrirait**. Une décision qu'on ne relit pas au démarrage se reprend — et le débat recommence trois semaines plus tard sans que personne se souvienne pourquoi il avait été clos.
+
+Les décisions de la section 2 y entrent le jour où le lot 1 démarre.
+
+### 14.3 Rapport de fin de lot
+
+`docs/gabarit-rapport-lot.md`, appliqué à chaque fin de lot, quatre sections :
+
+1. **Ce qui a changé** — fichiers, compteurs, avant/après
+2. **Ce qui a cassé** — y compris ce qui a été cassé puis rattrapé
+3. **Ce que je signale sans y avoir touché** — trouvé en chemin, hors périmètre
+4. **Le franchissement** — la preuve que le garde-fou mord, pas sa relecture
+
+S'y ajoutent, pour chaque lot : ce qui n'a **pas** pu être vérifié, nommément, et les agents ou skills invoqués — avec, pour ceux qui ne l'ont pas été, pourquoi.
+
+### 14.4 Les agents du workflow
+
+**Aucun agent, skill ou hook n'est créé.** `08-workflow.md` § 7 : « Utiliser exclusivement Superpowers et les agents publiés sur les marketplaces publiques. » La contrepartie est qu'il faut les **employer**.
+
+| Étape | Agent ou skill | Source |
+|---|---|---|
+| Clarification avant conception | `superpowers:brainstorming` | superpowers |
+| Plan d'implémentation | `superpowers:writing-plans` | superpowers |
+| Exécution par lots | `superpowers:executing-plans`, `subagent-driven-development` | superpowers |
+| TDD à chaque tâche | `superpowers:test-driven-development` | superpowers |
+| Débogage | `superpowers:systematic-debugging` | superpowers |
+| Avant de déclarer terminé | `superpowers:verification-before-completion` | superpowers |
+| Demander la revue | `superpowers:requesting-code-review` | superpowers |
+| Recevoir la revue | `superpowers:receiving-code-review` | superpowers |
+| Fin de branche | `superpowers:finishing-a-development-branch` | superpowers |
+| Isolation, parallélisme | `using-git-worktrees`, `dispatching-parallel-agents` | superpowers |
+| Commits | `commit-commands:commit` | officiel |
+
+**Revue entre tâches** — `pr-review-toolkit` :
+
+| Agent | Ce qu'il traque |
+|---|---|
+| `code-reviewer` | conventions du projet |
+| `silent-failure-hunter` | `catch` silencieux et replis masquant une erreur — exigé nommément par `08-workflow.md` § 6 |
+| `pr-test-analyzer` | couverture réelle des cas limites |
+| `type-design-analyzer` | invariants exprimés par les types |
+| `comment-analyzer` | commentaires qui mentent sur le code |
+
+**Par domaine** :
+
+| Besoin | Agent | Lot |
+|---|---|---|
+| Scan OWASP de fin de lot | `claude-security:scan`, `/security-review`, `semgrep` | tous |
+| Modèle de menace | `threat-modeling-expert` | 1 |
+| Conformité RGPD | `gdpr-ccpa-compliance` | 3, 6, 7 |
+| Audit de conformité | `compliance-auditor` | 7 |
+| Code front sécurisé | `frontend-security-coder` | 2, 4 |
+| API et back sécurisés | `backend-api-security-backend-security-coder` | 4, 6 |
+| TypeScript avancé | `typescript-pro` | tous |
+| Accessibilité WCAG | `accessibility-expert` | 2 |
+| Jetons et système de design | `design-system-architect` | 2 |
+| Schéma PostgreSQL et RLS | `database-design-database-architect` | 3 |
+| Pipeline CI/CD | `cicd-automation-deployment-engineer` | 1, 7 |
+| Documentation de bibliothèques | `context7` (MCP) | tous |
+| Tests navigateur | `playwright` (MCP) | 1, 2 |
+
+Marketplace ajoutée au dépôt : `VoltAgent/awesome-claude-code-subagents` (MIT, 24 461 étoiles, actif). Plugins activés : `voltagent-qa-sec`, `voltagent-domains`, `voltagent-biz`, `voltagent-meta`.
+
+**`voltagent-meta` est une dépendance technique, pas un choix.** `seo-specialist` et `compliance-auditor` commencent tous deux par solliciter un `context-manager` qu'ils ne déclarent pas ; il vit dans cette catégorie. Sans elle, ces deux agents interrogeraient un interlocuteur absent.
+
+### 14.5 Ce qui n'a pas d'agent, et n'en aura pas
+
+**Internationalisation.** Aucun agent publié ne couvre le besoin — vérifié sur les 198 agents de VoltAgent et par recherche GitHub. Et un agent de traduction serait partiellement contraire au dossier : `11-qualite.md` § 3 impose que « les libellés nutritionnels validés par le diététicien sont traduits **puis revalidés**, jamais traduits automatiquement ». Le besoin réel — aucune chaîne en dur, aucune clé orpheline, aucune clé manquante — est couvert de façon bloquante par `eslint-plugin-i18next` et Knip. Un contrôle déterministe vaut mieux qu'un relecteur probabiliste.
+
+**Conformité informer/prescrire.** Même raisonnement, et il est écrit dans `01-conformite.md` : la ligne se tient par un **filtre de sortie testé unitairement**, pas par un jugement. `tests/compliance/` en est le gardien, et `08-workflow.md` § 6 lui donne le pouvoir de bloquer le déploiement.
+
+### 14.6 Le seed conditionne la vérifiabilité
+
+`16-projet.md` § 4 : « Sans seed, l'application est inutilisable en développement et **Claude Code ne peut rien vérifier** », et « sans historique, la moitié des écrans ne peut pas être vérifiée ».
+
+Le compte de démonstration avec quatre semaines de données réalistes n'est donc pas un agrément mais une **condition de sortie du lot 3**, sans laquelle les courbes, le radar et le TDEE adaptatif ne sont pas contrôlables.
