@@ -1,6 +1,6 @@
 {
   "model": "claude-opus-5",
-  "effortLevel": "xhigh",
+  "effortLevel": "max",
   "env": {
     "CONTRAT_DE_SORTIE": "0"
   },
