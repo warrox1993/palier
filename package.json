@@ -1,24 +1,19 @@
 {
-  "name": "appmuscu",
+  "name": "palier",
   "version": "1.0.0",
-  "description": "Dossier de spécification destiné à Claude Code.",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "private": true,
+  "description": "Application de suivi de musculation et de nutrition, pour éviter les excès et les blessures.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/warrox1993/palier.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
   "type": "module",
   "engines": {
     "node": "24.x"
