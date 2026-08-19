@@ -146,3 +146,46 @@ La règle graduée de `02-design.md` § 5 — valeur, fourchette, limite haute, 
 `recent.design` (ex-Godly) : curation quotidienne, filtrable par **Motion**, **Interface**, **Typography**, **App Screenshots**. C'est la source la plus dense pour observer le mouvement et les interfaces réelles.
 
 **Limite à connaître :** une capture ne montre pas le mouvement. Les animations se jugent en regardant, pas en lisant une description — c'est le seul point de ce document qui demande un œil humain devant un écran.
+
+---
+
+## 10. Le mouvement — valeurs mesurées, non inventées
+
+Relevé le 19 août 2026 en interrogeant directement le style calculé de trois références de premier plan. Ce ne sont pas des impressions : ce sont les valeurs que ces produits appliquent réellement.
+
+| Référence | Courbe dominante | Durées principales | Variantes déclarées |
+|---|---|---|---|
+| **Linear** | `cubic-bezier(0.25, 0.46, 0.45, 0.94)` | 0,10 s · 0,16 s · 0,40 s | 20 courbes déclarées, **une seule utilisée** |
+| **Stripe** | `cubic-bezier(0.25, 1, 0.5, 1)` | 0,30 s — 477 occurrences contre 58 à la suivante | 22 variantes, une écrasante |
+| **Vercel** | `cubic-bezier(0.4, …)` | 0,10 s · 0,15 s | 17 variantes, 45 % sur la dominante |
+
+### Trois constantes
+
+1. **Une courbe domine massivement.** Linear déclare vingt courbes d'accélération dans ses variables CSS et n'en emploie qu'une. La discipline n'est pas d'avoir une belle bibliothèque : c'est de ne pas s'en servir.
+2. **Toutes sont des sorties douces.** Départ rapide, arrivée en ralenti. Jamais d'entrée douce sur le mouvement courant — c'est ce qui donne la sensation de réponse immédiate au geste.
+3. **Deux à trois durées, pas plus.** Les plus fréquentes sont courtes, 0,10 à 0,16 s. Les durées longues sont réservées aux grands changements : fonds, panneaux, un moment expressif.
+
+### Confrontation avec `02-design.md` § 6
+
+Les trois animations prévues résistent à l'épreuve :
+
+| Animation | Durée prévue | Verdict |
+|---|---|---|
+| Le repère de la règle qui glisse | 400 ms | correspond au cran long des trois références. Justifié : c'est le seul moment expressif du produit |
+| Validation d'une série, bordure au vert | 150 ms | correspond exactement au cran courant mesuré partout |
+| Décompte du minuteur | linéaire | correct — un décompte non linéaire mentirait sur le temps écoulé |
+
+**Ce que le § 6 ne prévoit pas :** le retour immédiat au doigt. Les trois références consacrent 0,10 s à la couleur au survol ou à l'appui. Sur un produit tenu d'une main entre deux séries, l'état actif est ce qui confirme que l'appui a été pris.
+
+### L'échelle retenue
+
+```
+--duree-instant   : 100ms   couleur, état actif, retour au doigt
+--duree-courante  : 150ms   validation d'une série, apparition d'un élément
+--duree-longue    : 400ms   le repère de la règle, seul moment expressif
+--courbe          : cubic-bezier(0.25, 0.46, 0.45, 0.94)   sortie douce, unique
+```
+
+Trois durées, une courbe, rien d'autre. Sous `prefers-reduced-motion`, tout passe à zéro — `11-qualite.md` l'impose déjà.
+
+**Mécanisable :** une règle de lint refuse toute `transition-duration` et toute `cubic-bezier` qui ne soit pas l'un de ces jetons. C'est la réponse directe au défaut le plus courant du mouvement généré — des micro-interactions éparpillées sans langage commun.
