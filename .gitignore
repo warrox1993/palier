@@ -1,8 +1,11 @@
+front/node_modules/
+front/dist/
+front/coverage/
+front/playwright-report/
+front/test-results/
+back/**/bin/
+back/**/obj/
 node_modules/
-dist/
-coverage/
-playwright-report/
-test-results/
 .env
 .env.local
 *.local

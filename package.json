@@ -1,0 +1,14 @@
+{
+  "name": "palier",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Application de suivi de musculation et de nutrition, pour éviter les excès et les blessures.",
+  "type": "module",
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "verify": "node scripts/verify.mjs",
+    "front": "npm --prefix front run",
+    "front:dev": "npm --prefix front run dev"
+  }
+}
