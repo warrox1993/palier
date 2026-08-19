@@ -8,7 +8,7 @@
 
 **Architecture :** un dépôt à deux moitiés, `front/` en React et TypeScript, `back/` en C# suivant la Clean Architecture. Chaque garde-fou est installé selon un cycle rouge-vert : on écrit d'abord l'épreuve — une violation délibérée placée hors du build normal — on la voit passer faute de garde-fou, on installe le garde-fou, l'épreuve constate le refus. Une commande unique, `npm run verify` à la racine, enchaîne les deux moitiés ; le hook de pré-envoi et la CI n'appellent qu'elle.
 
-**Pile technique :** Vite, React, TypeScript, ESLint 9, Prettier, Vitest, Playwright, axe-core, Knip, jscpd, Husky, gitleaks, Semgrep · .NET 10, xUnit, coverlet, analyseurs Roslyn, `dotnet format` · GitHub Actions.
+**Pile technique :** Vite, React, TypeScript, Oxlint et tsgolint, Prettier, Vitest, Playwright, axe-core, Knip, jscpd, Husky, gitleaks, Semgrep · .NET 10, xUnit, coverlet, analyseurs Roslyn, `dotnet format` · GitHub Actions.
 
 **Spec :** `docs/superpowers/specs/2026-08-19-architecture-backend-csharp-design.md`
 
@@ -82,7 +82,7 @@ Livrée le 19/08/2026. Ce qu'elle a produit : Vitest, et la fonction `lancerOuti
 ## Tâche 3 : Réorganiser en `front/` et `back/`
 
 **Fichiers :**
-- Déplacer : `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts`, `vitest.config.ts`, `index.html`, `src/`, `tests/`, `.prettierrc`, `.prettierignore`, `eslint.config.js` (s'il existe) → `front/`
+- Déplacer : `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts`, `vitest.config.ts`, `index.html`, `src/`, `tests/`, `.prettierrc`, `.prettierignore` → `front/`
 - Modifier : `.gitignore`, `.husky/pre-commit`, `.husky/pre-push`
 - Créer : `package.json` à la racine (orchestration seulement)
 
@@ -109,7 +109,6 @@ git mv package.json package-lock.json tsconfig.json tsconfig.node.json front/
 git mv vite.config.ts vitest.config.ts index.html front/
 git mv src tests front/
 git mv .prettierrc .prettierignore front/ 2>/dev/null || true
-[ -f eslint.config.js ] && git mv eslint.config.js front/
 [ -f .env.example ] && git mv .env.example front/
 git status
 ```
@@ -275,130 +274,90 @@ git commit -m "éprouve le refus du any par le typecheck"
 
 ---
 
-## Tâche 5 : ESLint — règles de base et de nommage
+## Tâche 5 : Oxlint — socle et règles syntaxiques
 
 **Fichiers :**
-- Créer : `eslint.config.js`, `tests/harness/fixtures/nommage-Invalide.ts`, `tests/harness/eslint-base.test.ts`
-- Modifier : `package.json` (script `lint`)
+- Créer : `front/.oxlintrc.json`, `front/tests/harness/fixtures/any-explicite.ts`, `front/tests/harness/fixtures/nommage-Invalide.ts`, `front/tests/harness/oxlint-base.test.ts`
+- Modifier : `front/package.json` (script `lint`)
 
 **Interfaces :**
-- Consomme : `lancerOutil`
-- Produit : `npm run lint`, et le fichier `eslint.config.js` que les tâches 5 et 6 enrichissent sans le recréer.
+- Consomme : `lancerOutil` de la tâche 2
+- Produit : `npm --prefix front run lint`, et le fichier `.oxlintrc.json` que les tâches 6 et 7 enrichissent sans le recréer.
+
+> **Pourquoi Oxlint et non ESLint.** `typescript-eslint` 8.67.0, publié le 10/08/2026, exige `typescript >=4.8.4 <6.1.0` — vérifié sur le registre npm. TypeScript 7.0.2 est hors de cette plage. Oxlint ne dépend pas de l'API du compilateur pour ses règles syntaxiques, et son composant type-aware `tsgolint` est **construit sur TypeScript 7** : ses versions suivent celles du compilateur (`v7.0.2001` = TypeScript 7.0.2, patch 001). C'est l'option alignée sur la version installée, pas un contournement.
 
 - [ ] **Étape 1 : écrire l'épreuve**
 
-`tests/harness/eslint-base.test.ts` :
+`front/tests/harness/oxlint-base.test.ts` :
 
 ```typescript
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { lancerOutil } from './run-outil'
 
-const FIXTURES = [
-  'tests/harness/fixtures/any-explicite.ts',
-  'tests/harness/fixtures/nommage-Invalide.ts',
-]
+const ANY = 'tests/harness/fixtures/any-explicite.ts'
+const NOMMAGE = 'tests/harness/fixtures/nommage-Invalide.ts'
 
-describe('garde-fou : ESLint, règles de base', () => {
-  it.each(FIXTURES)('la fixture %s existe', (f) => {
+describe('garde-fou : Oxlint, règles syntaxiques', () => {
+  it.each([ANY, NOMMAGE])('la fixture %s existe', (f) => {
     expect(existsSync(f), `Cible manquante : ${f}`).toBe(true)
   })
 
   it('refuse un any explicite', () => {
-    const r = lancerOutil(['npx', 'eslint', '--no-ignore', 'tests/harness/fixtures/any-explicite.ts'])
-    expect(r.code, `ESLint a accepté le any :\n${r.sortie}`).not.toBe(0)
+    const r = lancerOutil(['npx', 'oxlint', ANY])
+    expect(r.code, `Oxlint a accepté le any :\n${r.sortie}`).not.toBe(0)
     expect(r.sortie).toContain('no-explicit-any')
   })
 
-  it('refuse un nom de fichier hors kebab-case', () => {
-    const r = lancerOutil(['npx', 'eslint', '--no-ignore', 'tests/harness/fixtures/nommage-Invalide.ts'])
-    expect(r.code, `ESLint a accepté le nommage :\n${r.sortie}`).not.toBe(0)
-    expect(r.sortie).toMatch(/filename|kebab/i)
+  it('refuse un nom de fichier hors kebab-case et PascalCase', () => {
+    const r = lancerOutil(['npx', 'oxlint', NOMMAGE])
+    expect(r.code, `Oxlint a accepté le nommage :\n${r.sortie}`).not.toBe(0)
+    expect(r.sortie).toMatch(/filename-case/)
   })
 })
 ```
 
 - [ ] **Étape 2 : lancer l'épreuve pour la voir échouer**
 
-Lancer : `npx vitest run tests/harness/eslint-base.test.ts`
-Attendu : ÉCHEC — ESLint n'est pas installé.
+Lancer : `npm --prefix front run test:harness -- oxlint-base`
+Attendu : ÉCHEC — Oxlint n'est pas installé.
 
-- [ ] **Étape 3 : installer ESLint et ses greffons**
+- [ ] **Étape 3 : installer Oxlint**
 
 ```bash
-npm install -D eslint @eslint/js typescript-eslint eslint-plugin-react-hooks \
-  eslint-plugin-jsx-a11y eslint-plugin-import eslint-plugin-unicorn \
-  eslint-plugin-sonarjs eslint-config-prettier globals
+npm --prefix front add -D oxlint
 ```
 
-- [ ] **Étape 4 : écrire `eslint.config.js`**
+- [ ] **Étape 4 : écrire `front/.oxlintrc.json`**
 
-```javascript
-import js from '@eslint/js'
-import tseslint from 'typescript-eslint'
-import reactHooks from 'eslint-plugin-react-hooks'
-import jsxA11y from 'eslint-plugin-jsx-a11y'
-import importPlugin from 'eslint-plugin-import'
-import unicorn from 'eslint-plugin-unicorn'
-import sonarjs from 'eslint-plugin-sonarjs'
-import prettier from 'eslint-config-prettier'
-import globals from 'globals'
-
-export default tseslint.config(
-  { ignores: ['dist/**', 'coverage/**', 'playwright-report/**', 'node_modules/**'] },
-  js.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
-  {
-    languageOptions: {
-      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
-      globals: { ...globals.browser },
-    },
-    plugins: {
-      'react-hooks': reactHooks,
-      'jsx-a11y': jsxA11y,
-      import: importPlugin,
-      unicorn,
-      sonarjs,
-    },
-    rules: {
-      // --- bloquant : sécurité du typage ---
-      '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-
-      // --- bloquant : nommage, docs/16-projet.md § 2 ---
-      'unicorn/filename-case': ['error', { cases: { kebabCase: true, pascalCase: true } }],
-      '@typescript-eslint/naming-convention': [
-        'error',
-        { selector: 'default', format: ['camelCase'] },
-        { selector: 'variable', format: ['camelCase', 'UPPER_CASE', 'PascalCase'] },
-        { selector: 'parameter', format: ['camelCase'], leadingUnderscore: 'allow' },
-        { selector: 'typeLike', format: ['PascalCase'], custom: { regex: '^I[A-Z]', match: false } },
-        { selector: 'variable', types: ['boolean'], format: ['PascalCase'], prefix: ['is', 'has', 'can', 'should'] },
-        { selector: 'objectLiteralProperty', format: null },
-      ],
-
-      // --- bloquant : structure ---
-      'import/no-cycle': 'error',
-
-      // --- avertissement : jugement, traité en revue ---
-      'sonarjs/cognitive-complexity': ['warn', 15],
-      'sonarjs/no-duplicate-string': ['warn', { threshold: 3 }],
-      'max-lines': ['warn', { max: 300, skipBlankLines: true, skipComments: true }],
-      '@typescript-eslint/no-magic-numbers': [
-        'warn',
-        { ignore: [-1, 0, 1, 2], ignoreArrayIndexes: true, ignoreEnums: true },
-      ],
-    },
+```json
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "import", "jsx-a11y", "react"],
+  "env": { "browser": true, "es2024": true },
+  "categories": { "correctness": "error" },
+  "ignorePatterns": ["dist/**", "coverage/**", "tests/harness/fixtures/**"],
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "eslint/no-unused-vars": "error",
+    "unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
+    "import/no-cycle": "error",
+    "eslint/no-console": "error"
   },
-  { files: ['**/*.tsx'], plugins: { 'react-hooks': reactHooks }, rules: reactHooks.configs.recommended.rules },
-  { files: ['**/*.tsx'], rules: jsxA11y.flatConfigs.recommended.rules },
-  prettier,
-)
+  "overrides": [
+    {
+      "files": ["**/*.test.{ts,tsx}", "**/*.spec.ts"],
+      "rules": { "typescript/no-explicit-any": "off" }
+    }
+  ]
+}
 ```
+
+Les fixtures figurent dans `ignorePatterns` : le lint courant ne doit pas les voir. Les épreuves les atteignent en nommant leur chemin explicitement, ce qui contourne l'ignore.
 
 - [ ] **Étape 5 : créer les fixtures**
 
-`tests/harness/fixtures/any-explicite.ts` :
+`front/tests/harness/fixtures/any-explicite.ts` :
 
 ```typescript
 // Violation délibérée : any explicite.
@@ -407,59 +366,52 @@ export function traite(valeur: any): string {
 }
 ```
 
-`tests/harness/fixtures/nommage-Invalide.ts` :
+`front/tests/harness/fixtures/nommage-Invalide.ts` :
 
 ```typescript
-// Violation délibérée : nom de fichier hors kebab-case et hors PascalCase pur.
+// Violation délibérée : nom de fichier ni kebab-case ni PascalCase pur.
 export const valeur = 1
 ```
 
 - [ ] **Étape 6 : ajouter le script et lancer l'épreuve**
 
+Dans `front/package.json` :
+
 ```json
-{ "scripts": { "lint": "eslint src tests --ignore-pattern 'tests/harness/fixtures/**'" } }
+{ "scripts": { "lint": "oxlint src tests" } }
 ```
 
-Lancer : `npx vitest run tests/harness/eslint-base.test.ts`
-Attendu : 4 tests passent.
+Lancer l'épreuve : attendu, 4 tests passent.
 
-- [ ] **Étape 7 : vérifier que le projet principal est propre**
+- [ ] **Étape 7 : vérifier que le front réel est propre**
 
-Lancer : `npm run lint`
-Attendu : aucune erreur. Les fixtures sont exclues par `--ignore-pattern` dans le script, et atteintes uniquement par les épreuves qui les nomment.
-
-**Ne pas les placer dans `ignores` de la flat config** : le comportement de `--no-ignore` face à ce champ n'est pas garanti en ESLint 9, et les épreuves cesseraient silencieusement de voir leurs cibles. Ruling C5 du ledger.
+Lancer : `npm --prefix front run lint`
+Attendu : aucune erreur.
 
 - [ ] **Étape 8 : commit**
 
 ```bash
 git add -A
-git commit -m "éprouve les règles ESLint de typage et de nommage"
+git commit -m "installe Oxlint et ses règles syntaxiques"
 ```
 
 ---
 
----
-
-## Tâche 6 : ESLint — la frontière front / domaine
+## Tâche 6 : Oxlint type-aware, et la frontière front / domaine
 
 **Fichiers :**
-- Modifier : `front/eslint.config.js`
-- Créer : `front/tests/harness/fixtures/core-impur.ts`, `front/tests/harness/fixtures/calcul-conformite.ts`, `front/tests/harness/eslint-architecture.test.ts`
+- Modifier : `front/.oxlintrc.json`, `front/package.json`
+- Créer : `front/tests/harness/fixtures/core-impur.ts`, `front/tests/harness/oxlint-architecture.test.ts`
 
 **Interfaces :**
-- Consomme : `front/eslint.config.js` de la tâche 5
-- Produit : la barrière qui empêche un calcul de conformité d'exister dans le front.
+- Consomme : `.oxlintrc.json` de la tâche 5
+- Produit : la barrière d'import qui protège `front/src/core/`, et les 59 règles type-aware.
 
-> **Cette tâche a changé de nature avec l'architecture backend.** Elle protégeait autrefois `src/core/` contre React et Supabase. Elle protège désormais contre quelque chose de plus grave : **la duplication d'un calcul de conformité**.
->
-> La spec d'architecture nomme ce risque comme le plus insidieux du projet : le besoin de réactivité hors ligne pousse à recalculer côté front ce que `Palier.Domain` calcule déjà. Deux implémentations d'une même règle, ce sont deux vérités — et celle qui s'affiche à l'utilisateur n'est pas forcément celle que le diététicien a validée.
->
-> `front/src/core/` reste légitime, mais pour les conversions d'unités, le formatage et les agrégations d'affichage. Jamais pour un besoin énergétique, une limite haute EFSA ou un plancher de sécurité.
+> **La moitié de cette tâche a changé de nature avec l'architecture backend.** `src/llm/` a disparu du front — le modèle vit dans `Palier.Infrastructure`. `front/src/core/` reste légitime pour les conversions d'unités, le formatage et les agrégations d'affichage, mais **plus pour un calcul de conformité** : ceux-là vivent exclusivement dans `Palier.Domain`. L'interdiction des calculs de conformité est portée par la tâche 7, `no-restricted-syntax` n'existant pas dans Oxlint.
 
 - [ ] **Étape 1 : écrire l'épreuve**
 
-`front/tests/harness/eslint-architecture.test.ts` :
+`front/tests/harness/oxlint-architecture.test.ts` :
 
 ```typescript
 import { existsSync } from 'node:fs'
@@ -467,80 +419,72 @@ import { describe, expect, it } from 'vitest'
 import { lancerOutil } from './run-outil'
 
 const IMPUR = 'tests/harness/fixtures/core-impur.ts'
-const CONFORMITE = 'tests/harness/fixtures/calcul-conformite.ts'
 
-describe('garde-fou : frontière front / domaine', () => {
-  it.each([IMPUR, CONFORMITE])('la fixture %s existe', (f) => {
-    expect(existsSync(f), `Cible manquante : ${f}`).toBe(true)
+describe('garde-fou : pureté de front/src/core/', () => {
+  it('la fixture de violation existe', () => {
+    expect(existsSync(IMPUR), `Cible manquante : ${IMPUR}`).toBe(true)
   })
 
   it('refuse un import de React depuis core/', () => {
-    const r = lancerOutil(['npx', 'eslint', '--no-ignore', IMPUR])
-    expect(r.code, `ESLint a accepté l'import impur :\n${r.sortie}`).not.toBe(0)
-    expect(r.sortie).toMatch(/no-restricted-imports|pur/i)
+    const r = lancerOutil(['npx', 'oxlint', IMPUR])
+    expect(r.code, `Oxlint a accepté l'import impur :\n${r.sortie}`).not.toBe(0)
+    expect(r.sortie).toMatch(/no-restricted-imports/)
   })
 
-  it('refuse un calcul de conformité dans le front', () => {
-    const r = lancerOutil(['npx', 'eslint', '--no-ignore', CONFORMITE])
-    expect(r.code, `ESLint a accepté le calcul de conformité :\n${r.sortie}`).not.toBe(0)
-    expect(r.sortie).toMatch(/no-restricted-syntax|Palier.Domain/i)
+  it('le linting type-aware est actif', () => {
+    const r = lancerOutil(['npx', 'oxlint', '--type-aware', 'src'])
+    expect(r.code, `Le mode type-aware a échoué :\n${r.sortie}`).toBe(0)
   })
 })
 ```
 
 - [ ] **Étape 2 : lancer l'épreuve pour la voir échouer**
 
-Lancer : `npm --prefix front run test:harness -- eslint-architecture`
-Attendu : ÉCHEC — les fixtures et les règles n'existent pas.
+Attendu : ÉCHEC — ni la fixture ni la règle n'existent, et `oxlint-tsgolint` n'est pas installé.
 
-- [ ] **Étape 3 : ajouter le bloc à `front/eslint.config.js`**
+- [ ] **Étape 3 : installer le composant type-aware**
 
-À insérer avant l'appel final à `prettier` :
-
-```javascript
-  // --- front/src/core/ reste pur : conversions, formatage, agrégations d'affichage.
-  {
-    files: ['src/core/**/*.ts', 'tests/harness/fixtures/core-impur.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            { group: ['react', 'react-dom', 'react/*'], message: 'core/ est pur : aucune dépendance UI.' },
-            { group: ['dexie'], message: 'core/ est pur : aucun accès stockage.' },
-            { group: ['@/lib/*', '@/ui/*', '@/features/*', '../lib/*', '../ui/*', '../features/*'],
-              message: 'core/ est pur : aucune dépendance applicative.' },
-          ],
-        },
-      ],
-      'no-restricted-globals': [
-        'error',
-        { name: 'fetch', message: "core/ est pur : les appels à l'API vivent dans lib/." },
-      ],
-    },
-  },
-  // --- Aucun calcul de conformité dans le front : ils vivent dans Palier.Domain.
-  // C'est le risque le plus insidieux de l'architecture — deux implémentations
-  // d'une même règle produisent deux vérités, et celle qui s'affiche n'est pas
-  // forcément celle que le diététicien a validée.
-  {
-    files: ['src/**/*.{ts,tsx}', 'tests/harness/fixtures/calcul-conformite.ts'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            "Identifier[name=/^(mifflin|katch|tdee|metabolismeDeBase|limiteHaute|upperIntake|plancherCalorique|plancherProteique|epley|calculeBesoin)/i]",
-          message:
-            'Les calculs de conformité vivent dans Palier.Domain, jamais dans le front. ' +
-            "Le front affiche ce que l'API a calculé — hors ligne, la dernière valeur connue avec son horodatage.",
-        },
-      ],
-    },
-  },
+```bash
+npm --prefix front add -D oxlint-tsgolint@latest
 ```
 
-- [ ] **Étape 4 : créer les fixtures**
+`tsgolint` s'appuie sur `typescript-go` et cible TypeScript 7 : il suit la version du compilateur au lieu de la contraindre.
+
+- [ ] **Étape 4 : ajouter la barrière d'architecture à `.oxlintrc.json`**
+
+Dans le tableau `overrides` :
+
+```json
+    {
+      "files": ["src/core/**/*.ts", "tests/harness/fixtures/core-impur.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              { "group": ["react", "react-dom", "react/*"], "message": "core/ est pur : aucune dépendance UI." },
+              { "group": ["dexie"], "message": "core/ est pur : aucun accès stockage." },
+              { "group": ["@/lib/*", "@/ui/*", "@/features/*", "../lib/*", "../ui/*", "../features/*"], "message": "core/ est pur : aucune dépendance applicative." }
+            ]
+          }
+        ]
+      }
+    }
+```
+
+Et activer les règles type-aware dans la section `rules` :
+
+```json
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-unsafe-assignment": "warn",
+    "typescript/strict-boolean-expressions": "warn"
+```
+
+Les deux premières sont bloquantes : une promesse non attendue dans une application hors ligne à file de retry produit des pertes de données silencieuses.
+
+- [ ] **Étape 5 : créer la fixture**
 
 `front/tests/harness/fixtures/core-impur.ts` :
 
@@ -554,157 +498,265 @@ export function agregeQuelqueChose(): number {
 }
 ```
 
-`front/tests/harness/fixtures/calcul-conformite.ts` :
+- [ ] **Étape 6 : ajouter le script type-aware**
 
-```typescript
-// Violation délibérée : un calcul de conformité recopié dans le front.
-// Cette formule vit dans Palier.Domain, et nulle part ailleurs.
-export function mifflinStJeor(poidsKg: number, tailleCm: number, age: number): number {
-  return 10 * poidsKg + 6.25 * tailleCm - 5 * age + 5
-}
+```json
+{ "scripts": { "lint": "oxlint src tests", "lint:types": "oxlint --type-aware src" } }
 ```
 
-- [ ] **Étape 5 : lancer l'épreuve pour la voir passer**
+- [ ] **Étape 7 : lancer l'épreuve pour la voir passer**
 
-Attendu : 4 tests passent.
+Attendu : 3 tests passent.
 
-- [ ] **Étape 6 : vérifier que le front réel reste propre**
-
-Lancer : `npm --prefix front run lint`
-Attendu : aucune erreur.
-
-- [ ] **Étape 7 : commit**
+- [ ] **Étape 8 : commit**
 
 ```bash
 git add -A
-git commit -m "éprouve la frontière entre le front et le domaine"
+git commit -m "active le linting type-aware et la barrière de pureté du front"
 ```
+
+> **Note pour la tâche 18.** Oxlint propose `oxlint --type-aware --type-check`, qui remplace l'étape `tsc --noEmit`. Ce plan conserve `tsc --noEmit` séparément : c'est le contrôle connu et éprouvé, et fusionner les deux au moment où l'on installe le harnais mêlerait deux changements. À évaluer une fois le lot stabilisé, et à consigner dans `docs/decisions.md`.
 
 ---
 
-## Tâche 7 : ESLint — chaînes en dur, couleurs, mouvement
+## Tâche 7 : Règles de projet — ce qu'aucun linter ne connaît
 
 **Fichiers :**
-- Modifier : `eslint.config.js`
-- Créer : `tests/harness/fixtures/couleur-en-dur.ts`, `tests/harness/fixtures/chaine-en-dur.tsx`, `tests/harness/eslint-design.test.ts`
+- Créer : `scripts/regles-projet.mjs`, `front/tests/harness/fixtures/calcul-conformite.ts`, `front/tests/harness/fixtures/couleur-en-dur.ts`, `front/tests/harness/fixtures/chaine-en-dur.tsx`, `front/tests/harness/regles-projet.test.ts`
+- Modifier : `package.json` racine
 
 **Interfaces :**
-- Consomme : `eslint.config.js`
-- Produit : les règles qui mécanisent `02-design.md` et la règle i18n de `CLAUDE.md` § 4.
+- Consomme : rien
+- Produit : `node scripts/regles-projet.mjs`, appelé par `verify`.
+
+> **Pourquoi un script plutôt qu'une règle de linter.** Oxlint ne fournit ni `no-restricted-syntax`, ni équivalent d'`eslint-plugin-i18next`, ni `naming-convention`. Ces trois besoins sont de la recherche de motifs dans le source — un script les couvre, et il est plus lisible qu'un sélecteur AST. La règle qui interdit les calculs de conformité passe de ceci :
+>
+> `Identifier[name=/^(mifflin|katch|tdee|limiteHaute|epley)/i]`
+>
+> à une phrase en clair dans un tableau de motifs, avec son message et son motif. C'est le même choix que pour le contrôle de licences : un outil dont on lit le code.
 
 - [ ] **Étape 1 : écrire l'épreuve**
 
-`tests/harness/eslint-design.test.ts` :
+`front/tests/harness/regles-projet.test.ts` :
 
 ```typescript
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { lancerOutil } from './run-outil'
 
-const COULEUR = 'tests/harness/fixtures/couleur-en-dur.ts'
-const CHAINE = 'tests/harness/fixtures/chaine-en-dur.tsx'
+const FIXTURES = [
+  'tests/harness/fixtures/calcul-conformite.ts',
+  'tests/harness/fixtures/couleur-en-dur.ts',
+  'tests/harness/fixtures/chaine-en-dur.tsx',
+]
 
-describe('garde-fou : design et i18n', () => {
-  it.each([COULEUR, CHAINE])('la fixture %s existe', (f) => {
+describe('garde-fou : règles de projet', () => {
+  it.each(FIXTURES)('la fixture %s existe', (f) => {
     expect(existsSync(f), `Cible manquante : ${f}`).toBe(true)
   })
 
+  it('accepte le code réel du front', () => {
+    const r = lancerOutil(['node', '../scripts/regles-projet.mjs'])
+    expect(r.code, `Le front réel viole une règle de projet :\n${r.sortie}`).toBe(0)
+  })
+
+  it('refuse un calcul de conformité dans le front', () => {
+    const r = lancerOutil([
+      'node', '../scripts/regles-projet.mjs',
+      '--fichier', 'front/tests/harness/fixtures/calcul-conformite.ts',
+    ])
+    expect(r.code, `Le calcul de conformité a été accepté :\n${r.sortie}`).not.toBe(0)
+    expect(r.sortie).toMatch(/Palier\.Domain/)
+  })
+
   it('refuse une couleur hexadécimale hors jetons', () => {
-    const r = lancerOutil(['npx', 'eslint', '--no-ignore', COULEUR])
-    expect(r.code, `ESLint a accepté la couleur :\n${r.sortie}`).not.toBe(0)
-    expect(r.sortie).toMatch(/jeton|no-restricted-syntax/i)
+    const r = lancerOutil([
+      'node', '../scripts/regles-projet.mjs',
+      '--fichier', 'front/tests/harness/fixtures/couleur-en-dur.ts',
+    ])
+    expect(r.code, `La couleur a été acceptée :\n${r.sortie}`).not.toBe(0)
+    expect(r.sortie).toMatch(/jeton/i)
   })
 
   it('refuse une chaîne de texte en dur dans le JSX', () => {
-    const r = lancerOutil(['npx', 'eslint', '--no-ignore', CHAINE])
-    expect(r.code, `ESLint a accepté la chaîne :\n${r.sortie}`).not.toBe(0)
-    expect(r.sortie).toMatch(/i18next|literal/i)
+    const r = lancerOutil([
+      'node', '../scripts/regles-projet.mjs',
+      '--fichier', 'front/tests/harness/fixtures/chaine-en-dur.tsx',
+    ])
+    expect(r.code, `La chaîne en dur a été acceptée :\n${r.sortie}`).not.toBe(0)
+    expect(r.sortie).toMatch(/i18n/i)
   })
 })
 ```
 
 - [ ] **Étape 2 : lancer l'épreuve pour la voir échouer**
 
-Lancer : `npx vitest run tests/harness/eslint-design.test.ts`
-Attendu : ÉCHEC.
+Attendu : ÉCHEC — le script n'existe pas.
 
-- [ ] **Étape 3 : installer le greffon i18n**
-
-```bash
-npm install -D eslint-plugin-i18next
-```
-
-- [ ] **Étape 4 : ajouter le bloc design à `eslint.config.js`**
+- [ ] **Étape 3 : écrire `scripts/regles-projet.mjs`**
 
 ```javascript
-  // --- Design : docs/02-design.md § 2 et § 4.
-  // Couleurs hors jetons, ombres, flou d'arrière-plan, durées hors échelle.
+#!/usr/bin/env node
+// Règles propres à ce projet, qu'aucun linter généraliste ne connaît.
+// Remplace no-restricted-syntax, eslint-plugin-i18next et naming-convention,
+// absents d'Oxlint. Aucune dépendance : on lit ce qu'on exécute.
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, extname, basename } from 'node:path'
+
+const REGLES = [
   {
-    files: ['src/**/*.{ts,tsx,css}', 'tests/harness/fixtures/couleur-en-dur.ts'],
-    ignores: ['src/ui/jetons.ts'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "Literal[value=/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/]",
-          message: 'Aucune couleur hors des jetons de src/ui/jetons.ts — docs/02-design.md § 9.',
-        },
-        {
-          selector: "Literal[value=/box-shadow|drop-shadow|backdrop-filter|backdrop-blur/]",
-          message: 'Aucune ombre portée ni flou d\'arrière-plan — docs/02-design.md § 4.',
-        },
-        {
-          selector: "Literal[value=/linear-gradient|radial-gradient/]",
-          message: 'Aucun dégradé — docs/02-design.md § 2.',
-        },
-        {
-          selector: "Literal[value=/[→←↑↓]/]",
-          message: 'Aucune flèche Unicode dans un libellé.',
-        },
-      ],
-    },
+    id: 'calcul-de-conformite',
+    motif:
+      /\b(mifflin|katchMcArdle|tdeeAdaptatif|metabolismeDeBase|limiteHauteEfsa|plancherCalorique|plancherProteique|epleyCorrige)\w*/i,
+    extensions: ['.ts', '.tsx'],
+    message:
+      'Les calculs de conformité vivent dans Palier.Domain, jamais dans le front. ' +
+      "Le front affiche ce que l'API a calculé ; hors ligne, la dernière valeur connue avec son horodatage.",
   },
-  // --- i18n : aucune chaîne en dur. CLAUDE.md § 4.
   {
-    files: ['src/**/*.tsx', 'tests/harness/fixtures/chaine-en-dur.tsx'],
-    plugins: { i18next: i18next },
-    rules: { 'i18next/no-literal-string': ['error', { markupOnly: true }] },
+    id: 'couleur-hors-jetons',
+    motif: /#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b/,
+    extensions: ['.ts', '.tsx', '.css'],
+    exclure: [/src[\\/]ui[\\/]jetons\./],
+    message: 'Aucune couleur hors des jetons de src/ui/jetons.ts — docs/02-design.md § 9.',
   },
+  {
+    id: 'ombre-ou-degrade',
+    motif: /\b(box-shadow|drop-shadow|backdrop-blur|backdrop-filter|linear-gradient|radial-gradient)\b/,
+    extensions: ['.ts', '.tsx', '.css'],
+    message: 'Aucune ombre portée, aucun flou, aucun dégradé — docs/02-design.md § 2 et § 4.',
+  },
+  {
+    id: 'fleche-unicode',
+    motif: /["'`][^"'`]*[→←↑↓][^"'`]*["'`]/,
+    extensions: ['.ts', '.tsx'],
+    message: "Aucune flèche Unicode dans un libellé : utiliser une icône, ou rien.",
+  },
+  {
+    id: 'chaine-en-dur',
+    // Texte visible entre balises JSX : > Bonjour <
+    motif: />\s*[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ ,.'’!?-]{2,}\s*</,
+    extensions: ['.tsx'],
+    message:
+      'Aucune chaîne de texte en dur : tout passe par i18next, y compris les erreurs et les états vides — CLAUDE.md § 4.',
+  },
+  {
+    id: 'booleen-mal-nomme',
+    motif: /\b(?:const|let)\s+(?!is|has|can|should)[a-z]\w*\s*:\s*boolean\b/,
+    extensions: ['.ts', '.tsx'],
+    message: "Un booléen se préfixe par is, has, can ou should — docs/16-projet.md § 2.",
+  },
+  {
+    id: 'type-prefixe-i',
+    motif: /\b(?:interface|type)\s+I[A-Z]\w*/,
+    extensions: ['.ts', '.tsx'],
+    message: 'Préfixe I interdit sur les types — docs/16-projet.md § 2.',
+  },
+]
+
+const IGNORES = ['node_modules', 'dist', 'coverage', '.git', 'bin', 'obj', 'playwright-report']
+
+function fichiers(racine) {
+  const out = []
+  const parcourir = (d) => {
+    for (const e of readdirSync(d)) {
+      if (IGNORES.includes(e)) continue
+      const p = join(d, e)
+      if (statSync(p).isDirectory()) parcourir(p)
+      else out.push(p)
+    }
+  }
+  parcourir(racine)
+  return out
+}
+
+const iFichier = process.argv.indexOf('--fichier')
+const cibles =
+  iFichier !== -1
+    ? [process.argv[iFichier + 1]]
+    : fichiers('front/src').concat(fichiers('front/tests').filter((f) => !f.includes('fixtures')))
+
+const violations = []
+for (const f of cibles) {
+  const ext = extname(f)
+  let contenu
+  try {
+    contenu = readFileSync(f, 'utf8')
+  } catch {
+    console.error(`Fichier illisible : ${f}`)
+    process.exit(2)
+  }
+  const lignes = contenu.split('\n')
+  for (const regle of REGLES) {
+    if (!regle.extensions.includes(ext)) continue
+    if (regle.exclure?.some((r) => r.test(f))) continue
+    lignes.forEach((ligne, i) => {
+      if (ligne.trimStart().startsWith('//')) return
+      if (regle.motif.test(ligne)) {
+        violations.push({ fichier: f, ligne: i + 1, regle: regle.id, message: regle.message })
+      }
+    })
+  }
+}
+
+if (violations.length > 0) {
+  console.error(`${violations.length} violation(s) des règles de projet :\n`)
+  for (const v of violations) {
+    console.error(`  ${v.fichier}:${v.ligne}  [${v.regle}]`)
+    console.error(`    ${v.message}\n`)
+  }
+  process.exit(1)
+}
+
+console.log(`${cibles.length} fichiers vérifiés, aucune violation des règles de projet.`)
 ```
 
-Ajouter en tête du fichier : `import i18next from 'eslint-plugin-i18next'`.
+- [ ] **Étape 4 : créer les trois fixtures**
 
-- [ ] **Étape 5 : créer les fixtures**
-
-`tests/harness/fixtures/couleur-en-dur.ts` :
+`front/tests/harness/fixtures/calcul-conformite.ts` :
 
 ```typescript
-// Violation délibérée : couleur hexadécimale hors jetons.
+export function mifflinStJeor(poidsKg: number, tailleCm: number, age: number): number {
+  return 10 * poidsKg + 6.25 * tailleCm - 5 * age + 5
+}
+```
+
+`front/tests/harness/fixtures/couleur-en-dur.ts` :
+
+```typescript
 export const fondInterdit = '#D97757'
 ```
 
-`tests/harness/fixtures/chaine-en-dur.tsx` :
+`front/tests/harness/fixtures/chaine-en-dur.tsx` :
 
 ```typescript
-// Violation délibérée : texte affiché sans passer par i18next.
 export function Bouton() {
   return <button type="button">Enregistrer la séance</button>
 }
 ```
 
+Aucune de ces fixtures ne porte de commentaire explicatif en tête : le script ignore les lignes commentées, et un commentaire décrivant la violation la masquerait.
+
+- [ ] **Étape 5 : ajouter le script racine**
+
+```json
+{ "scripts": { "regles": "node scripts/regles-projet.mjs" } }
+```
+
 - [ ] **Étape 6 : lancer l'épreuve pour la voir passer**
 
-Lancer : `npx vitest run tests/harness/eslint-design.test.ts`
-Attendu : 4 tests passent.
+Attendu : 7 tests passent — les trois fixtures existent, le front réel est accepté, les trois violations sont refusées.
 
-- [ ] **Étape 7 : commit**
+- [ ] **Étape 7 : mesurer les faux positifs**
+
+Lancer `npm run regles` sur le front réel. Si des violations légitimes apparaissent — une couleur dans un commentaire de documentation, un texte de test — affiner le motif plutôt que d'ajouter une exception au fichier. **Consigner le nombre de motifs affinés dans le rapport de tâche** : un détecteur qui crie à tort est un détecteur qu'on cesse de lire.
+
+- [ ] **Étape 8 : commit**
 
 ```bash
 git add -A
-git commit -m "éprouve les règles de design et d'internationalisation"
+git commit -m "ajoute les règles de projet que le linter ne couvre pas"
 ```
-
----
 
 ---
 
@@ -862,7 +914,6 @@ npm install -D knip jscpd
     "vite.config.ts",
     "vitest.config.ts",
     "playwright.config.ts",
-    "eslint.config.js",
     "scripts/verify.mjs",
     "tests/**/*.test.ts",
     "tests/**/*.spec.ts"
@@ -1270,7 +1321,7 @@ Attendu : ÉCHEC — ni le fichier de rigueur ni la fixture n'existent.
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsNotAsErrors></WarningsNotAsErrors>
 
-    <!-- L'équivalent d'ESLint -->
+    <!-- Analyseurs de code : l'équivalent côté .NET de ce qu'Oxlint fait au front -->
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-all</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
@@ -2109,7 +2160,7 @@ Dans `package.json` :
 ```json
 {
   "lint-staged": {
-    "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
+    "*.{ts,tsx}": ["oxlint --fix", "prettier --write"],
     "*.{json,md,css,html}": ["prettier --write"]
   }
 }
@@ -2454,6 +2505,6 @@ Invoquer `superpowers:finishing-a-development-branch`.
 
 **Trois points à vérifier à l'exécution, signalés plutôt que découverts :**
 
-1. **`typescript-eslint` contre TypeScript 7** — `peerDependencies: typescript >=4.8.4 <6.1.0`, vérifié sur le registre. TypeScript 7.0.2 est hors plage et **bloque la tâche 5**. Deux issues : redescendre le front en TypeScript 6, ou remplacer le linter par Oxlint. À trancher avant d'atteindre la tâche 5, et à consigner dans `docs/decisions.md`.
+1. **`typescript-eslint` contre TypeScript 7 — tranché.** Sa version 8.67.0, publiée le 10/08/2026, exige `typescript >=4.8.4 <6.1.0` ; TypeScript 7.0.2 est hors plage. Le front passe à **Oxlint**, dont le composant type-aware `tsgolint` est construit sur `typescript-go` et cible TypeScript 7 — ses versions suivent celles du compilateur. Ce que cela coûte : `no-restricted-syntax`, `naming-convention` et l'équivalent d'`eslint-plugin-i18next` n'existent pas dans Oxlint, et sont repris par le script de règles de projet de la tâche 7.
 2. **L'import de `lancerOutil` traverse la frontière `front`/`back`.** Si `back/tests-harness/*.test.mjs` ne résout pas `../../front/tests/harness/run-outil.js`, la parade est une configuration vitest racine. Détail d'outillage, pas d'exigence.
 3. **`gitleaks` distribué par npm** n'expose pas forcément un binaire sur toutes les plateformes. Si `npx gitleaks` échoue sous Windows, replier sur l'action GitHub officielle en CI et une installation locale pour le hook.
