@@ -1,3 +1,4 @@
+> **CADUC — remplacé par `2026-08-20-lot-1-harnais-complet.md`.** Conservé pour l'historique : les deux plans séparés définissaient chacun `verify` et la CI, ce que le point d'entrée unique interdit.
 # Lot 1b — Harnais backend .NET — Plan d'implémentation
 
 > **Pour les exécutants agentiques :** SOUS-SKILL REQUISE — utiliser `superpowers:subagent-driven-development` (recommandé) ou `superpowers:executing-plans` pour exécuter ce plan tâche par tâche. Les étapes utilisent la syntaxe à cases (`- [ ]`) pour le suivi.
