@@ -4,6 +4,20 @@
   "env": {
     "CONTRAT_DE_SORTIE": "0"
   },
+  "extraKnownMarketplaces": {
+    "voltagent-subagents": {
+      "source": {
+        "source": "github",
+        "repo": "VoltAgent/awesome-claude-code-subagents"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "voltagent-qa-sec@voltagent-subagents": true,
+    "voltagent-domains@voltagent-subagents": true,
+    "voltagent-biz@voltagent-subagents": true,
+    "voltagent-meta@voltagent-subagents": true
+  },
   "permissions": {
     "deny": ["EnterPlanMode"],
     "allow": [
