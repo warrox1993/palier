@@ -1,0 +1,5 @@
+Skill installé depuis https://github.com/funboy322/avoid-ai-design
+Commit : 8337060636a8cf12e32e883eb367becd702aa526
+Licence : MIT
+Installé le : 2026-08-19
+Non modifié.
