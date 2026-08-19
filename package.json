@@ -20,7 +20,9 @@
   "author": "",
   "license": "ISC",
   "type": "module",
-  "engines": { "node": "24.x" },
+  "engines": {
+    "node": "24.x"
+  },
   "bugs": {
     "url": "https://github.com/warrox1993/palier/issues"
   },
@@ -30,10 +32,11 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vite": "^8.2.1"
   }
 }
