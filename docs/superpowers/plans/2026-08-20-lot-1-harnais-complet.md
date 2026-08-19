@@ -1975,7 +1975,7 @@ describe("garde-fou : point d'entrée unique", () => {
     const s = readFileSync('scripts/verify.mjs', 'utf8')
     for (const etape of [
       'front:format', 'front:lint', 'front:typecheck', 'front:test', 'front:knip',
-      'back:format', 'back:build', 'back:test', 'licences', 'front:build',
+      'regles', 'back:format', 'back:build', 'back:test', 'licences', 'front:build',
     ]) {
       expect(s, `Contrôle manquant dans verify : ${etape}`).toContain(etape)
     }
@@ -2009,6 +2009,7 @@ const etapes = [
   ['front:typecheck', ['npm', '--prefix', 'front', 'run', 'typecheck']],
   ['front:test', ['npm', '--prefix', 'front', 'run', 'test']],
   ['front:knip', ['npm', '--prefix', 'front', 'run', 'knip']],
+  ['regles', ['node', 'scripts/regles-projet.mjs']],
   ['back:format', ['dotnet', 'format', 'back/Palier.sln', '--verify-no-changes']],
   ['back:build', ['dotnet', 'build', 'back/Palier.sln', '--no-incremental']],
   ['back:test', ['dotnet', 'test', 'back/Palier.sln', '--settings', 'back/coverage.runsettings']],
