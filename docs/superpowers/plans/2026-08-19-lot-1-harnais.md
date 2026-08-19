@@ -266,6 +266,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.test.{ts,tsx}', 'tests/harness/**/*.test.ts'],
+    // L'epreuve d'accessibilite lance Playwright : elle n'appartient qu'a
+    // test:harness, execute par le job de CI qui installe les navigateurs.
+    exclude: ['**/node_modules/**', 'tests/harness/accessibilite.test.ts'],
     testTimeout: 60000,
     coverage: {
       provider: 'v8',
@@ -341,16 +344,26 @@ describe('lancerOutil', () => {
 - [ ] **Étape 5 : lancer les tests pour vérifier qu'ils échouent**
 
 Lancer : `npx vitest run tests/harness/run-outil.test.ts`
-Attendu : ÉCHEC — le fichier `run-outil.ts` n'est pas encore écrit si l'on suit l'ordre rouge-vert. Si l'étape 3 a déjà été faite, inverser : écrire le test avant l'implémentation.
+Attendu : ÉCHEC — `run-outil.ts` n'existe pas encore.
+
+**Ordre impératif :** écrire le test de l'étape 4 avant l'implémentation de l'étape 3. Si l'implémentation a déjà été écrite, la supprimer et recommencer — `08-workflow.md` § 11 : « Écrire du code avant son test — ce code est supprimé, pas corrigé. » Ruling C4 du ledger.
 
 - [ ] **Étape 6 : ajouter le script et vérifier que les tests passent**
 
 ```json
-{ "scripts": { "test": "vitest run", "test:watch": "vitest" } }
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:harness": "vitest run tests/harness --exclude ''",
+    "test:watch": "vitest"
+  }
+}
 ```
 
 Lancer : `npm run test`
 Attendu : 3 tests passent.
+
+`test` exclut l'épreuve d'accessibilité, qui exige les navigateurs Playwright ; `test:harness` lance les douze épreuves et n'est appelé que par le job de CI qui les installe. Sans cette séparation, le job qualité échouerait pour une raison sans rapport avec ce qu'il mesure. Ruling C3 du ledger.
 
 - [ ] **Étape 7 : commit**
 
@@ -584,7 +597,7 @@ export const valeur = 1
 - [ ] **Étape 6 : ajouter le script et lancer l'épreuve**
 
 ```json
-{ "scripts": { "lint": "eslint ." } }
+{ "scripts": { "lint": "eslint src tests --ignore-pattern 'tests/harness/fixtures/**'" } }
 ```
 
 Lancer : `npx vitest run tests/harness/eslint-base.test.ts`
@@ -593,7 +606,9 @@ Attendu : 4 tests passent.
 - [ ] **Étape 7 : vérifier que le projet principal est propre**
 
 Lancer : `npm run lint`
-Attendu : aucune erreur sur `src/`. Les fixtures sont atteintes uniquement via `--no-ignore` et un chemin explicite ; ajouter `tests/harness/fixtures/**` à `ignores` dans `eslint.config.js` si le lint global les remonte.
+Attendu : aucune erreur. Les fixtures sont exclues par `--ignore-pattern` dans le script, et atteintes uniquement par les épreuves qui les nomment.
+
+**Ne pas les placer dans `ignores` de la flat config** : le comportement de `--no-ignore` face à ce champ n'est pas garanti en ESLint 9, et les épreuves cesseraient silencieusement de voir leurs cibles. Ruling C5 du ledger.
 
 - [ ] **Étape 8 : commit**
 
@@ -1045,19 +1060,19 @@ export const entree = true
 {
   "scripts": {
     "knip": "knip",
-    "jscpd": "jscpd src || exit 0"
+    "jscpd": "jscpd src"
   }
 }
 ```
 
-Le `|| exit 0` matérialise le classement de la spec : jscpd publie un rapport, il ne bloque jamais.
+Le caractère non bloquant de jscpd n'est pas porté par le script : `|| exit 0` ne se comporte pas de la même façon selon le shell sous Windows. Il est porté par la CI, qui lance cette étape en `continue-on-error`. Ruling C6 du ledger.
 
 Lancer : `npx vitest run tests/harness/code-mort.test.ts`
 Attendu : 2 tests passent.
 
 - [ ] **Étape 6 : consigner les faux positifs**
 
-Lancer : `npm run knip` sur le projet principal. Noter le nombre de signalements écartés et la raison de chacun dans `docs/decisions.md` (créé en tâche 12). Un détecteur qui se trompe est un détecteur qu'on cesse de lire.
+Lancer : `npm run knip` sur le projet principal. Noter le nombre de signalements écartés et la raison de chacun **dans le rapport de tâche** — `docs/decisions.md` n'existe qu'à la tâche 12, qui les y reprendra. Ruling C2 du ledger. Un détecteur qui se trompe est un détecteur qu'on cesse de lire.
 
 - [ ] **Étape 7 : commit**
 
@@ -1235,16 +1250,6 @@ describe('garde-fou : point d\'entrée unique', () => {
     expect(existsSync('scripts/verify.mjs'), 'Cible manquante : scripts/verify.mjs').toBe(true)
   })
 
-  it('le hook pre-push n\'appelle que verify', () => {
-    const hook = readFileSync('.husky/pre-push', 'utf8')
-    expect(hook).toContain('npm run verify')
-  })
-
-  it('la CI n\'appelle que verify pour le job de synthèse', () => {
-    const ci = readFileSync('.github/workflows/ci.yml', 'utf8')
-    expect(ci).toContain('npm run verify')
-  })
-
   it('verify enchaîne les six contrôles attendus', () => {
     const s = readFileSync('scripts/verify.mjs', 'utf8')
     for (const etape of ['format:check', 'lint', 'typecheck', 'test', 'knip', 'build']) {
@@ -1254,12 +1259,12 @@ describe('garde-fou : point d\'entrée unique', () => {
 })
 ```
 
-Les deux tests sur le hook et la CI sont ce qui empêche la dérive : le jour où quelqu'un ajoute un contrôle à la CI sans le mettre dans `verify`, le local et la CI cessent de vérifier la même chose.
+**Ruling C1 du ledger :** les deux tests qui vérifient que le hook pre-push et la CI n'appellent que `verify` ne peuvent pas vivre ici — ces fichiers n'existent qu'aux tâches 11 et 13. Ils y sont écrits, et c'est là qu'ils empêchent la dérive : le jour où quelqu'un ajoute un contrôle à la CI sans le mettre dans `verify`, le local et la CI cessent de vérifier la même chose.
 
 - [ ] **Étape 2 : lancer l'épreuve pour la voir échouer**
 
 Lancer : `npx vitest run tests/harness/verify.test.ts`
-Attendu : ÉCHEC — ni le script, ni le hook, ni la CI n'existent.
+Attendu : ÉCHEC — `scripts/verify.mjs` n'existe pas.
 
 - [ ] **Étape 3 : écrire `scripts/verify.mjs`**
 
@@ -1349,7 +1354,7 @@ git commit -m "ajoute la commande de vérification unique"
 `tests/harness/secrets.test.ts` :
 
 ```typescript
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { lancerOutil } from './run-outil'
 
@@ -1368,6 +1373,13 @@ describe('garde-fou : secrets', () => {
   it('les deux hooks existent', () => {
     expect(existsSync('.husky/pre-commit')).toBe(true)
     expect(existsSync('.husky/pre-push')).toBe(true)
+  })
+
+  it("le hook pre-push n'appelle que verify", () => {
+    const hook = readFileSync('.husky/pre-push', 'utf8')
+    expect(hook).toContain('npm run verify')
+    // Le hook délègue, il n'énumère pas : sinon il diverge de la CI.
+    expect(hook).not.toMatch(/npm run (lint|typecheck|build|knip)/)
   })
 })
 ```
@@ -1589,6 +1601,7 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm run jscpd
+        continue-on-error: true
 
   securite:
     runs-on: ubuntu-latest
@@ -1628,8 +1641,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: La CI n'appelle que verify
+        run: grep -q 'npm run verify' .github/workflows/ci.yml
       - name: Les garde-fous refusent-ils encore ?
-        run: npx vitest run tests/harness
+        run: npm run test:harness
 ```
 
 - [ ] **Étape 3 : écrire `.github/dependabot.yml`**
