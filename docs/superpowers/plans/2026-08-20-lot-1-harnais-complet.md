@@ -2129,9 +2129,19 @@ description = "Clé API Anthropic"
 regex = '''sk-ant-[A-Za-z0-9_\-]{20,}'''
 
 [[rules]]
-id = "cle-supabase-service"
-description = "Clé de service Supabase"
-regex = '''eyJ[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}'''
+id = "chaine-connexion-postgres"
+description = "Chaîne de connexion PostgreSQL avec mot de passe"
+regex = '''(?i)(Host|Server)=[^;]+;.*Password=[^;\s"']+'''
+
+[[rules]]
+id = "jeton-jwt"
+description = "Jeton JWT en clair"
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+
+[[rules]]
+id = "cle-application-ovh"
+description = "Clé applicative OVHcloud"
+regex = '''(?i)ovh_(application|consumer)_(key|secret)\s*[=:]\s*[A-Za-z0-9]{16,}'''
 ```
 
 - [ ] **Étape 6 : créer la fixture**
@@ -2140,6 +2150,8 @@ regex = '''eyJ[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}'''
 
 ```
 # Faux secret, format valide, valeur inventée. Sert à prouver que gitleaks mord.
+# Les motifs surveillés suivent l'architecture : clé de modèle, chaîne de
+# connexion PostgreSQL, jeton JWT, clé applicative OVHcloud.
 ANTHROPIC_API_KEY=sk-ant-api03-CECI-EST-UN-FAUX-SECRET-DE-TEST-0000000000
 ```
 
