@@ -189,3 +189,70 @@ Les trois animations prévues résistent à l'épreuve :
 Trois durées, une courbe, rien d'autre. Sous `prefers-reduced-motion`, tout passe à zéro — `11-qualite.md` l'impose déjà.
 
 **Mécanisable :** une règle de lint refuse toute `transition-duration` et toute `cubic-bezier` qui ne soit pas l'un de ces jetons. C'est la réponse directe au défaut le plus courant du mouvement généré — des micro-interactions éparpillées sans langage commun.
+
+---
+
+## 11. Le mouvement en natif — Material 3 et Apple
+
+Relevé le 19 août 2026 sur les documentations officielles. Une application native installée n'est pas instrumentable depuis ici ; les systèmes qui régissent le natif, eux, publient leurs valeurs.
+
+### Material 3 — un système de jetons
+
+Seize durées, quatre par famille :
+
+| Famille | Valeurs |
+|---|---|
+| short | 50 · 100 · **150** · 200 ms |
+| medium | 250 · 300 · 350 · **400** ms |
+| long | 450 · 500 · 550 · 600 ms |
+| extra-long | 700 · 800 · 900 · 1000 ms |
+
+Cinq courbes :
+
+```
+Standard               cubic-bezier(0.2, 0.0, 0, 1.0)
+Standard decelerate    cubic-bezier(0, 0, 0, 1)
+Standard accelerate    cubic-bezier(0.3, 0, 1, 1)
+Emphasized decelerate  cubic-bezier(0.05, 0.7, 0.1, 1.0)
+Emphasized accelerate  cubic-bezier(0.3, 0.0, 0.8, 0.15)
+```
+
+Règles d'usage citées textuellement :
+
+- « Les contrôles de sélection ont une durée courte de **200 ms** avec la courbe Standard »
+- « Un bouton flottant qui se déploie en feuille utilise **400 ms** avec la courbe Emphasized »
+- « Une carte qui s'ouvre en plein écran utilise **500 ms** »
+- « Au-delà de 600 ms, c'est rare, et réservé aux transitions d'ambiance **sans intervention de l'utilisateur** »
+
+### Apple — aucun chiffre, des principes
+
+La documentation de mouvement d'Apple ne publie **aucune durée**. iOS anime par ressorts physiques — masse, raideur, amortissement — et non par durée fixe. Un ressort peut être interrompu et repris en cours de route, ce qu'une durée fixe ne permet pas.
+
+Quatre principes en découlent, et deux touchent directement ce produit :
+
+1. « **Dans les applications, évitez d'ajouter du mouvement aux interactions d'interface qui se produisent fréquemment.** Vous ne voulez généralement pas faire passer aux gens du temps supplémentaire à regarder un mouvement inutile chaque fois qu'ils interagissent. »
+2. « **Laissez les gens annuler le mouvement.** Autant que possible, ne faites pas attendre la fin d'une animation avant de pouvoir agir, surtout s'ils doivent la subir plus d'une fois. »
+3. « Visez la brièveté et la précision dans les animations de retour. »
+4. « Rendez le mouvement optionnel — complétez le retour visuel par des alternatives comme **le retour haptique** et le son. »
+
+### Ce que ça change pour ce produit
+
+**Le premier principe d'Apple vise exactement le geste central du produit.** Une série se saisit quinze à trente fois par séance. C'est la définition d'une interaction fréquente. L'animation de validation prévue au § 6 de `02-design.md` reste légitime — c'est un retour, bref et précis — mais elle ne doit jamais retarder la saisie suivante, et sa durée penche vers le bas de la fourchette.
+
+**Confrontation des trois sources sur la validation d'une série :**
+
+| Source | Valeur |
+|---|---|
+| Web mesuré (Linear, Vercel) | 150-160 ms |
+| Material 3, contrôles de sélection | 200 ms |
+| `02-design.md` § 6 | 150 ms |
+
+150 ms est un jeton officiel Material (`short3`) et correspond au web mesuré. La valeur du dossier tient. Material recommande 200 ms spécifiquement pour les cases à cocher ; l'écart est mince et la valeur basse sert mieux un geste répété trente fois.
+
+**Le repère de la règle à 400 ms** correspond exactement au jeton `medium4` de Material, cité pour une expansion avec courbe Emphasized. Le dossier est aligné sans le savoir.
+
+### Un manque signalé : le retour haptique
+
+Apple recommande de compléter le retour visuel par l'haptique. Sur un produit tenu d'une main en salle, mains parfois moites, écran à luminosité réduite, une vibration brève à la validation d'une série vaudrait mieux qu'un changement de couleur qu'il faut regarder.
+
+**Réserve technique, à vérifier avant de s'y engager :** l'API Vibration du web n'est pas prise en charge par Safari sur iOS. Une PWA ne peut donc pas produire de retour haptique sur iPhone. Le retour visuel reste le seul disponible sur cette plateforme, ce qui rend sa qualité d'autant plus importante.
