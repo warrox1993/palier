@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": ["EnterPlanMode"],
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(git *)",
+      "Bash(npx supabase *)"
+    ]
+  }
+}
