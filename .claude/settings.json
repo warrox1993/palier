@@ -1,4 +1,9 @@
 {
+  "model": "claude-opus-5",
+  "effortLevel": "xhigh",
+  "env": {
+    "CONTRAT_DE_SORTIE": "0"
+  },
   "permissions": {
     "deny": ["EnterPlanMode"],
     "allow": [
