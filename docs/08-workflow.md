@@ -40,10 +40,10 @@ Toute investigation demandant plus de trois lectures de fichiers part en **sous-
 Une exploration non bornée lit des centaines de fichiers, remplit la fenêtre et ne produit rien d'exploitable. **Toute recherche est bornée avant d'être lancée** : question précise, périmètre de fichiers, format de rapport attendu.
 
 ### Plan
-`/superpowers:write-plan`. Découpage en tâches assez précises pour qu'un exécutant sans contexte puisse les réaliser. **Validé par l'utilisateur avant toute écriture de code.**
+La commande de planification. Découpage en tâches assez précises pour qu'un exécutant sans contexte puisse les réaliser. **Validé par l'utilisateur avant toute écriture de code.**
 
 ### Exécution
-`/superpowers:execute-plan`, par lots. Une tâche = un test qui échoue, le code minimal, le test qui passe, un commit.
+La commande d'exécution, par lots. Une tâche = un test qui échoue, le code minimal, le test qui passe, un commit.
 
 ### Revue
 Revue entre chaque tâche, contre le plan. Les problèmes critiques bloquent la suite.
@@ -62,11 +62,15 @@ Revue entre chaque tâche, contre le plan. Les problèmes critiques bloquent la 
 /plugin install superpowers@superpowers-marketplace
 ```
 
-Superpowers (Jesse Vincent / Prime Radiant) a dépassé 94 000 étoiles et a été accepté dans la marketplace officielle d'Anthropic. Commandes attendues après installation, à vérifier via `/help` :
+Superpowers (Jesse Vincent / Prime Radiant) a dépassé 94 000 étoiles et a été accepté dans la marketplace officielle d'Anthropic.
 
-- `/superpowers:brainstorm` — clarification avant conception
-- `/superpowers:write-plan` — plan d'implémentation
-- `/superpowers:execute-plan` — exécution par lots
+**Les noms de commandes varient selon la version.** La version courante expose `brainstorming`, `writing-plans` et `executing-plans` ; des versions antérieures utilisaient le préfixe `/superpowers:`. Vérifier via `/help` au démarrage et utiliser ce qui s'affiche.
+
+| Fonction | Commande courante |
+|---|---|
+| Clarification avant conception | `brainstorming` |
+| Plan d'implémentation | `writing-plans` |
+| Exécution par lots | `executing-plans` |
 
 Skills qui s'activent automatiquement : `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `requesting-code-review`, `finishing-a-development-branch`, `subagent-driven-development`.
 

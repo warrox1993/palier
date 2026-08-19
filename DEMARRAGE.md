@@ -16,7 +16,9 @@ Comptes à créer, tous gratuits :
 - **Vercel** — connecté à GitHub
 - **GitHub** — dépôt privé
 
-**Ne crée pas encore de clés API Anthropic ou Google.** Elles ne serviront qu'à l'étape 6 de la roadmap.
+**Clés API Anthropic et Google : à créer maintenant.** L'étape 1 de la roadmap livre l'abstraction `LLMProvider` avec un appel de test sur chaque fournisseur — sans clés, ce livrable est inatteignable.
+
+Le coût est négligeable : quelques appels de test valent des centimes. Fixe un plafond de dépense sur chaque console dès la création, et ne mets jamais ces clés côté client (voir `docs/16-projet.md`).
 
 ---
 
@@ -59,9 +61,9 @@ Puis les plugins officiels, depuis la marketplace `claude-plugins-official` déj
 /plugin install commit-commands
 ```
 
-**Critère :** `/help` liste `/superpowers:brainstorm`, `/superpowers:write-plan` et `/superpowers:execute-plan`.
+**Critère :** `/help` liste trois commandes correspondant à *clarifier*, *planifier* et *exécuter*. **Leur nom exact dépend de la version installée** — la version courante les expose sous `brainstorming`, `writing-plans` et `executing-plans`, une version antérieure utilisait `/superpowers:brainstorm`, `write-plan`, `execute-plan`.
 
-Si les commandes n'apparaissent pas, redémarrer la session avant d'aller plus loin.
+Ce qui compte est la présence des trois fonctions, pas le libellé. Si rien n'apparaît, redémarrer la session avant d'aller plus loin.
 
 ---
 
@@ -129,13 +131,13 @@ Copier tel quel :
 
 Une fois ses questions traitées :
 
-> Lance `/superpowers:brainstorm` sur l'étape 1 de `docs/07-roadmap.md` — le harnais et le socle.
+> Lance la commande de clarification de Superpowers (`brainstorming` ou son équivalent selon ta version) sur l'étape 1 de `docs/07-roadmap.md` — le harnais et le socle.
 >
 > Rappel : le harnais avant le produit. Rien ne s'écrit avant que TypeScript strict, ESLint, Prettier, Vitest, Playwright, les hooks pre-commit et pre-push, la CI et axe-core ne soient en place et vérifiés.
 
 Puis, après le brainstorm :
 
-> Écris le plan avec `/superpowers:write-plan`. Je le relis avant toute exécution.
+> Écris le plan avec la commande de planification (`writing-plans` ou équivalent). Je le relis avant toute exécution.
 
 ---
 
@@ -155,6 +157,8 @@ C'est la partie que la plupart des gens ratent. L'agent est bon dans la mesure o
 **La phrase à utiliser quand il dérive :** « Relis `docs/XX` et reprends. »
 
 **La phrase à utiliser quand il dit avoir fini :** « Montre-moi le contrôle exécutable des douze points de la définition de terminé. »
+
+**La phrase à utiliser quand il signale une contradiction :** « Bonne prise. Applique la hiérarchie de `CLAUDE.md` § 5, propose la correction, et attends ma validation. » Ne jamais le laisser trancher seul sur le contenu métier.
 
 ---
 

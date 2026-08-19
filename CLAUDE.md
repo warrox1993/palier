@@ -19,10 +19,15 @@ Ce projet se construit avec le framework **Superpowers** (Jesse Vincent / Prime 
 /plugin install superpowers@superpowers-marketplace
 ```
 
-Vérifier au démarrage de chaque session que les commandes sont disponibles via `/help` :
-- `/superpowers:brainstorm` — clarification du besoin avant toute conception
-- `/superpowers:write-plan` — plan d'implémentation
-- `/superpowers:execute-plan` — exécution par lots
+Vérifier au démarrage de chaque session que les commandes sont disponibles via `/help`. **Leur nom exact varie selon la version installée** — la version courante expose `brainstorming`, `writing-plans` et `executing-plans`. Ce qui compte est la fonction, pas le libellé :
+
+| Fonction | Commande (à confirmer via `/help`) |
+|---|---|
+| Clarification avant conception | `brainstorming` |
+| Plan d'implémentation | `writing-plans` |
+| Exécution par lots | `executing-plans` |
+
+Si les noms diffèrent encore, utiliser ceux que `/help` affiche et le signaler.
 
 **Séquence imposée pour toute fonctionnalité :** brainstorm → plan validé par l'utilisateur → exécution. Jamais de code avant qu'un plan ait été approuvé.
 
@@ -42,7 +47,7 @@ Cette règle existe parce qu'un agent maison n'est ni testé, ni maintenu, ni pa
 
 ### Produit fini, jamais prototype
 
-Chaque tâche livrée est finie : testée, accessible, traduite, avec ses états de chargement, d'erreur et vide. La définition de terminé de `docs/08-workflow.md` fait foi, et ses dix points sont cochés avant tout passage à la suite.
+Chaque tâche livrée est finie : testée, accessible, traduite, avec ses états de chargement, d'erreur et vide. La définition de terminé de `docs/08-workflow.md` fait foi, et ses **douze** points sont cochés avant tout passage à la suite.
 
 On séquence la livraison, jamais la qualité. « On finira plus tard » n'existe pas dans ce projet.
 
@@ -115,7 +120,7 @@ Documents de référence, à lire avant de commencer :
 | Front | React + Vite + TypeScript + Tailwind | PWA installable |
 | Backend | Supabase | **Région Francfort ou Paris — irréversible** |
 | Base de données | PostgreSQL | **RLS activé dès la création de chaque table** |
-| Auth | Supabase Auth, magic link | Pas de mot de passe |
+| Auth | Supabase Auth : **Google OAuth + email/mot de passe** | Pas de lien magique. Voir `docs/09-comptes.md` |
 | État serveur | TanStack Query | Mutations optimistes |
 | Cache local | IndexedDB (Dexie) | Écriture immédiate, réseau en arrière-plan |
 | Hébergement | Vercel | Spend limit activé dès le jour 1 |
@@ -143,7 +148,22 @@ Documents de référence, à lire avant de commencer :
 
 ---
 
-## 5. Ce qui doit déclencher une question à l'utilisateur
+## 5. Hiérarchie en cas de contradiction
+
+Ce dossier a été écrit par itérations. Des contradictions résiduelles sont possibles. **Ne jamais trancher silencieusement : signaler, proposer, attendre.**
+
+Ordre de priorité quand deux documents divergent :
+
+1. **`docs/01-conformite.md`** — prime sur tout. Une règle de conformité ne cède jamais
+2. **Le document spécialisé** — `09-comptes.md` fait autorité sur l'authentification, `02-design.md` sur le visuel, `03-donnees.md` sur le schéma
+3. **`docs/07-roadmap.md`** — pour l'ordre et le contenu des étapes
+4. **`CLAUDE.md`** — synthèse, donc le plus susceptible d'être en retard sur les documents spécialisés
+
+Autrement dit : ce fichier prime sur les **règles de travail**, jamais sur le **contenu métier**. En cas de conflit sur un point produit, le document spécialisé gagne.
+
+---
+
+## 6. Ce qui doit déclencher une question à l'utilisateur
 
 Ne jamais trancher seul sur :
 
@@ -152,3 +172,4 @@ Ne jamais trancher seul sur :
 - Un changement de schéma de base après la première mise en production
 - L'ajout d'une dépendance lourde
 - Un arbitrage entre rapidité de livraison et conformité — **la conformité gagne toujours, mais l'utilisateur doit être informé du coût**
+- **Toute contradiction détectée entre deux documents** — la signaler avec les références exactes, proposer la résolution, attendre validation

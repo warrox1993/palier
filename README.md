@@ -34,6 +34,21 @@ Dossier de spécification destiné à Claude Code.
 > Ne code rien pour l'instant. Lance `/superpowers:brainstorm` sur l'étape 1 de la roadmap et
 > pose-moi les questions nécessaires avant de proposer un plan.
 
+## En cas de contradiction entre documents
+
+Ce dossier a été écrit par itérations successives. **Si tu détectes une contradiction : signale-la avec les références exactes, propose la résolution, attends validation.** Ne tranche jamais seul sur le contenu métier.
+
+Ordre de priorité : `01-conformite.md` > document spécialisé > `07-roadmap.md` > `CLAUDE.md`. Le détail est en section 5 de `CLAUDE.md`.
+
+### Corrections déjà appliquées
+
+| Contradiction | Résolution |
+|---|---|
+| `CLAUDE.md` annonçait « magic link », trois documents imposaient Google OAuth + mot de passe | **Google OAuth + email/mot de passe.** `CLAUDE.md` corrigé |
+| `CLAUDE.md` disait « dix points », `08-workflow.md` en comptait douze | **Douze.** `CLAUDE.md` corrigé |
+| Noms de commandes Superpowers obsolètes (`/superpowers:brainstorm`) | Les noms **varient selon la version** — vérifier via `/help`. Version courante : `brainstorming`, `writing-plans`, `executing-plans` |
+| Clés API interdites à l'étape 0, exigées à l'étape 1 | **Les créer à l'étape 0**, avec plafond de dépense. L'étape 1 livre un appel de test |
+
 ## Les quatre règles à ne jamais contourner
 
 1. **Informer, jamais prescrire.** Un chiffre, une référence, un écart. Aucune action recommandée
