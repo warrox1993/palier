@@ -21,6 +21,10 @@ describe("garde-fou : point d'entrée unique", () => {
       'back:test',
       'licences',
       'back:audit',
+      // Sans cette étape, les 39 épreuves du harnais backend et racine ne sont
+      // lancées que par la CI — laquelle ne bloque rien (D29). Ce test-ci en
+      // fait partie : il gardait `verify` sans que `verify` ne le lance jamais.
+      'harnais:back',
       'front:build',
     ]) {
       expect(s, `Contrôle manquant dans verify : ${etape}`).toContain(etape)

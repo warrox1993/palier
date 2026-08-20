@@ -75,6 +75,12 @@ jobs:
       - uses: ./.github/actions/installer-gitleaks
       - run: npm --prefix front ci
       - run: npm --prefix front audit --audit-level=high
+      # La racine porte husky et lint-staged, qui s'exécutent à CHAQUE commit
+      # sur le poste du développeur. Elles échappaient à l'audit, qui ne
+      # regardait que `front/`. Une dépendance de hook compromise s'exécute au
+      # moment le plus privilégié du cycle : juste avant que le code parte.
+      - run: npm ci
+      - run: npm audit --audit-level=high
       # `fetch-depth: 0` ci-dessus n'est pas décoratif : `gitleaks git` parcourt
       # l'HISTORIQUE, et un clone superficiel lui donnerait un commit à lire.
       - run: gitleaks git --redact --no-banner -v --config .gitleaks.toml .

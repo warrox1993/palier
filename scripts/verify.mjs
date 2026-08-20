@@ -18,6 +18,18 @@ const etapes = [
   ['back:test', ['dotnet', 'test', 'back/Palier.sln', '--settings', 'back/coverage.runsettings']],
   ['licences', ['node', 'scripts/verifier-licences.mjs']],
   ['back:audit', ['npm', 'run', 'audit:back']],
+  // Les 39 épreuves du harnais backend et racine. `front:test` lançait déjà les
+  // 77 du front ; celles-ci n'étaient appelées QUE par la CI, et la CI ne bloque
+  // rien (D29). Casser le seuil de couverture du domaine, l'épinglage des
+  // actions par empreinte, le délai de refroidissement de Dependabot ou la
+  // délégation du hook de pré-envoi ne faisait donc rougir aucun contrôle local
+  // — y compris `verify.test.mjs`, l'épreuve qui garde ce fichier même.
+  //
+  // L'argument du plan pour les exclure — « ne pas mêler des outils qu'on fait
+  // échouer exprès aux contrôles normaux » — ne tenait déjà plus : `front:test`
+  // les mêle depuis la tâche 4. Mieux vaut une sortie chargée qu'un garde-fou
+  // que rien n'appelle.
+  ['harnais:back', ['npm', 'run', 'test:harness:back']],
   ['front:build', ['npm', '--prefix', 'front', 'run', 'build']],
 ]
 

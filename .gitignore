@@ -13,3 +13,14 @@ node_modules/
 .env.local
 *.local
 .DS_Store
+
+# Sondes écrites par `back/tests-harness/rigueur.test.mjs` dans l'arbre SUIVI :
+# l'épreuve dépose une violation dans un vrai projet, lance MSBuild, puis la
+# retire en `afterEach`. Une interruption, un délai dépassé ou un plantage laisse
+# le fichier en place — et `dotnet build`, `dotnet format`, `verify` et le hook
+# de pré-commit échouent alors pour tout le monde, en accusant du code sain.
+# Un auditeur l'a vécu le 20/08/2026. Les ignorer empêche aussi qu'un
+# `git add -A` les emporte.
+back/Palier.Domain/ChampInutilise.cs
+back/Palier.Domain.Tests/SondeRacineTests.cs
+back/Palier.Domain.Tests/Energie/SondeSousDossierTests.cs

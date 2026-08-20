@@ -14,7 +14,7 @@
     "format:check": "prettier --check . \"!tests/harness/fixtures/**\"",
     "knip": "knip",
     "jscpd": "jscpd src",
-    "e2e": "playwright test tests/e2e/accessibilite.spec.ts",
+    "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps chromium webkit",
     "test": "vitest run --exclude \"tests/harness/accessibilite.test.ts\"",
     "test:harness": "vitest run tests/harness",
