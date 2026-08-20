@@ -44,6 +44,26 @@ dotnet_naming_style.underscore_camel.capitalization = camel_case
 [**/*.Tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
 
+# CA1515 « rendez ce type interne » contredit FRONTALEMENT xUnit, qui n'énumère
+# que les types publics. Mesuré le 20/08/2026 en rendant `RolesTests` interne :
+# la compilation sort en code 1 sur `error xUnit1000: Test classes must be
+# public` — et sur `error CA1812` au passage, xUnit instanciant ses classes par
+# réflexion, invisible pour l'analyseur. Avec TreatWarningsAsErrors, les deux
+# règles rendent le projet incompilable dans les deux sens : l'exception n'est
+# pas un confort, c'est la seule sortie. Elle reste restreinte aux projets
+# `*.Tests` et à cette seule règle.
+dotnet_diagnostic.CA1515.severity = none
+
+# CA2007 « appeler ConfigureAwait sur la tâche attendue » vise les
+# BIBLIOTHÈQUES, dont l'appelant est inconnu et peut porter un contexte de
+# synchronisation bloquant. Sa propre documentation le dit : « This rule is
+# generally not applicable to application code ». Un assemblage de tests n'est
+# consommé par personne, et `IsPackable` y est faux. Ajouter `.ConfigureAwait`
+# à chaque `await` d'une suite d'intégration reviendrait à écrire une centaine
+# de fois un mot qui ne protège de rien, et à noyer les lignes qui, elles,
+# portent une assertion.
+dotnet_diagnostic.CA2007.severity = none
+
 [*.{ts,tsx,js,jsx,json,md,yml,yaml}]
 indent_size = 2
 
