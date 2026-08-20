@@ -29,5 +29,12 @@ export default {
     exclude: ['**/node_modules/**'],
     testTimeout: 300_000,
     hookTimeout: 300_000,
+    // Plusieurs épreuves déposent un fichier de violation dans
+    // `back/Palier.Domain/` puis lancent MSBuild. En parallèle, la violation
+    // de l'une ferait échouer la compilation de l'autre : chacune resterait
+    // rouge, mais pour la mauvaise raison — et un jour verte pour la mauvaise
+    // raison. MSBuild ne tolère pas non plus deux builds concurrents du même
+    // projet. Les fichiers d'épreuve s'exécutent donc l'un après l'autre.
+    fileParallelism: false,
   },
 }

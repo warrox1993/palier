@@ -1,0 +1,33 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_size = 4
+csharp_new_line_before_open_brace = all
+csharp_style_namespace_declarations = file_scoped:error
+dotnet_style_require_accessibility_modifiers = always:error
+dotnet_diagnostic.IDE0005.severity = error
+
+# Nommage — conventions .NET
+dotnet_naming_rule.types_pascal.symbols = types
+dotnet_naming_rule.types_pascal.style = pascal
+dotnet_naming_rule.types_pascal.severity = error
+dotnet_naming_symbols.types.applicable_kinds = class,struct,enum,property,method
+dotnet_naming_style.pascal.capitalization = pascal_case
+
+dotnet_naming_rule.champs_prives.symbols = champs_prives
+dotnet_naming_rule.champs_prives.style = underscore_camel
+dotnet_naming_rule.champs_prives.severity = error
+dotnet_naming_symbols.champs_prives.applicable_kinds = field
+dotnet_naming_symbols.champs_prives.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+[*.{ts,tsx,js,jsx,json,md,yml,yaml}]
+indent_size = 2
