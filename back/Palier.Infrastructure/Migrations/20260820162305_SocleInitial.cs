@@ -635,6 +635,38 @@ namespace Palier.Infrastructure.Migrations
                 grant select on public.weekly_volume to palier_app;
                 """
             );
+
+            // ---- La version du schéma, en LECTURE SEULE pour l'API -----------
+            //
+            // AJOUTÉ À LA TÂCHE 9, ET C'EST UN DÉFAUT DU PLAN CORRIGÉ, PAS UNE
+            // AMÉLIORATION. `GET /api/v1/sante` doit rendre « la version de
+            // migration APPLIQUÉE » — c'est le seul champ qui distingue « le
+            // schéma est en retard sur le code » de « tout va bien ». Mesuré le
+            // 20/08/2026 sous `palier_app` :
+            //
+            //     ERROR:  permission denied for table __EFMigrationsHistory
+            //
+            // Le rôle n'avait ni le privilège ni de politique. Les deux
+            // manquaient : sous FORCE, le privilège seul ne suffit pas.
+            //
+            // SELECT SEULEMENT, et une politique de LECTURE seulement. Rien
+            // n'ouvre l'écriture : c'est EF, sous `palier_migrations` et par la
+            // politique `migrations_referentiel`, qui inscrit ses lignes.
+            //
+            // Ce que cela expose : le nom de la dernière migration et la version
+            // d'EF Core. C'est une empreinte de version, pas une donnée
+            // personnelle — et elle est déjà rendue par la route de santé, qui
+            // est publique jusqu'au lot 4 (D41). Le choix d'exposer se fait donc
+            // à la ROUTE, pas ici.
+            migrationBuilder.Sql(
+                """
+                grant select on public."__EFMigrationsHistory" to palier_app;
+
+                create policy lecture_version on public."__EFMigrationsHistory"
+                  for select to palier_app
+                  using (true);
+                """
+            );
         }
 
         /// <inheritdoc />
@@ -656,6 +688,8 @@ namespace Palier.Infrastructure.Migrations
             migrationBuilder.Sql(
                 """
                 drop policy if exists migrations_referentiel on public."__EFMigrationsHistory";
+                drop policy if exists lecture_version on public."__EFMigrationsHistory";
+                revoke select on public."__EFMigrationsHistory" from palier_app;
                 alter table public."__EFMigrationsHistory" no force row level security;
                 alter table public."__EFMigrationsHistory" disable row level security;
                 """

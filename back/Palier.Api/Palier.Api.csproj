@@ -12,4 +12,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!--
+      Les types de ce projet sont INTERNES : CA1515 refuse un type public dans un
+      exécutable, et `AnalysisLevel: latest-all` avec `TreatWarningsAsErrors` en
+      fait une erreur de compilation. Les rendre publics pour les éprouver serait
+      l'inverse du bon geste — on affaiblirait l'assemblage pour le tester.
+      L'épreuve de la configuration de production et celle de l'assertion de
+      démarrage lisent donc l'assemblage de l'intérieur.
+    -->
+    <InternalsVisibleTo Include="Palier.Database.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -14,7 +14,10 @@ namespace Palier.Database.Tests;
 ///
 /// Ce qu'elles protègent est la STABILITÉ de ce tri d'un environnement à
 /// l'autre. Sous le fournisseur `libc`, `datcollversion` est la version de la
-/// glibc de l'image — 2.41 sur `postgres:18.6`. Elle change avec l'image de
+/// glibc de l'image — 2.41 sur l'image Debian que `db/compose.yaml` désigne, et
+/// le tag n'est PAS recopié ici : `tests-harness/db.test.mjs` refuse toute
+/// seconde déclaration, y compris dans un commentaire, et il a mordu sur cette
+/// ligne même le 20/08/2026. Elle change avec l'image de
 /// base, avec une mise à jour du socle de l'hébergeur, avec un passage de
 /// Debian 13 à 14. Or un changement d'ordre de tri INVALIDE les index sur les
 /// colonnes texte : les requêtes rendent alors des résultats faux, et

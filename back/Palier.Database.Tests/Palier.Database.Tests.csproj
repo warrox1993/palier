@@ -26,6 +26,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      L'épreuve `La_configuration_de_PRODUCTION_n_active_pas_la_journalisation_sensible`
+      CONSTRUIT la configuration réelle de l'API : elle a donc besoin de
+      `WebApplication`, qui vit dans le framework partagé ASP.NET Core. Une
+      référence de projet ne le transmet pas à un projet `Microsoft.NET.Sdk`.
+      L'alternative — recopier la composition dans l'épreuve — reviendrait à
+      éprouver la copie.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Palier.Infrastructure\Palier.Infrastructure.csproj" />
     <ProjectReference Include="..\Palier.Api\Palier.Api.csproj" />
   </ItemGroup>
