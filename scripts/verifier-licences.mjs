@@ -14,10 +14,23 @@ const PERMISES = [
 // n'est pas forcément interdite : elle doit être LUE, puis inscrite ici avec
 // la raison de son admission — jamais ajoutée à la liste blanche, qui ne
 // porte que des expressions SPDX permissives.
-// La liste est vide : aucune exception n'a été accordée à ce jour.
 const EXCEPTIONS = {
-  // 'Exemple.Paquet': 'MIT lue dans LICENSE le 20/08/2026, sans expression SPDX publiée.',
+  '@axe-core/playwright':
+    'MPL-2.0, lue le 20/08/2026. Copyleft PAR FICHIER, sans clause réseau : ' +
+    'la section 3.3 autorise explicitement la combinaison avec du code propriétaire ' +
+    'sous nos propres termes, et la 3.2 n\'oblige à publier que les fichiers MPL ' +
+    'que l\'on MODIFIE. Nous ne modifions pas axe-core. C\'est la différence de fond ' +
+    'avec RPL-1.5, qui a motivé D13 : celle-ci ferme la faille SaaS, MPL-2.0 ne la ' +
+    'connaît pas. De plus axe-core est un outil de développement, jamais distribué ' +
+    'dans le produit, et CLAUDE.md § 3 l\'impose nommément. ' +
+    'Ce qui rouvrirait cette exception : un besoin de PATCHER axe-core.',
 }
+
+// Pour mémoire, non détecté par ce contrôle qui ne lit que les dépendances
+// DIRECTES : `lightningcss` est aussi en MPL-2.0, en transitif de Vite 8.
+// Le même raisonnement s'applique, et il n'y a de toute façon aucun moyen de
+// l'éviter sans changer d'empaqueteur. Si le contrôle est un jour étendu aux
+// dépendances transitives, il devra entrer ici.
 
 // Comparaison par jetons, et non par sous-chaîne. `includes` acceptait
 // « MITNFA » parce qu'il contient « MIT » : sur un contrôle juridique, une
