@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Palier.Infrastructure\Palier.Infrastructure.csproj" />
+    <ProjectReference Include="..\Palier.Api\Palier.Api.csproj" />
   </ItemGroup>
 
 </Project>

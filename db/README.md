@@ -175,11 +175,24 @@ est évaluée **pour chaque ligne** ; `(select …)` force un InitPlan évalué 
 fois par instruction. On garde le `plpgsql` qui lève _et_ la vitesse.
 
 > **Ce que ce dispositif n'achète PAS, et qu'il ne faut pas croire.** « L'échec
-> crie » est **faux sur une table vide** : zéro ligne parcourue, zéro
-> évaluation, aucune exception. Sur un compte neuf — donc les premiers jours de
-> production — « identité absente » et « cet utilisateur n'a pas de données »
-> sont indiscernables. La garde applicative du pipeline est ce qui ferme ce
-> trou. La fonction SQL est le **filet**, jamais le garde unique.
+> crie » n'est **pas garanti sur une table vide**. RLS évalue ses politiques
+> _par ligne_ : zéro ligne parcourue peut rendre zéro évaluation, donc aucune
+> exception — et « identité absente » redevient indiscernable de « cet
+> utilisateur n'a pas de données », précisément les premiers jours de
+> production.
+>
+> **Mesuré le 20/08/2026 sur PostgreSQL 18.6 :** avec l'enveloppe
+> `(select app.utilisateur())`, le moteur lève `28000` **même sur table vide**,
+> pour les trois formes de requête essayées — l'InitPlan est évalué une fois par
+> instruction, avant tout parcours. C'est mieux que ce que le plan annonçait,
+> **et cela ne se revendique pas** : rien ne promet que le planificateur
+> l'évaluera toujours, ni qu'il ne l'élaguera pas sur une relation prouvée vide.
+> Une propriété de sécurité qui dépend du plan d'exécution n'est pas une
+> propriété.
+>
+> La garde applicative du pipeline est donc ce qui ferme ce trou, et son épreuve
+> n'assertionne **rien** sur le comportement du moteur. La fonction SQL est le
+> **filet**, jamais le garde unique.
 
 **La migration suppose que les rôles existent.** Un `grant … to palier_app` sur
 une base sans ce rôle échoue en le nommant. C'est le couplage voulu entre

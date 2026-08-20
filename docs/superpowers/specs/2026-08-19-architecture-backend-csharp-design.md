@@ -11,7 +11,7 @@
 
 Le dossier initial prévoyait une application cliente parlant directement à Supabase, protégée par les politiques RLS de PostgreSQL. Cette architecture est remplacée par **trois composants distincts** : un front React, une API C#, une base PostgreSQL, le tout hébergé chez OVHcloud.
 
-Ce document décrit l'architecture cible. Il ne redéfinit pas le produit : `00-produit.md`, `01-conformite.md`, `04-nutrition.md`, `05-entrainement.md` et `10-progression.md` restent intégralement valables — ce sont les documents qui disent *quoi*, et le quoi ne change pas.
+Ce document décrit l'architecture cible. Il ne redéfinit pas le produit : `00-produit.md`, `01-conformite.md`, `04-nutrition.md`, `05-entrainement.md` et `10-progression.md` restent intégralement valables — ce sont les documents qui disent _quoi_, et le quoi ne change pas.
 
 ---
 
@@ -19,25 +19,25 @@ Ce document décrit l'architecture cible. Il ne redéfinit pas le produit : `00-
 
 ### Reste inchangé
 
-| Élément | Où |
-|---|---|
-| Le produit, sa promesse, son périmètre | `00-produit.md` |
-| La ligne informer / prescrire et ses garde-fous | `01-conformite.md` |
+| Élément                                               | Où                                      |
+| ----------------------------------------------------- | --------------------------------------- |
+| Le produit, sa promesse, son périmètre                | `00-produit.md`                         |
+| La ligne informer / prescrire et ses garde-fous       | `01-conformite.md`                      |
 | Toutes les formules nutritionnelles et d'entraînement | `04-nutrition.md`, `05-entrainement.md` |
-| La direction artistique et l'écran de séance | `02-design.md` |
-| Le front React, TypeScript, PWA, i18n, Dexie | inchangé |
-| Le harnais front déjà installé | lot 1, tâches 1 et 2 livrées |
+| La direction artistique et l'écran de séance          | `02-design.md`                          |
+| Le front React, TypeScript, PWA, i18n, Dexie          | inchangé                                |
+| Le harnais front déjà installé                        | lot 1, tâches 1 et 2 livrées            |
 
 ### Change
 
-| Élément | Avant | Après |
-|---|---|---|
-| Accès aux données | client → Supabase | client → API C# → PostgreSQL |
-| Authentification | Supabase Auth | ASP.NET Identity |
-| Protection des données | RLS comme unique barrière | autorisation applicative, RLS en défense de profondeur |
-| Hébergement | Vercel + Supabase | OVHcloud, front et API sous le même domaine |
-| Fonctions serveur | `api/` en TypeScript sur Vercel | contrôleurs de l'API C# |
-| Calculs métier | `src/core/` en TypeScript | `Palier.Domain` en C# |
+| Élément                | Avant                           | Après                                                  |
+| ---------------------- | ------------------------------- | ------------------------------------------------------ |
+| Accès aux données      | client → Supabase               | client → API C# → PostgreSQL                           |
+| Authentification       | Supabase Auth                   | ASP.NET Identity                                       |
+| Protection des données | RLS comme unique barrière       | autorisation applicative, RLS en défense de profondeur |
+| Hébergement            | Vercel + Supabase               | OVHcloud, front et API sous le même domaine            |
+| Fonctions serveur      | `api/` en TypeScript sur Vercel | contrôleurs de l'API C#                                |
+| Calculs métier         | `src/core/` en TypeScript       | `Palier.Domain` en C#                                  |
 
 **Le front conserve ses propres modules purs** pour ce qui doit rester réactif hors ligne — conversions d'unités, formatage, agrégations d'affichage. Les calculs qui engagent la conformité — besoins énergétiques, comparaison aux limites hautes EFSA, planchers de sécurité — vivent **exclusivement** dans `Palier.Domain`. Un calcul de conformité ne peut pas exister à deux endroits : il y aurait deux vérités.
 
@@ -105,10 +105,16 @@ Un pipeline de comportements enveloppe chaque handler, dans cet ordre :
 
 1. **Validation** — FluentValidation (Apache-2.0, vérifiée), échec avant toute exécution
 2. **Autorisation** — le demandeur a-t-il le droit sur cette ressource
-3. **Transaction** — les commandes seulement, jamais les requêtes
+3. **Transaction** — **les commandes ET les requêtes, sans exception** (réécrit le 20/08/2026, D36)
 4. **Journalisation** — durée, résultat, **jamais de donnée de santé**, comme l'exige `01-conformite.md` § 4
 
 Cette dernière contrainte a une épreuve dédiée dans le harnais : un journal contenant un poids, un apport ou une contrainte déclarée doit faire échouer un test.
+
+> **Le point 3 disait « les commandes seulement, jamais les requêtes ». Il est réécrit, pas nuancé.** D36 fait parvenir l'identité au moteur par `set_config('app.utilisateur', $1, true)`, en portée **transaction** : hors transaction, il n'y a **aucune identité**, donc aucune politique évaluable. Laisser les requêtes en dehors produirait une isolation qui mord sur les écritures et **disparaît sur les lectures** — le chemin le moins dangereux gardé, le plus dangereux ouvert.
+>
+> Le coût est réel et il est écrit : **trois** allers-retours par cas d'usage — `BEGIN`, `set_config`, `COMMIT` — et non un. Mesuré le 20/08/2026 sur Testcontainers, requête la plus chère du schéma (`sets` avec son `exists` sur `workouts`, dont la politique s'applique à son tour dans la sous-requête) : **4,3 ms par cas d'usage complet**, sur vingt tours. Ce chiffre ne prouve rien de l'instance managée, qui n'existe pas encore.
+>
+> Le pipeline **refuse avant d'ouvrir la transaction** quand l'identité manque, avec le nom du cas d'usage. Ce n'est pas une ceinture de plus : sur une table **vide**, l'accesseur SQL n'est jamais appelé — RLS évalue ses politiques _par ligne_ — et « identité absente » redevient indiscernable de « cet utilisateur n'a pas de données ». La fonction SQL est le filet, jamais le garde unique.
 
 ---
 
@@ -129,11 +135,11 @@ Les tests de politiques de `08-workflow.md` § 6 sont conservés tels quels : «
 
 **Trois tables absentes de `03-donnees.md`** et exigées ailleurs, à créer :
 
-| Table | Exigée par |
-|---|---|
-| journal versionné des libellés | `09-comptes.md` § 6 — « aucun texte nutritionnel en dur dans le code » |
-| journal des appels au modèle | `06-ia.md` § 2 — « sans cette table, aucun arbitrage n'est possible » ; `13-juridique.md` § 2 |
-| tables d'identité ASP.NET | conséquence de D17 |
+| Table                          | Exigée par                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------- |
+| journal versionné des libellés | `09-comptes.md` § 6 — « aucun texte nutritionnel en dur dans le code »                        |
+| journal des appels au modèle   | `06-ia.md` § 2 — « sans cette table, aucun arbitrage n'est possible » ; `13-juridique.md` § 2 |
+| tables d'identité ASP.NET      | conséquence de D17                                                                            |
 
 ---
 
@@ -141,18 +147,18 @@ Les tests de politiques de `08-workflow.md` § 6 sont conservés tels quels : «
 
 ASP.NET Identity, avec les sept exigences de `09-comptes.md` § 1. Ce qu'Identity fournit et ce qui reste à écrire :
 
-| Exigence | Fourni | À écrire |
-|---|---|---|
-| Email et mot de passe, hachage | ✅ | — |
-| Minimum 10 caractères | ✅ configurable | — |
-| Contrôle HaveIBeenPwned par préfixe de hachage | ❌ | validateur de mot de passe |
-| Vérification d'email | ✅ jetons | l'envoi et le blocage de la nutrition |
-| Google OAuth | ✅ | la fusion avec un compte email existant |
-| 5 tentatives par IP **et** par compte sur 15 minutes | partiel | limitation par IP |
-| Verrouillage temporaire progressif | ✅ par compte | la progressivité |
-| 2FA TOTP | ✅ | les codes de secours |
-| Sessions listées, déconnexion de tous les appareils | ❌ | table de sessions |
-| Rotation du jeton de rafraîchissement à chaque usage | ❌ | à implémenter |
+| Exigence                                             | Fourni          | À écrire                                |
+| ---------------------------------------------------- | --------------- | --------------------------------------- |
+| Email et mot de passe, hachage                       | ✅              | —                                       |
+| Minimum 10 caractères                                | ✅ configurable | —                                       |
+| Contrôle HaveIBeenPwned par préfixe de hachage       | ❌              | validateur de mot de passe              |
+| Vérification d'email                                 | ✅ jetons       | l'envoi et le blocage de la nutrition   |
+| Google OAuth                                         | ✅              | la fusion avec un compte email existant |
+| 5 tentatives par IP **et** par compte sur 15 minutes | partiel         | limitation par IP                       |
+| Verrouillage temporaire progressif                   | ✅ par compte   | la progressivité                        |
+| 2FA TOTP                                             | ✅              | les codes de secours                    |
+| Sessions listées, déconnexion de tous les appareils  | ❌              | table de sessions                       |
+| Rotation du jeton de rafraîchissement à chaque usage | ❌              | à implémenter                           |
 
 **Le jeton d'accès est court, le jeton de rafraîchissement vit dans un cookie `httpOnly`, `Secure`, `SameSite=Strict`.** Ce dernier point n'est possible que parce que le front et l'API partagent le domaine (D16) — c'est le bénéfice concret de cette décision.
 
@@ -224,33 +230,33 @@ Deux implémentations, un routage par tâche configurable sans recompilation, et
 
 Le harnais front reste intégralement valable. Il lui faut un jumeau côté backend.
 
-| Élément | Rôle |
-|---|---|
-| `TreatWarningsAsErrors` | un avertissement du compilateur est une erreur |
-| `Nullable: enable` | l'équivalent de `strict` en TypeScript |
-| Analyseurs Roslyn (`AnalysisLevel: latest-all`) | l'équivalent d'ESLint |
-| `dotnet format --verify-no-changes` | l'équivalent de Prettier |
-| xUnit (Apache-2.0) | tests unitaires et d'intégration |
-| Couverture, seuil 100 % sur `Palier.Domain` | `08-workflow.md` § 6 |
-| Testcontainers | tests d'intégration sur un vrai PostgreSQL, pas un simulacre |
-| Contrôle des licences | liste blanche, échec si une dépendance en sort (D13) |
-| Analyse de vulnérabilités | `dotnet list package --vulnerable`, en échec |
+| Élément                                         | Rôle                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| `TreatWarningsAsErrors`                         | un avertissement du compilateur est une erreur               |
+| `Nullable: enable`                              | l'équivalent de `strict` en TypeScript                       |
+| Analyseurs Roslyn (`AnalysisLevel: latest-all`) | l'équivalent d'ESLint                                        |
+| `dotnet format --verify-no-changes`             | l'équivalent de Prettier                                     |
+| xUnit (Apache-2.0)                              | tests unitaires et d'intégration                             |
+| Couverture, seuil 100 % sur `Palier.Domain`     | `08-workflow.md` § 6                                         |
+| Testcontainers                                  | tests d'intégration sur un vrai PostgreSQL, pas un simulacre |
+| Contrôle des licences                           | liste blanche, échec si une dépendance en sort (D13)         |
+| Analyse de vulnérabilités                       | `dotnet list package --vulnerable`, en échec                 |
 
 **Un seul point d'entrée, comme côté front :** `npm run verify` à la racine enchaîne le front puis le backend. C'est cette commande unique qu'appellent le hook de pré-envoi et la CI — jamais une liste dupliquée, sinon les deux divergent.
 
 **Les épreuves de franchissement** passent de douze à une vingtaine. Les nouvelles, côté backend :
 
-| Garde-fou | Violation provoquée | Attendu |
-|---|---|---|
-| Pureté du domaine | référence de `Domain` vers `Infrastructure` | la compilation échoue |
-| Nullabilité | déréférencement possiblement nul | la compilation échoue |
-| Avertissements | avertissement du compilateur | la compilation échoue |
-| Format | fichier mal formaté | `dotnet format --verify-no-changes` échoue |
-| Couverture | fonction du domaine non testée | le seuil échoue |
-| Journalisation | une donnée de santé dans un journal | le test échoue |
-| Isolation des données | l'utilisateur A lit une ligne de B | le test échoue |
-| Minimisation | un nom ou un email franchit la frontière du modèle | le test échoue |
-| Licences | dépendance hors liste blanche | la CI échoue |
+| Garde-fou             | Violation provoquée                                | Attendu                                    |
+| --------------------- | -------------------------------------------------- | ------------------------------------------ |
+| Pureté du domaine     | référence de `Domain` vers `Infrastructure`        | la compilation échoue                      |
+| Nullabilité           | déréférencement possiblement nul                   | la compilation échoue                      |
+| Avertissements        | avertissement du compilateur                       | la compilation échoue                      |
+| Format                | fichier mal formaté                                | `dotnet format --verify-no-changes` échoue |
+| Couverture            | fonction du domaine non testée                     | le seuil échoue                            |
+| Journalisation        | une donnée de santé dans un journal                | le test échoue                             |
+| Isolation des données | l'utilisateur A lit une ligne de B                 | le test échoue                             |
+| Minimisation          | un nom ou un email franchit la frontière du modèle | le test échoue                             |
+| Licences              | dépendance hors liste blanche                      | la CI échoue                               |
 
 ---
 
@@ -268,15 +274,15 @@ Le harnais front reste intégralement valable. Il lui faut un jumeau côté back
 
 Ces documents contiennent désormais des affirmations fausses. **Aucun ne sera modifié sans validation** — `CLAUDE.md` § 6 l'interdit sur le contenu métier.
 
-| Document | Ce qui devient faux |
-|---|---|
-| `CLAUDE.md` § 3 | toute la ligne « Stack » : backend, auth, hébergement, portabilité Cloudflare |
-| `03-donnees.md` | RLS présentée comme la barrière principale ; trois tables manquantes |
-| `09-comptes.md` § 1 | « toutes deux gérées par Supabase Auth » |
-| `16-projet.md` | arborescence, variables d'environnement, conventions de nommage C# absentes |
-| `08-workflow.md` | pipeline, serveurs MCP, critères de sortie par domaine |
-| `13-juridique.md` | liste des sous-traitants, périmètre de l'AIPD |
-| `07-roadmap.md` | découpage des étapes |
+| Document            | Ce qui devient faux                                                           |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `CLAUDE.md` § 3     | toute la ligne « Stack » : backend, auth, hébergement, portabilité Cloudflare |
+| `03-donnees.md`     | RLS présentée comme la barrière principale ; trois tables manquantes          |
+| `09-comptes.md` § 1 | « toutes deux gérées par Supabase Auth »                                      |
+| `16-projet.md`      | arborescence, variables d'environnement, conventions de nommage C# absentes   |
+| `08-workflow.md`    | pipeline, serveurs MCP, critères de sortie par domaine                        |
+| `13-juridique.md`   | liste des sous-traitants, périmètre de l'AIPD                                 |
+| `07-roadmap.md`     | découpage des étapes                                                          |
 
 **La clause de portabilité de `CLAUDE.md` tombe :** « une migration vers Cloudflare doit rester possible en une journée » — Cloudflare Workers n'exécute pas .NET. Elle doit être supprimée ou remplacée par une clause de portabilité par conteneur, qui est mieux servie : une image Docker se déplace d'un hébergeur à l'autre.
 
@@ -284,18 +290,18 @@ Ces documents contiennent désormais des affirmations fausses. **Aucun ne sera m
 
 ## 14. Nouveau découpage
 
-| Lot | Contenu | Dépend de |
-|---|---|---|
-| **1a** | Harnais front — **livré** (tâches 1 et 2), reste 11 tâches | — |
-| **1b** | Harnais backend : solution, quatre projets, analyseurs, xUnit, Testcontainers, épreuves | .NET installé ✅ |
-| **2** | Socle applicatif front : PWA, routage, jetons de design, i18n, quatre états | 1a |
-| **3** | Domaine : entités, calculs purs, planchers de sécurité, filtre de sortie — **100 % de couverture** | 1b |
-| **4** | Données : EF Core, migrations, schéma, vues et RLS en SQL, seed | 3 |
-| **5** | Authentification : Identity, OAuth, 2FA, sessions, limitation de débit | 4 |
-| **6** | API : cas d'usage, endpoints, contrat d'erreur, versionnement | 3, 4, 5 |
-| **7** | Résilience front : Dexie, file de retry idempotente, indicateur | 2, 6 |
-| **8** | Couche modèle : `ILlmProvider`, routage, journal des coûts, minimisation | 3, 6 |
-| **9** | Déploiement : Docker, Caddy, OVH, trois environnements, supervision | tous |
+| Lot    | Contenu                                                                                            | Dépend de        |
+| ------ | -------------------------------------------------------------------------------------------------- | ---------------- |
+| **1a** | Harnais front — **livré** (tâches 1 et 2), reste 11 tâches                                         | —                |
+| **1b** | Harnais backend : solution, quatre projets, analyseurs, xUnit, Testcontainers, épreuves            | .NET installé ✅ |
+| **2**  | Socle applicatif front : PWA, routage, jetons de design, i18n, quatre états                        | 1a               |
+| **3**  | Domaine : entités, calculs purs, planchers de sécurité, filtre de sortie — **100 % de couverture** | 1b               |
+| **4**  | Données : EF Core, migrations, schéma, vues et RLS en SQL, seed                                    | 3                |
+| **5**  | Authentification : Identity, OAuth, 2FA, sessions, limitation de débit                             | 4                |
+| **6**  | API : cas d'usage, endpoints, contrat d'erreur, versionnement                                      | 3, 4, 5          |
+| **7**  | Résilience front : Dexie, file de retry idempotente, indicateur                                    | 2, 6             |
+| **8**  | Couche modèle : `ILlmProvider`, routage, journal des coûts, minimisation                           | 3, 6             |
+| **9**  | Déploiement : Docker, Caddy, OVH, trois environnements, supervision                                | tous             |
 
 Le lot 3 est le premier où l'orchestration multi-agents rapporte réellement : les calculs sont indépendants les uns des autres, un agent par famille de formules.
 
@@ -303,14 +309,14 @@ Le lot 3 est le premier où l'orchestration multi-agents rapporte réellement : 
 
 ## 15. Points ouverts
 
-| Point | Bloque | Détail |
-|---|---|---|
+| Point                                         | Bloque          | Détail                                                                                                   |
+| --------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------- |
 | `typescript-eslint` incompatible TypeScript 7 | lot 1a, tâche 4 | `peerDependencies: typescript >=4.8.4 <6.1.0`, vérifié. Redescendre en TypeScript 6 ou changer de linter |
-| Produit OVH exact | lot 9 | VPS, instance Public Cloud ou Kubernetes managé — à trancher au déploiement |
-| Avatar « mode Miroir » | lot ultérieur | `10-progression.md` § 7 contredit `01-conformite.md` § 5 et sa propre § 1 |
-| Coût IA : 3 €/mois ou moins d'1 € | aucun | `00-produit.md` et `06-ia.md` divergent d'un facteur trois |
-| Définition de « V1 » et « V2 » | lot 9 | jamais définies, alors que plusieurs décisions s'y réfèrent |
-| Recherche d'antériorité BOIP et EUIPO | dépôt de marque | `15-marque.md` § 4 la demande avant de s'attacher au nom |
+| Produit OVH exact                             | lot 9           | VPS, instance Public Cloud ou Kubernetes managé — à trancher au déploiement                              |
+| Avatar « mode Miroir »                        | lot ultérieur   | `10-progression.md` § 7 contredit `01-conformite.md` § 5 et sa propre § 1                                |
+| Coût IA : 3 €/mois ou moins d'1 €             | aucun           | `00-produit.md` et `06-ia.md` divergent d'un facteur trois                                               |
+| Définition de « V1 » et « V2 »                | lot 9           | jamais définies, alors que plusieurs décisions s'y réfèrent                                              |
+| Recherche d'antériorité BOIP et EUIPO         | dépôt de marque | `15-marque.md` § 4 la demande avant de s'attacher au nom                                                 |
 
 ---
 
