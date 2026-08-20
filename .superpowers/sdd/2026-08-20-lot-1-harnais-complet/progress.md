@@ -484,3 +484,66 @@ job `performance`. Le risque n'est pas éliminé, il est **déplacé hors de la 
 - **semgrep n'a jamais tourné**, ni localement ni en CI.
 - `core.hooksPath` est partagé entre tous les worktrees : `npx husky` l'a posé pour la
   checkout principale aussi, où `.husky/` n'existera qu'après fusion.
+
+## Fusion dans `main` et première exécution réelle de la CI — 20/08/2026
+
+Fusionnée par `--no-ff` (commit `416f3ea`), poussée sur `github.com/warrox1993/palier`.
+**La CI a échoué trois fois avant de passer**, et chaque échec portait sur un point que
+le journal signalait déjà comme non éprouvé ailleurs que sous Windows. Les trois ont la
+même forme — _une chose vraie sur cette machine et fausse ailleurs_ — et c'est
+précisément ce que `verify` ne peut pas attraper, puisqu'il tourne sur cette machine.
+
+**Ruling P21 — le hook et la CI ne scannaient pas le même objet.**
+Le hook de pré-commit lance `gitleaks git --staged` : seulement ce qui est indexé.
+La CI lance `gitleaks git` : **l'historique entier**. Le faux secret cité par le plan et
+les briefs — qui décrivent l'épreuve — vivait dans trois commits antérieurs à
+l'écriture de la règle. Local vert, CI rouge.
+C'est le défaut que `verify` existe pour empêcher, et gitleaks lui échappait : il vit
+dans le hook et dans la CI, jamais dans `verify`.
+Exception restreinte aux plans et briefs, jamais aux répertoires de code. Vérifié :
+73 commits scannés, aucune fuite, et l'épreuve « l'exception ne couvre que la fixture »
+reste verte.
+
+**Ruling P22 — mon épreuve du `maxBuffer` perdait sa propre sortie.**
+Elle écrivait 2 Mio puis appelait `process.exit(1)`. Sur un tuyau, `exit()` termine le
+processus **sans attendre le vidage de stdout** : la CI a rendu 146 176 octets sur
+2 Mio, et l'épreuve a échoué en accusant `maxBuffer` alors que la fixture était fautive.
+Sous Windows le tuyau se vidait avant la sortie, ce qui masquait le défaut depuis le
+début. `process.exitCode = 1` laisse le processus se terminer naturellement.
+_Leçon :_ une épreuve peut être fausse dans le sens inverse de celui qu'on surveille —
+non pas verte à tort, mais **rouge à tort**, en accusant le code qu'elle contrôle.
+
+**Ruling P23 — le job de franchissement n'installait qu'un des deux `package.json`.**
+`tests-harness/ci.test.mjs` importe `yaml`, déclaré à la racine : ERR_MODULE_NOT_FOUND,
+et le job qui garde la fusion tombait. Invisible en local, où `node_modules/` existe
+depuis longtemps. Une épreuve vérifie désormais que les deux installations sont là.
+
+### Ce que semgrep a trouvé à sa toute première exécution
+
+**`dependabot-missing-cooldown`, quatre occurrences.** Sans délai de refroidissement,
+une version compromise publiée sur npm est proposée à la fusion dans l'heure : c'est le
+vecteur des attaques de chaîne d'approvisionnement, où le paquet légitime est remplacé
+quelques heures puis retiré. Le plan du lot 1 ne prévoyait pas cette option.
+Durées graduées par le risque — 30 jours pour une majeure, 7 pour une mineure, 3 pour un
+correctif — et `github-actions` ne reçoit que `default-days`, vérifié dans la référence
+des options Dependabot plutôt que supposé.
+Une épreuve le surveille, éprouvée en retirant un `cooldown` : elle rougit en nommant
+l'écosystème fautif. Sans elle, retirer quatre blocs ne ferait échouer aucun contrôle —
+et semgrep vit dans un job dont l'échec pourrait être toléré un jour.
+_Réserve écrite dans le fichier :_ `cooldown` s'applique aux mises à jour de **version**.
+Les mises à jour de **sécurité** suivent un autre chemin — non éprouvé ici, et un délai
+trop long les retarderait s'il ne l'était pas.
+
+### Réserves levées par la CI
+
+- **Le backend, l'e2e et Lighthouse passent sous Linux.** Lighthouse a tourné pour la
+  première fois et respecte ses seuils sur le squelette Vite.
+- **`ci.yml` est désormais éprouvé fonctionnellement**, plus seulement structurellement.
+- **Six jobs verts** : front, backend, securite, e2e, performance, franchissement.
+
+### Réserve qui demeure
+
+Le job `franchissement` est le seul à lancer `npm run test:harness`, et il dépend des
+cinq autres. Un échec ailleurs le fait **sauter**, pas échouer : la protection de branche
+doit exiger `franchissement` nommément, sinon une fusion pourrait passer sans qu'aucune
+épreuve de franchissement n'ait tourné. **La protection de branche n'est pas configurée.**
