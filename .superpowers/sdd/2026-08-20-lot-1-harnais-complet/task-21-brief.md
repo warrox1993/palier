@@ -123,8 +123,21 @@ jobs:
       - run: npx --prefix front playwright install --with-deps chromium webkit
       - run: npm --prefix front run e2e
 
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@<SHA> # v4
+      - uses: actions/setup-node@<SHA> # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - run: npm --prefix front ci
+      - run: npm --prefix front run build
+      - run: npx --prefix front @lhci/cli autorun
+
   franchissement:
-    needs: [front, backend, securite, e2e]
+    needs: [front, backend, securite, e2e, performance]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@<SHA> # v4
@@ -141,6 +154,40 @@ jobs:
       - name: Les garde-fous refusent-ils encore ?
         run: npm run test:harness
 ```
+
+- [ ] **Étape 2 bis : écrire `front/.lighthouserc.json`**
+
+`08-workflow.md` § 5 liste Lighthouse CI comme dixième élément du harnais, et
+§ 9 fait de « Lighthouse supérieur à 90 » un critère de sortie du domaine
+frontend. Il manquait au plan entier — trouvé par la revue de fin de tâche 5.
+
+```json
+{
+  "ci": {
+    "collect": {
+      "staticDistDir": "./dist",
+      "numberOfRuns": 3
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["error", { "minScore": 0.9 }],
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
+        "categories:best-practices": ["error", { "minScore": 0.9 }],
+        "categories:seo": ["warn", { "minScore": 0.9 }]
+      }
+    },
+    "upload": { "target": "temporary-public-storage" }
+  }
+}
+```
+
+Ajouter `@lhci/cli` aux dépendances de développement du front.
+
+> **Le seuil se recalibre au lot 2.** Aujourd'hui la seule page est le squelette
+> Vite : un score élevé ne prouve rien sur le produit. Le garde-fou est installé
+> maintenant pour qu'une régression soit visible dès la première vraie page,
+> pas pour valider quoi que ce soit sur celle-ci. Le job échoue si le score
+> baisse — c'est tout ce qu'on lui demande à ce stade.
 
 - [ ] **Étape 3 : écrire `.github/dependabot.yml`**
 

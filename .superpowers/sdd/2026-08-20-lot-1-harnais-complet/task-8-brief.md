@@ -51,6 +51,10 @@ describe('garde-fou : Prettier', () => {
   it('refuse un fichier mal formaté', () => {
     const r = lancerOutil(['npx', 'prettier', '--check', FIXTURE])
     expect(r.code, `Prettier a accepté le fichier :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion obligatoire : un code non nul prouve seulement que
+    // quelque chose a échoué, pas que Prettier a refusé. Sans elle, l'épreuve
+    // passe au vert quand l'outil est simplement absent — mesuré.
+    expect(r.sortie).toMatch(/Code style issues/)
   })
 })
 ```

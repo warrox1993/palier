@@ -62,6 +62,10 @@ describe('garde-fou : couverture du domaine', () => {
       '--settings', 'back/coverage.runsettings',
     ])
     expect(r.code, `Le seuil de couverture n'a pas mordu :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion obligatoire : un code non nul prouve seulement que
+    // quelque chose a échoué, pas que l'outil a refusé. Sans elle, l'épreuve
+    // passe au vert quand l'outil est absent, indisponible ou mal appelé.
+    expect(r.sortie).toMatch(/threshold|seuil|coverage/i)
   })
 })
 ```

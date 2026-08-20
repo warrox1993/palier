@@ -51,6 +51,12 @@ describe('garde-fou : secrets', () => {
   it('gitleaks détecte une clé au format reconnu', () => {
     const r = lancerOutil(['npx', 'gitleaks', 'detect', '--no-git', '--source', 'tests/harness/fixtures', '--redact'])
     expect(r.code, `gitleaks n'a rien vu :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion obligatoire : un code non nul prouve seulement que
+    // quelque chose a échoué, pas que l'outil a refusé. Sans elle, l'épreuve
+    // passe au vert quand l'outil est absent, indisponible ou mal appelé.
+    // Ce cas est le plus exposé : le plan prévient lui-même que `npx gitleaks`
+    // n'expose pas forcément un binaire sur toutes les plateformes.
+    expect(r.sortie).toMatch(/secret|leak/i)
   })
 
   it('les deux hooks existent', () => {

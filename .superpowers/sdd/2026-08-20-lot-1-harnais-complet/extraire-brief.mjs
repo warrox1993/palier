@@ -63,3 +63,10 @@ const etapes = (corps.match(/^- \[ \]/gm) ?? []).length
   }
   console.log(`task-${n} — ${etapes} étapes`)
 }
+
+// ── Régénération ────────────────────────────────────────────────────────────
+// Sans argument, ce script réécrit TOUS les briefs. C'est le mode à privilégier
+// après toute correction du plan : le ruling P7 s'est produit deux fois, parce
+// qu'un brief déjà extrait garde la valeur périmée que le plan vient de perdre.
+// Un implémenteur lit son brief, pas le plan — la correction qui ne l'atteint
+// pas n'existe pas.

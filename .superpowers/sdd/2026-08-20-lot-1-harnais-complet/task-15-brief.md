@@ -54,6 +54,10 @@ describe('garde-fou : format du code', () => {
     copyFileSync(SOURCE, CIBLE)
     const r = lancerOutil(['dotnet', 'format', 'back/Palier.sln', '--verify-no-changes'])
     expect(r.code, `dotnet format a accepté le fichier :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion obligatoire : un code non nul prouve seulement que
+    // quelque chose a échoué, pas que l'outil a refusé. Sans elle, l'épreuve
+    // passe au vert quand l'outil est absent, indisponible ou mal appelé.
+    expect(r.sortie).toMatch(/WHITESPACE|IDE\d{4}|formatted incorrectly/)
   })
 })
 ```

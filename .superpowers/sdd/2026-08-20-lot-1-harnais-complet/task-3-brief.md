@@ -79,7 +79,11 @@ git status
 
 Ce fichier ne porte **aucune dépendance** : les dépendances du front restent dans `front/package.json`.
 
-- [ ] **Étape 4 : corriger les hooks, qui pointent encore vers la racine**
+- [ ] **Étape 4 : corriger les hooks — seulement s'ils existent déjà**
+
+**Vérifier d'abord :** `ls .husky/` . Si le répertoire n'existe pas, **passer cette étape** : la tâche 19 installe Husky et écrit ces deux fichiers avec un contenu qui tient déjà compte de la structure `front`/`back`. Cette étape n'a de sens que si le harnais front a été installé avant la réorganisation, ce qui n'est pas le cas dans l'ordre actuel du plan.
+
+Si les hooks existent, les corriger ainsi.
 
 `.husky/pre-commit` :
 

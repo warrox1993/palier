@@ -82,9 +82,18 @@ npm install -D knip jscpd
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.mjs"],
   "ignore": ["tests/harness/fixtures/**"],
-  "ignoreDependencies": []
+  "ignoreDependencies": [
+    "@testing-library/jest-dom",
+    "@testing-library/react"
+  ]
 }
 ```
+
+Les deux `@testing-library` sont installées et pas encore consommées : elles
+attendent les premiers composants du lot 2. Elles sont déclarées ici plutôt que
+retirées puis réinstallées, mais la mention est **datée** — si le lot 2 se
+termine sans qu'elles soient câblées (aucun `setupFiles`, aucun import), elles
+sortent de cette liste et du `package.json`.
 
 `knip.fixtures.json` — configuration dédiée à l'épreuve :
 
@@ -143,7 +152,7 @@ Attendu : 2 tests passent.
 
 - [ ] **Étape 6 : consigner les faux positifs**
 
-Lancer : `npm run knip` sur le projet principal. Noter le nombre de signalements écartés et la raison de chacun **dans le rapport de tâche** — `docs/decisions.md` n'existe qu'à la tâche 12, qui les y reprendra. Ruling C2 du ledger. Un détecteur qui se trompe est un détecteur qu'on cesse de lire.
+Lancer : `npm run knip` sur le projet principal. Noter le nombre de signalements écartés et la raison de chacun **dans le rapport de tâche** — `docs/decisions.md` existe déjà (créé hors plan, il porte D1 à D17) : le rapport de tâche reste le lieu du détail, et la tâche 20 y consigne ce qui doit survivre au lot. Ruling C2 du ledger. Un détecteur qui se trompe est un détecteur qu'on cesse de lire.
 
 - [ ] **Étape 7 : commit**
 
