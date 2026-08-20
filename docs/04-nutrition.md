@@ -27,12 +27,12 @@ TDEE = MB × facteur d'activité + coût de l'entraînement
 
 **Le facteur d'activité vient de deux questions concrètes**, posées à l'onboarding : temps de marche quotidien approximatif, et métier assis ou debout.
 
-| Profil | Facteur |
-|---|---|
-| Bureau, moins de 30 min de marche | 1,25 |
-| Bureau, 30 à 60 min de marche | 1,35 |
-| Mixte assis/debout, marche régulière | 1,45 |
-| Métier debout ou très actif | 1,60 |
+| Profil                               | Facteur |
+| ------------------------------------ | ------- |
+| Bureau, moins de 30 min de marche    | 1,25    |
+| Bureau, 30 à 60 min de marche        | 1,35    |
+| Mixte assis/debout, marche régulière | 1,45    |
+| Métier debout ou très actif          | 1,60    |
 
 **La lecture automatique des pas est impossible sur une application web.** L'API REST Google Fit est dépréciée fin 2026 et fermée aux nouvelles inscriptions depuis mai 2024 ; Health Connect stocke les données sur l'appareil et n'est accessible que depuis une application Android native ; HealthKit n'expose aucune API web. Une saisie manuelle hebdomadaire des pas reste proposée en option, sans être requise.
 
@@ -74,19 +74,19 @@ La formule sert de point de départ en semaine 1. À la semaine 4, elle n'est pl
 
 Pré-remplies, **toujours modifiables par l'utilisateur**.
 
-| Macronutriment | Fourchette | Défaut |
-|---|---|---|
-| Protéines | 1,6 – 2,2 g/kg | 1,8 g/kg |
-| Lipides | 0,8 – 1,2 g/kg | 1,0 g/kg |
-| Glucides | le reste des calories | calculé |
-| Fibres | 25 – 35 g | 30 g |
-| Eau | 35 ml/kg + compensation de l'effort | calculé |
+| Macronutriment | Fourchette                          | Défaut   |
+| -------------- | ----------------------------------- | -------- |
+| Protéines      | 1,6 – 2,2 g/kg                      | 1,8 g/kg |
+| Lipides        | 0,8 – 1,2 g/kg                      | 1,0 g/kg |
+| Glucides       | le reste des calories               | calculé  |
+| Fibres         | 25 – 35 g                           | 30 g     |
+| Eau            | 35 ml/kg + compensation de l'effort | calculé  |
 
 Chaque objectif s'affiche avec sa source :
 
 > **Protéines — 131 g/jour**
 > Valeur par défaut : 1,8 g/kg pour 73 kg
-> Fourchette de référence : 117 – 160 g *(1,6 – 2,2 g/kg, recommandations en musculation)*
+> Fourchette de référence : 117 – 160 g _(1,6 – 2,2 g/kg, recommandations en musculation)_
 > `[modifier]`
 
 **Ne jamais pré-remplir un objectif de perte de poids.** Le défaut est la maintenance. Si l'utilisateur veut un déficit ou un surplus, il le choisit dans une fourchette encadrée : −20 % à +15 % de la maintenance, jamais au-delà.
@@ -128,21 +128,21 @@ Quelqu'un qui note son eau ouvre l'application cinq fois par jour. C'est le gest
 
 ## 3. Micronutriments et limites hautes
 
-Source : **EFSA Dietary Reference Values**, avec les *Tolerable Upper Intake Levels*.
+Source : **EFSA Dietary Reference Values**, avec les _Tolerable Upper Intake Levels_.
 
 **Les UL n'existent que pour une quinzaine de nutriments.** Pour tous les autres, aucun seuil haut ne doit être affiché, et il est formellement interdit d'en inventer un. Le champ `ul` reste `NULL` et l'interface n'affiche pas de limite.
 
 Nutriments prioritaires pour la V1, ceux où la surcharge par complémentation est réelle :
 
-| Nutriment | Enjeu |
-|---|---|
-| Zinc | Excès chronique → déplétion en cuivre |
-| Vitamine B6 | Neuropathie périphérique au long cours |
-| Vitamine A (rétinol) | Tératogénicité, toxicité hépatique |
-| Vitamine D | Hypercalcémie à très forte dose |
-| Fer | Accumulation chez l'homme non carencé |
-| Magnésium | Effet laxatif, seuil de supplémentation distinct |
-| Sélénium, iode, cuivre, calcium, folates, niacine | UL définis |
+| Nutriment                                         | Enjeu                                            |
+| ------------------------------------------------- | ------------------------------------------------ |
+| Zinc                                              | Excès chronique → déplétion en cuivre            |
+| Vitamine B6                                       | Neuropathie périphérique au long cours           |
+| Vitamine A (rétinol)                              | Tératogénicité, toxicité hépatique               |
+| Vitamine D                                        | Hypercalcémie à très forte dose                  |
+| Fer                                               | Accumulation chez l'homme non carencé            |
+| Magnésium                                         | Effet laxatif, seuil de supplémentation distinct |
+| Sélénium, iode, cuivre, calcium, folates, niacine | UL définis                                       |
 
 ---
 
@@ -173,12 +173,12 @@ Jamais : « réduis ton complément de zinc ».
 
 ## 5. Sources de données
 
-| Source | Usage | Accès |
-|---|---|---|
-| OpenFoodFacts | Produits emballés par code-barres, base européenne | API ouverte, gratuite |
-| CIQUAL (ANSES) | Aliments bruts, composition détaillée en micronutriments | Téléchargement libre |
-| NUBEL | Table belge, produits locaux | Selon licence |
-| EFSA DRV | Références et limites hautes | Publication libre |
+| Source         | Usage                                                    | Accès                 |
+| -------------- | -------------------------------------------------------- | --------------------- |
+| OpenFoodFacts  | Produits emballés par code-barres, base européenne       | API ouverte, gratuite |
+| CIQUAL (ANSES) | Aliments bruts, composition détaillée en micronutriments | Téléchargement libre  |
+| NUBEL          | Table belge, produits locaux                             | Selon licence         |
+| EFSA DRV       | Références et limites hautes                             | Publication libre     |
 
 **Ne pas noter, ne pas classer, ne pas juger les produits.** Yuka a été condamnée trois fois en première instance avant de gagner en appel — trois ans de procédure. Ce produit affiche des compositions et compare des totaux à des références. Le jugement porte sur l'apport de l'utilisateur, jamais sur le produit d'un industriel.
 
@@ -205,7 +205,11 @@ Le code-barres reste le chemin par défaut : plus rapide et plus fiable.
 
 ### Compléments — le meilleur usage de la vision
 
-Photo de l'étiquette, extraction des doses par nutriment, stockage dans `supplements.per_unit`. La photo d'origine est conservée pour traçabilité.
+Photo de l'étiquette, extraction des doses par nutriment, stockage dans `supplements.per_unit`.
+
+**La photo n'est pas conservée** — D46. Elle traverse le modèle et disparaît ; seul le JSON extrait entre en base, après validation de schéma, contrôle de plausibilité contre les limites hautes de `nutrient_refs`, et confirmation par l'utilisateur (D47). La traçabilité ne repose plus sur l'image mais sur l'acte de validation : l'utilisateur a vu la dose et l'a confirmée.
+
+**Les métadonnées EXIF sont retirées côté navigateur, avant l'envoi au modèle.** C'est désormais le seul moment où ce nettoyage peut avoir lieu — il n'y a plus d'étape ultérieure pour rattraper un oubli, et une photo de repas porte les coordonnées GPS du domicile.
 
 C'est cette brique qui alimente la règle centrale du produit, et c'est là que personne ne fait mieux.
 

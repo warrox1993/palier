@@ -703,3 +703,53 @@ Sous ICU, la version est celle de la bibliothèque — 153.128 — versionnée i
 **Le design reste conçu pour les petits écrans.** Le porteur avait dit « la priorité de cette app va être sur téléphone » ; il dit maintenant « web à 100 % ». Les deux ne se contredisent pas : le premier parlait de la **conception visuelle**, le second de la **plateforme**. Une application web, consultée dans un navigateur de téléphone, dessinée pour cet écran d'abord.
 
 **Ce qui la rouvrirait :** les trois semaines d'usage de l'étape 2. Si le réseau tient, le mode déconnecté saute et le lot 7 se réduit. S'il lâche, on saura exactement quoi construire — et sur quelle fréquence réelle.
+
+## D46 — Les photos ne sont jamais stockées : elles traversent le modèle et disparaissent
+
+**Tranché le :** 21/08/2026, **par le porteur du projet** : « les photos vont uniquement aller dans l'IA Claude ou Gemini pour analyse des repas et des ingrédients, on ne va pas garder ces photos nulle part ». Puis, en précisant ce qui alimente les tables : « ce qui va alimenter les tables, ce sont les données que l'IA va renvoyer en format JSON, pas les photos en elles-mêmes ».
+
+**Le trou que cette décision referme.** `07-roadmap.md` signalait le 20/08 un point « décidé nulle part » : Supabase Storage était l'endroit implicite où les photos allaient, et D15 l'a emporté sans lui donner de successeur. La réponse n'est pas de choisir un remplaçant — OVH Object Storage aurait été le candidat — mais de constater que **le besoin n'existait pas**. La photo est un mode de saisie, au même titre que le clavier ou le code-barres. Elle n'a jamais eu vocation à devenir une donnée.
+
+**Le flux, désormais explicite :**
+
+```
+photo (navigateur) → EXIF retiré → modèle → JSON structuré → validé (D47) → tables
+                                                                    ↓
+                                                            la photo est jetée
+```
+
+**Ce que cela supprime.** Plus de stockage d'objets, plus d'URL signées à durée limitée, plus de chiffrement au repos à garantir, plus de purge à orchestrer à la suppression d'un compte, plus de sous-traitant de stockage au registre des traitements. **Aucune donnée de santé au repos sous forme d'image.** Un chantier entier disparaît de l'architecture.
+
+**Ce que cela ne supprime pas, et qu'il ne faut pas confondre.** Ne pas stocker n'est pas ne pas transmettre. La photo part toujours chez Anthropic ou Google, et `13-juridique.md` § 2 continue de s'appliquer **intégralement** : accord de sous-traitance signé, minimisation du contexte, consentement séparé pour l'assistant, option de désactivation.
+
+**Ce que cela déplace, et rend plus urgent.** `08-workflow.md` § 6 exige la suppression des métadonnées EXIF, « les photos contiennent des coordonnées GPS ». Cette exigence changeait autrefois de moment — on nettoyait avant de stocker. Elle se déplace **avant l'envoi au modèle, et côté navigateur**. Sans cela, on transmet à un fournisseur américain les coordonnées GPS du domicile de l'utilisateur, attachées à une photo de son repas. C'est désormais le **seul** moment où ce nettoyage peut avoir lieu : il n'y a plus d'étape ultérieure pour rattraper l'oubli.
+
+**Ce que cela coûte, et qui est réel.** `04-nutrition.md` § 6 justifiait la conservation par la traçabilité : pouvoir revérifier ce qu'une extraction a produit. Sur un complément, les doses extraites alimentent la comparaison aux limites hautes EFSA — si le modèle lit « 25 mg » là où l'étiquette porte « 2,5 mg », plus rien ne permet de le constater après coup. **D47 est la contrepartie de cette perte**, et les deux décisions ne se séparent pas.
+
+**Ce qui la rouvrirait :** un taux d'erreur d'extraction constaté qui rendrait la vérification a posteriori nécessaire — auquel cas la photo redeviendrait une pièce justificative, et non une donnée du produit.
+
+**Documents à reprendre :** `03-donnees.md` (champ `supplements.photo_path`, supprimé), `04-nutrition.md` § 6 (la phrase sur la conservation), `13-juridique.md` (registre des traitements, ligne stockage).
+
+---
+
+## D47 — Le JSON du modèle est validé, plausibilisé et confirmé avant d'entrer en base
+
+**Tranché le :** 21/08/2026, en conséquence directe de D46.
+
+**Pourquoi cette décision existe.** Puisque c'est le JSON qui alimente les tables et non la photo, c'est le JSON qu'il faut contrôler. Et il le faut d'autant plus que la photo ne subsiste plus pour arbitrer : le contrôle doit avoir lieu **avant** l'écriture, parce qu'il n'y aura pas d'après.
+
+**Trois contrôles, dans cet ordre, avant qu'une valeur touche une table :**
+
+**1. Schéma.** Types, unités, champs obligatoires, valeurs d'énumération. `06-ia.md` § 1 impose déjà des « sorties structurées quand la réponse alimente une interface ». Côté C#, c'est FluentValidation dans le pipeline de `Palier.Application`, avant le handler.
+
+**2. Plausibilité, calculée depuis les données du produit.** `nutrient_refs` porte déjà les limites hautes EFSA. Une dose extraite qui dépasse l'UL d'un ordre de grandeur n'est pas un dépassement à signaler — c'est une erreur de lecture. Un zinc à 250 mg sur une étiquette de complément, c'est une virgule mal placée.
+
+**La distinction est un enjeu de sécurité, pas de confort.** Le produit doit _alerter_ sur un dépassement réel et _rejeter_ une valeur aberrante. Les confondre, c'est soit affoler l'utilisateur pour une erreur de lecture, soit laisser une donnée fausse fonder la comparaison qui est la raison d'être du produit.
+
+**3. Confirmation humaine.** `04-nutrition.md` § 6 l'impose déjà pour les repas — « le système propose des lignes pré-remplies, **que l'utilisateur valide** ». Étendu aux compléments, où l'enjeu est plus élevé puisque c'est là que se joue la comparaison aux limites hautes. **La traçabilité passe de l'image à l'acte de validation** : ce n'est plus la photo qui atteste, c'est l'utilisateur qui a vu la valeur et l'a confirmée.
+
+**Où vivent ces contrôles.** Dans `Palier.Domain` et `Palier.Application`, jamais dans l'adaptateur du modèle. Un contrôle logé dans ce qu'il contrôle ne contrôle rien — c'est le motif de D11, appliqué ici.
+
+**Ce que cela n'est pas.** Le modèle ne calcule toujours rien : il **extrait**, ce que `06-ia.md` § 1 autorise explicitement (« extraire des doses d'une étiquette »). La frontière de `01-conformite.md` § 3 reste intacte — les seuils, les références et la comparaison restent dans le code déterministe.
+
+**Ce qui la rouvrirait :** rien. Un contrôle de plausibilité sur des données de santé ne se retire pas.

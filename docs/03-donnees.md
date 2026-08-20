@@ -187,7 +187,8 @@ create table supplements (
   brand        text,
   per_unit     jsonb not null,            -- doses par gélule/dose
   unit_label   text,                      -- 'gélule', 'dose', 'ml'
-  photo_path   text,                      -- étiquette d'origine, traçabilité
+  -- Aucune photo n'est stockée : D46. L'étiquette traverse le modèle,
+  -- son JSON est validé (D47), puis l'image est jetée.
   created_at   timestamptz default now()
 );
 
