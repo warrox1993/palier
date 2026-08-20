@@ -51,6 +51,80 @@ describe('garde-fou : intégration continue', () => {
     }
   })
 
+  it('le job de franchissement ÉCHOUE quand un amont tombe, au lieu de sauter', () => {
+    // Dette datée du lot 1, dernière réserve de son journal. `needs:` seul fait
+    // SAUTER le job quand un amont échoue : il apparaît GRIS, pas rouge — et un
+    // job gris se lit comme « pas concerné ».
+    //
+    // C'est grave ici et nulle part ailleurs : D29 rappelle qu'AUCUNE barrière
+    // côté serveur n'existe — GitHub Free ne donne ni branches protégées ni
+    // rulesets sur un dépôt privé. `franchissement` est ce qui devrait dire
+    // « les garde-fous ont tourné ». Gris, une fusion passe sans qu'aucune
+    // épreuve de franchissement n'ait tourné.
+    const job = flux.jobs.franchissement
+    expect(String(job.if ?? ''), 'le job saute au lieu d’échouer : `if: always()` manque').toMatch(
+      /always\(\)/,
+    )
+
+    const etapes = JSON.stringify(job.steps)
+    // Une condition `always()` sans étape qui juge les amonts rend le job VERT
+    // quoi qu'il arrive : c'est pire que gris. La seconde assertion est donc
+    // obligatoire, pas décorative.
+    expect(etapes, 'aucune étape ne juge le résultat des jobs amont').toMatch(/needs\./)
+
+    // Les cinq amonts sont nommés dans le message : « un job amont a échoué »
+    // sans nom oblige à rouvrir l'interface pour savoir lequel.
+    for (const amont of job.needs) {
+      expect(etapes, `Le résultat du job « ${amont} » n'est pas examiné`).toContain(
+        `needs.${amont}.result`,
+      )
+    }
+  })
+
+  it("le job securite interroge l'ÉTAT du service Dependabot, pas son fichier", () => {
+    // D30 : `.github/dependabot.yml` était juste et ne servait à rien, parce
+    // que la fonctionnalité qu'il paramètre était désactivée en amont.
+    // `GET /repos/…/vulnerability-alerts` rendait 404 et
+    // `/automated-security-fixes` rendait `{"enabled": false}` — pendant
+    // qu'une épreuve verte lisait un fichier correct, vingt-quatre heures
+    // durant. Une épreuve qui lit un fichier ne voit pas un service éteint.
+    const etapes = JSON.stringify(flux.jobs.securite.steps)
+    expect(etapes, "l'état des alertes Dependabot n'est pas interrogé").toContain(
+      'vulnerability-alerts',
+    )
+    expect(etapes, "l'état des correctifs automatiques n'est pas interrogé").toContain(
+      'automated-security-fixes',
+    )
+
+    // Une étape tolérante ne refuse rien : elle rend le même vert qu'un service
+    // allumé. C'est exactement le faux vert que D30 a mesuré.
+    const sonde = flux.jobs.securite.steps.find((e) =>
+      String(e.run ?? '').includes('vulnerability-alerts'),
+    )
+    expect(sonde, "aucune étape ne porte la sonde d'état").toBeDefined()
+    expect(sonde?.['continue-on-error'], 'la sonde est tolérante : elle ne refuse rien').not.toBe(
+      true,
+    )
+  })
+
+  it('la vérification manuelle de Dependabot est réclamée par le gabarit de lot', () => {
+    // La sonde de la CI ne peut pas aboutir avec GITHUB_TOKEN — mesuré, voir
+    // le commentaire de l'étape. Le contrôle n'est donc pas abandonné : il
+    // devient une vérification manuelle. Or un paragraphe de gabarit se
+    // supprime sans que rien ne bouge — c'est le mode de défaillance du ruling
+    // P2. Cette épreuve est ce qui l'appelle.
+    const chemin = 'docs/gabarit-rapport-lot.md'
+    expect(existsSync(chemin), `Cible manquante : ${chemin}`).toBe(true)
+    const gabarit = readFileSync(chemin, 'utf8')
+    expect(gabarit, 'le gabarit ne réclame plus la vérification manuelle').toMatch(
+      /gh api[^\n]*vulnerability-alerts/,
+    )
+    expect(gabarit).toMatch(/gh api[^\n]*automated-security-fixes/)
+    // Et il donne le résultat ATTENDU : une commande sans son attendu ne se
+    // vérifie pas, elle se lance.
+    expect(gabarit, "le gabarit ne dit pas ce qu'on doit obtenir").toMatch(/204/)
+  })
+
   it('le franchissement installe les dépendances des DEUX package.json', () => {
     // Les épreuves de `tests-harness/` importent `yaml`, déclaré à la racine.
     // Sans `npm ci` racine, le job échoue sur ERR_MODULE_NOT_FOUND — invisible

@@ -96,6 +96,86 @@ jobs:
           --exclude=back/tests-harness/fixtures
           .
       - run: node scripts/verifier-licences.mjs
+      # D30 : `.github/dependabot.yml` était JUSTE et ne servait à RIEN, parce
+      # que la fonctionnalité qu'il paramètre était désactivée en amont. Une
+      # épreuve verte lisait un fichier correct pendant vingt-quatre heures.
+      # Cette étape interroge l'ÉTAT DU SERVICE, pas le fichier.
+      #
+      # ⚠️ LIMITE MESURÉE le 20/08/2026, à la source et non de mémoire.
+      # `GET /repos/…/vulnerability-alerts` et `/automated-security-fixes`
+      # exigent la permission fine « Administration: read ». Cette permission
+      # N'EXISTE PAS parmi les clés que `permissions:` accepte pour
+      # GITHUB_TOKEN, et l'application Actions dont ce jeton est issu ne peut
+      # pas la recevoir : l'appel rend 403 « Resource not accessible by
+      # integration » même sous `write-all`.
+      # Il faut donc un jeton à granularité fine portant « Administration:
+      # read », déposé en secret de dépôt sous le nom JETON_ETAT_DEPENDABOT.
+      # Sans lui, cette étape ÉCHOUE — délibérément, et en disant quoi faire.
+      # Le contrôle n'est pas abandonné : il devient une vérification manuelle
+      # inscrite à `docs/gabarit-rapport-lot.md`, avec ses deux commandes.
+      - name: Le service Dependabot est-il réellement allumé ?
+        env:
+          JETON: ${{ secrets.JETON_ETAT_DEPENDABOT || secrets.GITHUB_TOKEN }}
+          DEPOT: ${{ github.repository }}
+        run: |
+          set -u
+          # Fichier de réponse UNIQUE, jamais un chemin fixe : deux étapes
+          # concurrentes se marcheraient dessus, et un `/tmp` partagé rend le
+          # résultat dépendant de ce qui traînait avant.
+          reponse="$(mktemp)"
+          trap 'rm -f "$reponse"' EXIT
+
+          appel() {
+            curl -sS -o "$reponse" -w '%{http_code}' \
+              -H "Authorization: Bearer $JETON" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$DEPOT/$1"
+          }
+
+          echec=0
+
+          code=$(appel vulnerability-alerts)
+          case "$code" in
+            204) echo "alertes Dependabot : ACTIVES" ;;
+            404) echo "::error::Les alertes Dependabot sont ÉTEINTES (404 sur vulnerability-alerts), ou le jeton n'a pas « Administration: read ». Les deux se ressemblent : relancer la commande manuelle ci-dessous pour trancher."; echec=1 ;;
+            403) echo "::error::403 sur vulnerability-alerts : le jeton n'a pas « Administration: read ». GITHUB_TOKEN ne peut PAS l'avoir — déposer un jeton fin en secret JETON_ETAT_DEPENDABOT."; echec=1 ;;
+            *)   echo "::error::Réponse inattendue ($code) sur vulnerability-alerts :"; cat "$reponse"; echec=1 ;;
+          esac
+
+          code=$(appel automated-security-fixes)
+          if [ "$code" = "200" ]; then
+            # Le code de sortie de node est examiné SÉPARÉMENT du verdict.
+            # Sans cela, un plantage du parseur rendait une chaîne vide, que la
+            # branche suivante lisait comme « service éteint » : un contrôle
+            # cassé se déguisait en verdict. Mesuré le 20/08/2026 en lançant
+            # cette étape, pas en la relisant.
+            if actif=$(node -e '
+              const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+              console.log(o.enabled === true && o.paused !== true ? "oui" : "non")
+            ' "$reponse"); then
+              case "$actif" in
+                oui) echo "correctifs automatiques : ACTIFS" ;;
+                non) echo "::error::Les correctifs automatiques Dependabot sont ÉTEINTS ou EN PAUSE :"; cat "$reponse"; echec=1 ;;
+                *)   echo "::error::Verdict illisible (« $actif ») : le contrôle est cassé, ce n'est PAS un service éteint."; echec=1 ;;
+              esac
+            else
+              echo "::error::La lecture de la réponse a échoué : le contrôle est cassé, ce n'est PAS un service éteint."
+              cat "$reponse"
+              echec=1
+            fi
+          else
+            echo "::error::Réponse inattendue ($code) sur automated-security-fixes — voir la limite ci-dessus."
+            cat "$reponse"
+            echec=1
+          fi
+
+          if [ "$echec" -ne 0 ]; then
+            echo "Vérification manuelle, à porter au rapport de lot :"
+            echo "  gh api -i repos/$DEPOT/vulnerability-alerts      # attendu : HTTP 204"
+            echo "  gh api repos/$DEPOT/automated-security-fixes     # attendu : {\"enabled\":true,\"paused\":false}"
+            exit 1
+          fi
 
   e2e:
     runs-on: ubuntu-latest
@@ -132,8 +212,46 @@ jobs:
 
   franchissement:
     needs: [front, backend, securite, e2e, performance]
+    # `needs:` SEUL fait sauter ce job quand un amont échoue : il apparaît GRIS,
+    # et un job gris se lit comme « pas concerné ». D29 rappelle qu'aucune
+    # barrière côté serveur n'existe — GitHub Free ne donne ni branches
+    # protégées ni rulesets sur un dépôt privé. Ce job est ce qui DEVRAIT dire
+    # « les garde-fous ont tourné » ; gris, une fusion passe sans qu'aucune
+    # épreuve de franchissement n'ait tourné.
+    #
+    # `always()` le fait tourner quoi qu'il arrive ; la première étape ci-dessous
+    # le fait ÉCHOUER. Les deux sont nécessaires : `always()` seul rendrait le
+    # job VERT après un échec amont, ce qui est pire que gris.
+    if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Les cinq jobs amont ont-ils réussi ?
+        # Chaque résultat est nommé : « un job amont a échoué » sans nom oblige
+        # à rouvrir l'interface pour savoir lequel.
+        run: |
+          echo "front=${{ needs.front.result }}"
+          echo "backend=${{ needs.backend.result }}"
+          echo "securite=${{ needs.securite.result }}"
+          echo "e2e=${{ needs.e2e.result }}"
+          echo "performance=${{ needs.performance.result }}"
+          echec=0
+          for couple in \
+            "front:${{ needs.front.result }}" \
+            "backend:${{ needs.backend.result }}" \
+            "securite:${{ needs.securite.result }}" \
+            "e2e:${{ needs.e2e.result }}" \
+            "performance:${{ needs.performance.result }}"; do
+            nom="${couple%%:*}"
+            etat="${couple#*:}"
+            if [ "$etat" != "success" ]; then
+              echo "::error::Le job « $nom » n'a pas réussi : $etat"
+              echec=1
+            fi
+          done
+          if [ "$echec" -ne 0 ]; then
+            echo "Le franchissement ÉCHOUE parce qu'un garde-fou amont n'a pas tourné."
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
