@@ -8,6 +8,7 @@ back/**/obj/
 back/**/TestResults/
 back/**/coverage.cobertura.xml
 node_modules/
+*.tmp.txt
 .env
 .env.local
 *.local

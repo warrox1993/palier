@@ -5,18 +5,25 @@
   "license": "UNLICENSED",
   "description": "Application de suivi de musculation et de nutrition, pour éviter les excès et les blessures.",
   "type": "module",
-  "engines": { "node": "24.x" },
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
+    "prepare": "husky",
     "verify": "node scripts/verify.mjs",
     "regles": "node scripts/regles-projet.mjs",
     "licences": "node scripts/verifier-licences.mjs",
-    "lint:scripts": "node front/node_modules/oxlint/bin/oxlint --config .oxlintrc.json scripts",
-    "format:scripts": "node front/node_modules/prettier/bin/prettier.cjs --check \"scripts/**/*.mjs\"",
-    "format:scripts:fix": "node front/node_modules/prettier/bin/prettier.cjs --write \"scripts/**/*.mjs\"",
+    "lint:scripts": "node front/node_modules/oxlint/bin/oxlint --config .oxlintrc.json scripts tests-harness .lintstagedrc.mjs",
+    "format:scripts": "node front/node_modules/prettier/bin/prettier.cjs --check \"scripts/**/*.mjs\" \"tests-harness/**/*.mjs\" \".lintstagedrc.mjs\"",
+    "format:scripts:fix": "node front/node_modules/prettier/bin/prettier.cjs --write \"scripts/**/*.mjs\" \"tests-harness/**/*.mjs\" \".lintstagedrc.mjs\"",
     "audit:back": "dotnet list back/Palier.sln package --vulnerable --include-transitive",
     "test:harness": "npm --prefix front run test:harness && npm run test:harness:back",
     "test:harness:back": "node front/node_modules/vitest/vitest.mjs run --config back/vitest.config.mjs",
     "front": "npm --prefix front run",
     "front:dev": "npm --prefix front run dev"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0"
   }
 }

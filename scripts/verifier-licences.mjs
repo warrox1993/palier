@@ -143,9 +143,20 @@ async function licenceNuget(nom) {
   }
 }
 
+// Deux `package.json` déclarent des dépendances : celui du front, et celui de
+// la racine, qui porte l'outillage de dépôt (husky, lint-staged). Le contrôle
+// ne lisait que le premier — un paquet installé à la racine passait donc D13
+// sans être vu, exactement le faux vert du ruling P16.
+const MANIFESTES_NPM = ['front/package.json', 'package.json']
+
 function paquetsNpm() {
-  const p = JSON.parse(readFileSync('front/package.json', 'utf8'))
-  return Object.keys({ ...p.dependencies, ...p.devDependencies })
+  const noms = new Set()
+  for (const chemin of MANIFESTES_NPM) {
+    if (!existsSync(chemin)) continue
+    const p = JSON.parse(readFileSync(chemin, 'utf8'))
+    for (const nom of Object.keys({ ...p.dependencies, ...p.devDependencies })) noms.add(nom)
+  }
+  return [...noms]
 }
 
 // L'ordre des attributs d'un élément XML est LIBRE. MSBuild traite

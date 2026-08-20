@@ -1,0 +1,8 @@
+title = "palier"
+
+[extend]
+path = ".gitleaks.regles.toml"
+
+[[allowlists]]
+description = "Faux secret versionné, seule cible de l'épreuve du harnais"
+paths = ['''front/tests/harness/fixtures/faux-secret\.txt''']
