@@ -2,6 +2,11 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // Les fixtures du harnais sont conçues pour échouer. Sans cette exclusion,
+  // `npx playwright test` — ce que lance un développeur ou une extension d'IDE
+  // par défaut — rend deux échecs par construction, sur du dépôt sain.
+  // Elles restent éprouvées, par `playwright.fixtures.config.ts`.
+  testIgnore: /fixture-.*\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
