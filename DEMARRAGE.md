@@ -13,7 +13,46 @@ node --version     # 24 — voir .nvmrc, et D3
 dotnet --version   # 10 ou plus
 git --version
 gitleaks version   # 8 ou plus — voir ci-dessous
+docker --version   # 29 ou plus — NE SUFFIT PAS, voir ci-dessous
 ```
+
+**Docker est un prérequis depuis le lot 2 — et son client ne prouve rien.**
+`docker --version` interroge l'exécutable posé sur le disque. Ce qui lève les
+conteneurs, c'est le **démon**, et les deux peuvent parfaitement diverger :
+mesuré le 20/08/2026 sur ce poste, le client 29.6.2 et Compose v5.3.1
+répondaient sans une erreur pendant que le démon était injoignable. C'est la
+classe de faux vert que ce projet traque — un fichier correct dont le service
+est éteint (D30).
+
+La seule commande qui tranche :
+
+```bash
+docker info --format '{{.ServerVersion}}'   # doit rendre une version, pas une erreur
+```
+
+Installation :
+
+```bash
+winget install Docker.DockerDesktop   # Windows
+brew install --cask docker            # macOS
+# Linux : https://docs.docker.com/engine/install/
+```
+
+**Sous Windows, l'installation ne suffit pas non plus.** Docker Desktop exige
+WSL2 ou Hyper-V. Sur ce poste, `Microsoft-Windows-Subsystem-Linux` et
+`Microsoft-Hyper-V` étaient en `InstallState 2` — désactivés — et
+`wsl --status` rendait « Le Sous-système Windows pour Linux n'est pas
+installé ». Les activer demande des **droits administrateur et un redémarrage** :
+
+```powershell
+wsl --install     # administrateur, puis redémarrer
+```
+
+À quoi cela sert : `docs/08-workflow.md` § 6 fait du « test RLS vert pour
+chaque table » un critère de sortie, et ce test exige un vrai moteur, un rôle
+restreint et une seconde connexion (D33). Sans Docker, `npm run db:up` refuse
+avec la marche à suivre — code de sortie **3**, distinct du 1 d'un échec de
+`compose` — et les tests d'intégration ne peuvent pas tourner.
 
 **gitleaks s'installe hors de npm.** C'est un binaire Go ; le paquet `gitleaks`
 du registre npm est un squat vide, sans exécutable (vérifié le 20/08/2026).

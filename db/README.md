@@ -35,7 +35,28 @@ qui interdit de fusionner des sources aux licences différentes sans les tracer.
 
 ## Lever
 
-<!-- Écrit à la tâche 2 du lot 2. -->
+```bash
+npm run db:up      # lève le service palier-db en arrière-plan
+npm run db:down    # l'arrête, EN CONSERVANT les données
+```
+
+Le service s'appelle `palier-db`, il écoute sur `5432`, et son volume nommé est
+`palier-db-data`. Ces trois valeurs sont déclarées dans `compose.yaml` et nulle
+part ailleurs.
+
+**Le moteur doit tourner, pas seulement le client.** `docker --version` répond
+parfaitement pendant que le démon est injoignable — c'est la classe de faux vert
+que ce projet traque. `npm run db:up` teste `docker info` avant toute chose et
+refuse avec la marche à suivre plutôt qu'avec un nom de tuyau Windows :
+
+```
+db : le moteur Docker ne répond pas. Le CLIENT répond parfaitement —
+`docker --version` réussit — mais le DÉMON est injoignable, et c'est lui qui
+lève les conteneurs.
+```
+
+Le code de sortie est **3**, distinct du 1 que rend un échec de `compose` :
+« le moteur est éteint » et « compose a échoué » n'appellent pas le même geste.
 
 ## Appliquer
 
@@ -43,7 +64,15 @@ qui interdit de fusionner des sources aux licences différentes sans les tracer.
 
 ## Réinitialiser
 
-<!-- Écrit à la tâche 2 du lot 2. -->
+```bash
+npm run db:reset
+```
+
+**`db:reset` est la seule commande du projet qui détruit des données.** Elle
+passe `-v` à `docker compose down` : le volume `palier-db-data` est supprimé
+avec le conteneur, et tout ce que la base contenait disparaît. Il n'y a pas de
+confirmation et il n'y a pas de retour en arrière. `db:down`, lui, arrête le
+conteneur en conservant le volume — c'est la commande de tous les jours.
 
 ## Sauvegarder et restaurer
 
