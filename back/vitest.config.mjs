@@ -25,7 +25,7 @@ export default {
   test: {
     environment: 'node',
     globals: false,
-    include: ['back/tests-harness/**/*.test.mjs'],
+    include: ['back/tests-harness/**/*.test.mjs', 'tests-harness/**/*.test.mjs'],
     exclude: ['**/node_modules/**'],
     testTimeout: 300_000,
     hookTimeout: 300_000,

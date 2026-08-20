@@ -235,7 +235,7 @@ const NOEUD_TEXTE_JSX = />([^<>{}]*)<\//g
 /** Balise ouvrante, valeurs entre guillemets comprises, sur une ou plusieurs
  * lignes. Le groupe 1 est la zone des attributs ; le drapeau `d` en donne la
  * position, d'où se calcule le numéro de ligne. */
-const BALISE_OUVRANTE = /<[A-Za-z][\w.:-]*((?:"[^"]*"|'[^']*'|[^<>'"])*)\/?>/gd
+const BALISE_OUVRANTE = /<[A-Za-z][\w.:-]*((?:"[^"]*"|'[^']*'|[^<>'"])*)\/?>/dg
 
 /** Attributs qui portent de la copie. Le `(?<![-.\w$])` écarte `data-title=`,
  * `document.title =` et tout suffixe d'un identifiant plus long. Une valeur
@@ -310,7 +310,7 @@ const REGLES = [
     id: 'fleche-unicode',
     motif: /["'`][^"'`]*[→←↑↓][^"'`]*["'`]/,
     extensions: ['.ts', '.tsx'],
-    message: "Aucune flèche Unicode dans un libellé : utiliser une icône, ou rien.",
+    message: 'Aucune flèche Unicode dans un libellé : utiliser une icône, ou rien.',
   },
   {
     id: 'chaine-en-dur',
@@ -327,7 +327,7 @@ const REGLES = [
     id: 'booleen-mal-nomme',
     motif: /\b(?:const|let)\s+(?!is|has|can|should)[a-z]\w*\s*:\s*boolean\b/,
     extensions: ['.ts', '.tsx'],
-    message: "Un booléen se préfixe par is, has, can ou should — docs/16-projet.md § 2.",
+    message: 'Un booléen se préfixe par is, has, can ou should — docs/16-projet.md § 2.',
   },
   {
     id: 'type-prefixe-i',

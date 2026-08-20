@@ -6,8 +6,16 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const PERMISES = [
-  'MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC',
-  'PostgreSQL', '0BSD', 'Unlicense', 'CC0-1.0', 'MIT-0',
+  'MIT',
+  'Apache-2.0',
+  'BSD-2-Clause',
+  'BSD-3-Clause',
+  'ISC',
+  'PostgreSQL',
+  '0BSD',
+  'Unlicense',
+  'CC0-1.0',
+  'MIT-0',
 ]
 
 // Exceptions nominatives, chacune avec son motif. Une licence non standard
@@ -18,11 +26,11 @@ const EXCEPTIONS = {
   '@axe-core/playwright':
     'MPL-2.0, lue le 20/08/2026. Copyleft PAR FICHIER, sans clause réseau : ' +
     'la section 3.3 autorise explicitement la combinaison avec du code propriétaire ' +
-    'sous nos propres termes, et la 3.2 n\'oblige à publier que les fichiers MPL ' +
-    'que l\'on MODIFIE. Nous ne modifions pas axe-core. C\'est la différence de fond ' +
+    "sous nos propres termes, et la 3.2 n'oblige à publier que les fichiers MPL " +
+    "que l'on MODIFIE. Nous ne modifions pas axe-core. C'est la différence de fond " +
     'avec RPL-1.5, qui a motivé D13 : celle-ci ferme la faille SaaS, MPL-2.0 ne la ' +
     'connaît pas. De plus axe-core est un outil de développement, jamais distribué ' +
-    'dans le produit, et CLAUDE.md § 3 l\'impose nommément. ' +
+    "dans le produit, et CLAUDE.md § 3 l'impose nommément. " +
     'Ce qui rouvrirait cette exception : un besoin de PATCHER axe-core.',
 }
 
@@ -68,11 +76,15 @@ const NON_LUE = 'licence NON LUE'
 
 async function licenceNpm(nom) {
   const r = await fetch(`https://registry.npmjs.org/${encodeURIComponent(nom)}/latest`)
-  if (!r.ok) return { licence: null, refus: `${NON_LUE} — registre npm injoignable (HTTP ${r.status})` }
+  if (!r.ok)
+    return { licence: null, refus: `${NON_LUE} — registre npm injoignable (HTTP ${r.status})` }
   const j = await r.json()
   const licence = typeof j.license === 'string' ? j.license : (j.license?.type ?? null)
   if (licence) return { licence, refus: null }
-  return { licence: null, refus: `${SANS_EXPRESSION} — le paquet ne déclare aucun champ « license »` }
+  return {
+    licence: null,
+    refus: `${SANS_EXPRESSION} — le paquet ne déclare aucun champ « license »`,
+  }
 }
 
 // L'API de recherche NuGet ne renvoie PAS `licenseExpression` — mesuré le
@@ -87,7 +99,10 @@ async function licenceNuget(nom) {
     `https://azuresearch-usnc.nuget.org/query?q=packageid:${encodeURIComponent(nom)}&prerelease=false`,
   )
   if (!recherche.ok)
-    return { licence: null, refus: `${NON_LUE} — registre NuGet injoignable (HTTP ${recherche.status})` }
+    return {
+      licence: null,
+      refus: `${NON_LUE} — registre NuGet injoignable (HTTP ${recherche.status})`,
+    }
   const d = ((await recherche.json()).data ?? [])[0]
   if (!d?.version) return { licence: null, refus: `${NON_LUE} — paquet introuvable sur nuget.org` }
 
@@ -95,7 +110,10 @@ async function licenceNuget(nom) {
     `https://api.nuget.org/v3/registration5-semver1/${encodeURIComponent(nom.toLowerCase())}/${encodeURIComponent(d.version)}.json`,
   )
   if (!feuille.ok)
-    return { licence: null, refus: `${NON_LUE} — enregistrement illisible (HTTP ${feuille.status})` }
+    return {
+      licence: null,
+      refus: `${NON_LUE} — enregistrement illisible (HTTP ${feuille.status})`,
+    }
   const { catalogEntry } = await feuille.json()
   if (typeof catalogEntry !== 'string')
     return { licence: null, refus: `${NON_LUE} — entrée de catalogue absente` }
