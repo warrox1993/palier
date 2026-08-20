@@ -5,6 +5,8 @@ front/playwright-report/
 front/test-results/
 back/**/bin/
 back/**/obj/
+back/**/TestResults/
+back/**/coverage.cobertura.xml
 node_modules/
 .env
 .env.local

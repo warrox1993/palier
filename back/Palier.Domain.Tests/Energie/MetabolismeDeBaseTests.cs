@@ -31,4 +31,33 @@ public sealed class MetabolismeDeBaseTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => MetabolismeDeBase.MifflinStJeor(Sexe.Homme, poids, 178m, 35m));
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void MifflinStJeor_refuse_une_taille_non_positive(int taille)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => MetabolismeDeBase.MifflinStJeor(Sexe.Homme, 73m, taille, 35m));
+    }
+
+    [Fact]
+    public void MifflinStJeor_refuse_un_age_negatif()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => MetabolismeDeBase.MifflinStJeor(Sexe.Homme, 73m, 178m, -1m));
+    }
+
+    // Le bras par défaut de la sélection n'est atteignable que par une valeur
+    // d'énumération forgée. Sans ce test, il reste une ligne et une branche non
+    // couvertes : le domaine plafonnait à 91,66 % de lignes et 75 % de branches,
+    // et le seuil de 100 % exigé par docs/08-workflow.md § 6 refusait le domaine
+    // réel. Ce n'est pas un artifice de couverture — c'est la garde qui répond
+    // quand une valeur hors énumération traverse une frontière de sérialisation.
+    [Fact]
+    public void MifflinStJeor_refuse_un_sexe_hors_enumeration()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => MetabolismeDeBase.MifflinStJeor((Sexe)99, 73m, 178m, 35m));
+    }
 }
