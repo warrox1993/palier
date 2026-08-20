@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "lint": "oxlint --ignore-pattern \"tests/harness/fixtures/**\" src tests",
     "test": "vitest run",
     "test:harness": "vitest run tests/harness --exclude ''",
     "test:watch": "vitest"
@@ -38,6 +39,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^30.0.1",
+    "oxlint": "^1.79.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.11"

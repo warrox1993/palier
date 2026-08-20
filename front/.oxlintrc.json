@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "import", "jsx-a11y", "react"],
+  "env": { "browser": true, "es2024": true },
+  "categories": { "correctness": "error" },
+  "ignorePatterns": ["dist/**", "coverage/**"],
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "eslint/no-unused-vars": "error",
+    "unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
+    "import/no-cycle": "error",
+    "eslint/no-console": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.{ts,tsx}", "**/*.spec.ts"],
+      "rules": { "typescript/no-explicit-any": "off" }
+    }
+  ]
+}
