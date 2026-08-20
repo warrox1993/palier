@@ -280,3 +280,99 @@ publient tous deux un fichier de licence sans expression SPDX. Le contrôle les 
 tous les deux — MediatR est donc refusé pour « pas d'expression », pas pour
 « RPL-1.5 ». `Mediator.SourceGenerator` devra passer par `EXCEPTIONS` le jour où on
 l'ajoutera.
+
+## Revues des tâches 6 à 17, et leurs correctifs — 20/08/2026
+
+Deux revues indépendantes, en lecture seule, chacune provoquant les violations
+elle-même. Front : 3 critiques, 6 importants. Backend : **aucun critique**, 5 importants.
+Épreuves après correctifs : **65 front, 19 backend**. Les 37 ajoutées couvrent toutes
+des garde-fous qui existaient déjà et que rien ne surveillait.
+
+**Ruling P9 étendu — le piège du fichier d'exclusion vaut pour TOUT outil.**
+Constaté sur trois outils, aucune exception à ce jour :
+| Outil | Ce qui trompe | Effet |
+|---|---|---|
+| Oxlint | `ignorePatterns` | fichier ignoré même nommé en argument, `--no-ignore` ne l'annule pas |
+| Prettier | `.prettierignore` | `--check` sur la fixture rend **code 0** et « All matched files use Prettier code style! » |
+| Playwright | `testIgnore` | l'argument positionnel filtre la liste **déjà collectée** → `Error: No tests found` |
+La question à poser à chaque nouvel outil du harnais : *un fichier ignoré reste-t-il
+ignoré quand on le nomme explicitement ?* La réponse est oui partout jusqu'ici.
+La parade est toujours la même : **l'exclusion appartient à la commande qui n'en veut
+pas**, jamais au fichier de configuration — ou à une configuration dédiée à l'épreuve.
+
+**Ruling P14 — une clé inconnue peut désactiver la règle entière, en silence.**
+Un `"_note"` posé dans les options de `no-restricted-imports` pour documenter le choix
+de motifs a fait passer **9 violations à code 0**, sans erreur ni avertissement. Ce
+n'est pas « la clé est ignorée » : c'est la règle qui cesse de s'appliquer.
+*Conséquence de méthode :* **aucun commentaire dans un fichier de configuration
+d'outil.** Le motif d'un choix vit dans l'épreuve qui le protège, jamais dans le JSON
+qu'il documente. Même famille que P11 (`Threshold` accepté et ignoré par le collecteur
+VSTest) et que « une règle mal nommée est acceptée par `.oxlintrc.json` et ne fait rien ».
+
+**Ruling P15 — Prettier neutralisait une règle bloquante.**
+`chaine-en-dur` interdit la copie en dur dans le JSX — c'est ce qui garantit que tout
+passe par i18next. Elle lisait **une ligne à la fois**, or Prettier (`printWidth: 100`)
+coupe systématiquement le JSX : la violation disparaissait. Elle ne voyait pas non plus
+`title`, `alt`, `placeholder`, `aria-label`, et produisait un faux positif sur
+`(valeur: number) => valeur < 10`.
+Deux garde-fous du même harnais, l'un annulant l'autre — et dans le sens où `npm run
+format` est ce qu'on lance avant chaque commit.
+Réécrite : analyse du fichier entier, ancrage sur `>…</` (la balise fermante distingue
+un nœud de texte d'une comparaison), attributs cherchés dans les balises ouvrantes
+seulement, commentaires neutralisés en conservant les décalages pour garder les
+numéros de ligne justes.
+*Limites assumées, à connaître :* c'est une heuristique, pas un analyseur syntaxique.
+Un nœud de texte contenant `<` ou `>` n'est pas vu ; une valeur d'attribut construite
+par concaténation ou gabarit n'est pas vue ; seuls quatre attributs sont couverts.
+L'alternative — l'API JS de TypeScript 7 — est exposée sous `unstable/*` et lance un
+processus Go : trop fragile pour une règle bloquante.
+
+**Ruling P2, deux occurrences de plus.** `lint:types` (dont les règles sont justifiées
+par « des pertes de données silencieuses » dans la file de retry hors ligne),
+`scripts/*.mjs` (ni linté, ni formaté, ni typé — alors que ces trois fichiers décident
+si le reste du dépôt est conforme), et `audit:back` (dont le brief de la tâche 17
+déclarait pourtant « appelé par `verify` »). Tous branchés.
+
+**Ruling P16 — le contrôle de licences était aveugle à l'ordre des attributs XML.**
+`/PackageReference\s+Include="…"/` exigeait que `Include` suive immédiatement le nom
+d'élément. Mesuré à variable unique, même paquet, même fichier :
+```
+<PackageReference Version="5.7.0" Include="NHibernate" />  →  24 dépendances, toutes permissives.  code 0
+<PackageReference Include="NHibernate" Version="5.7.0" />  →  nuget NHibernate LGPL-2.1-only        code 1
+```
+Une dépendance sous licence réciproque traversait D13 **pendant que le script annonçait
+que tout était permissif**. Sur un contrôle juridique, un faux vert ne se tait pas :
+il rassure. Corrigé, et le contrôle lit désormais aussi `Directory.Build.props` — un
+paquet déclaré à la racine s'applique à tous les projets et n'apparaît dans aucun.
+
+**Ce que NU1903 protège, et que personne n'avait nommé.** Ce n'est pas l'épreuve qui
+arrête réellement un paquet vulnérable : c'est l'audit NuGet promu en erreur par
+`TreatWarningsAsErrors`, qui casse la restauration avant que l'épreuve ne tourne. La
+protection existait en double et la moitié efficace n'était documentée nulle part.
+Elle l'est maintenant, dans le code que quelqu'un lira.
+
+### Trouvé sur du code réel, pas sur des fixtures
+- `App.tsx` portait une chaîne en dur, refusée par `chaine-en-dur`.
+- `Program.cs` en CRLF là où `.editorconfig` exige LF.
+- Le bras par défaut du `switch` sur `Sexe` jamais franchi : 91,66 % lignes / **75 %
+  branches**, et non 100 %.
+- `run-outil.ts:55` confondait `undefined` (tableau vide) et `''` — trouvé en étendant
+  `lint:types` à `tests/`. Les deux cas ont désormais un test et un message distinct.
+- Le `app.MapGet("/", () => "Hello World!")` du template répondait en clair sur la
+  racine du domaine. Retiré ; `Palier.Api` n'expose plus aucune route jusqu'au lot 2.
+
+### Incident du worktree partagé, à ne pas reproduire
+**L'index git est partagé.** Deux agents commitant en parallèle : entre le `git add` de
+l'un et son `git commit`, l'autre a indexé ses fichiers. Résultat, `468a7b4` porte
+`back/Palier.Api/Program.cs` sous un message qui parle du front. Rien n'est perdu, le
+contenu est correct, et l'historique n'a pas été réécrit — un `reset --soft` pendant
+qu'un pair commite détruirait son travail.
+**Parade, adoptée par les deux agents ensuite :** `git commit -m <msg> -- <chemins>`,
+en une seule étape. La forme `git add` puis `git commit` laisse une fenêtre.
+
+### Signalé, non traité
+- **`scripts/*.mjs` n'a pas de `.prettierrc` à la racine.** Le formater depuis `front/`
+  applique les **défauts** de Prettier — guillemets doubles, points-virgules —, l'inverse
+  du style du dépôt. La tâche 18 devra ajouter une configuration à la racine avant de
+  couvrir ces fichiers, sinon elle retournera leur style.
+- **`.claude/settings.json`** est un second fichier suivi sans saut de ligne final.
