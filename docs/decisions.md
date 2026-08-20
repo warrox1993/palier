@@ -99,7 +99,16 @@ Ces décisions **remplacent** la pile décrite dans `CLAUDE.md` § 3. Les docume
 ## D13 — Contrôle des licences de dépendances en intégration continue
 
 **Tranché le :** 19/08/2026.
-**Motif :** l'affaire MediatR a été trouvée par méfiance envers un paquet précis. La suivante passera si personne ne regarde. Une liste blanche (MIT, Apache-2.0, BSD, ISC, PostgreSQL) et un échec du build si une dépendance en sort, sur les deux écosystèmes.
+**Motif :** l'affaire MediatR a été trouvée par méfiance envers un paquet précis. La suivante passera si personne ne regarde. Une liste blanche et un échec du build si une dépendance en sort, sur les deux écosystèmes.
+
+**Liste blanche, précisée le 20/08/2026 à l'implémentation :** MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, PostgreSQL, 0BSD, Unlicense, CC0-1.0, MIT-0. Cette décision en énonçait cinq ; les cinq ajoutées sont toutes équivalentes ou **plus permissives** que MIT — domaine public ou quasi. Aucune n'introduit d'obligation. L'écart a été relevé en revue et tranché ici plutôt que laissé entre le journal et le code.
+
+**Le mécanisme d'exception, ajouté le 20/08/2026.** Une licence hors liste n'est pas automatiquement interdite : elle est **lue**, puis inscrite nominativement dans `EXCEPTIONS` avec son motif et ce qui la rouvrirait. Jamais ajoutée à la liste blanche, qui ne porte que des expressions permissives. Première exception : `@axe-core/playwright` en MPL-2.0 — copyleft par fichier, sans clause réseau, et `CLAUDE.md` § 3 impose axe-core nommément.
+
+**Ce que le contrôle ne voit pas, à ce jour :** les dépendances **transitives** (`lightningcss`, MPL-2.0, arrive par Vite 8 et lui échappe). Une comparaison par jetons SPDX a remplacé la comparaison par sous-chaîne, qui acceptait `MITNFA` parce qu'il contient `MIT`.
+
+**À traiter au lot 2 :** `Mediator.SourceGenerator`, retenu par D12, ne publie **pas** d'expression SPDX — le contrôle le refuse aujourd'hui, pour cette raison et non pour sa licence, qui est MIT. Il devra entrer dans `EXCEPTIONS` le jour où CQRS sera implémenté, sans quoi `verify` cassera.
+
 **Ce qui la rouvrirait :** rien. Le coût est nul, le risque évité est juridique.
 
 ## D14 — Accès aux données : EF Core

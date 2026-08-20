@@ -53,7 +53,7 @@ describe("garde-fou : point d'entrée unique", () => {
     for (const etape of [
       'front:format', 'front:lint', 'front:lint:types', 'front:typecheck', 'front:test',
       'front:knip', 'regles', 'back:format', 'back:build', 'back:test', 'licences',
-      'front:build',
+      'back:audit', 'front:build',
     ]) {
       expect(s, `Contrôle manquant dans verify : ${etape}`).toContain(etape)
     }
@@ -148,6 +148,7 @@ const etapes = [
   ['back:build', ['dotnet', 'build', 'back/Palier.sln', '--no-incremental']],
   ['back:test', ['dotnet', 'test', 'back/Palier.sln', '--settings', 'back/coverage.runsettings']],
   ['licences', ['node', 'scripts/verifier-licences.mjs']],
+  ['back:audit', ['npm', 'run', 'audit:back']],
   ['front:build', ['npm', '--prefix', 'front', 'run', 'build']],
 ]
 

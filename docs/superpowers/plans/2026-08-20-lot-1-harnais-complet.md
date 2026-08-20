@@ -1474,7 +1474,9 @@ git commit -m "impose la rigueur du compilateur et les conventions de style"
 
 **Interfaces :**
 - Consomme : la solution, la rigueur
-- Produit : `MetabolismeDeBase.MifflinStJeor(Sexe sexe, decimal poidsKg, decimal tailleCm, int age) → decimal`, consommée par le lot 3.
+- Produit : `MetabolismeDeBase.MifflinStJeor(Sexe sexe, decimal poidsKg, decimal tailleCm, decimal age) → decimal`, consommée par le lot 3.
+
+> **`decimal age`, et non `int`.** Ce document se contredisait : l'interface annonçait `int`, son propre bloc de code écrivait `decimal`. L'implémentation a suivi le code. `decimal` est retenu — il permet un âge fractionnaire calculé depuis une date de naissance, et évite une conversion dans la formule.
 
 > Cette tâche installe l'outillage de test **et** la première fonction réelle, parce qu'un harnais de test sans rien à tester ne prouve rien.
 
@@ -2020,7 +2022,7 @@ describe("garde-fou : point d'entrée unique", () => {
     for (const etape of [
       'front:format', 'front:lint', 'front:lint:types', 'front:typecheck', 'front:test',
       'front:knip', 'regles', 'back:format', 'back:build', 'back:test', 'licences',
-      'front:build',
+      'back:audit', 'front:build',
     ]) {
       expect(s, `Contrôle manquant dans verify : ${etape}`).toContain(etape)
     }
@@ -2115,6 +2117,7 @@ const etapes = [
   ['back:build', ['dotnet', 'build', 'back/Palier.sln', '--no-incremental']],
   ['back:test', ['dotnet', 'test', 'back/Palier.sln', '--settings', 'back/coverage.runsettings']],
   ['licences', ['node', 'scripts/verifier-licences.mjs']],
+  ['back:audit', ['npm', 'run', 'audit:back']],
   ['front:build', ['npm', '--prefix', 'front', 'run', 'build']],
 ]
 
@@ -2528,7 +2531,10 @@ jobs:
       - run: dotnet build back/Palier.sln --no-restore
       - run: dotnet test back/Palier.sln --no-build --settings back/coverage.runsettings
       - run: dotnet format back/Palier.sln --verify-no-changes
-      - run: dotnet list back/Palier.sln package --vulnerable --include-transitive
+      # `dotnet list package --vulnerable` sort en code 0 même quand il TROUVE
+      # quelque chose : la commande brute est un affichage, pas un garde-fou.
+      # C'est l'épreuve du harnais qui porte l'assertion sur la sortie.
+      - run: npm run audit:back
 
   securite:
     runs-on: ubuntu-latest

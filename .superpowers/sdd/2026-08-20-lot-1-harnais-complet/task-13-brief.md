@@ -30,7 +30,9 @@
 
 **Interfaces :**
 - Consomme : la solution, la rigueur
-- Produit : `MetabolismeDeBase.MifflinStJeor(Sexe sexe, decimal poidsKg, decimal tailleCm, int age) → decimal`, consommée par le lot 3.
+- Produit : `MetabolismeDeBase.MifflinStJeor(Sexe sexe, decimal poidsKg, decimal tailleCm, decimal age) → decimal`, consommée par le lot 3.
+
+> **`decimal age`, et non `int`.** Ce document se contredisait : l'interface annonçait `int`, son propre bloc de code écrivait `decimal`. L'implémentation a suivi le code. `decimal` est retenu — il permet un âge fractionnaire calculé depuis une date de naissance, et évite une conversion dans la formule.
 
 > Cette tâche installe l'outillage de test **et** la première fonction réelle, parce qu'un harnais de test sans rien à tester ne prouve rien.
 

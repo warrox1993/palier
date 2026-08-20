@@ -94,7 +94,10 @@ jobs:
       - run: dotnet build back/Palier.sln --no-restore
       - run: dotnet test back/Palier.sln --no-build --settings back/coverage.runsettings
       - run: dotnet format back/Palier.sln --verify-no-changes
-      - run: dotnet list back/Palier.sln package --vulnerable --include-transitive
+      # `dotnet list package --vulnerable` sort en code 0 même quand il TROUVE
+      # quelque chose : la commande brute est un affichage, pas un garde-fou.
+      # C'est l'épreuve du harnais qui porte l'assertion sur la sortie.
+      - run: npm run audit:back
 
   securite:
     runs-on: ubuntu-latest
