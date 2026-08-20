@@ -565,3 +565,30 @@ Le point 5 est une obligation, pas une précaution — Microsoft Learn, _Connect
 **Ce que cela ne fait pas :** un tableau ne se remplit pas tout seul. Comme le gardien de `main` de D29, c'est un instrument et non un verrou — il ne mesure que si le rapport de fin de lot l'alimente.
 
 **Ce qui la rouvrirait :** rien.
+
+## D44 — Collation ICU en `fr-BE`, et non le fournisseur du système
+
+**Tranché le :** 20/08/2026, après mesure sur conteneur jetable puis sur la base réelle.
+
+**Ce qui a déclenché la vérification.** Le porteur du projet a demandé si `postgres:18.6` Debian était le bon choix. La réponse est oui — PostgreSQL 18.6 est la version courante au 13/08/2026, OVHcloud propose bien PostgreSQL 18 en base managée, et la variante Debian est justifiée : musl n'implémente pas `LC_COLLATE`, le tri y devient octet par octet quelle que soit la variable `LANG`. Mais la vérification a montré autre chose.
+
+**Ce que la mesure a corrigé dans notre propre raisonnement.** Il avait été avancé qu'une base en `en_US.utf8` trierait mal le français. **C'est faux**, et la mesure le dit :
+
+| Configuration                    | Résultat sur la même liste                |
+| -------------------------------- | ----------------------------------------- |
+| `en_US.utf8`, fournisseur `libc` | `eau < Éclair < élan < Ève < œuf < zèbre` |
+| `fr-BE`, fournisseur ICU         | `eau < Éclair < élan < Ève < œuf < zèbre` |
+
+Identiques. La glibc applique ISO 14651, qui gère déjà les accents, la casse et la ligature « œ ». L'argument du tri cassé était excessif et a été retiré.
+
+**Le motif réel, qui lui tient.** Sous le fournisseur `libc`, `datcollversion` **est la version de la glibc de l'image** — 2.41 ici. Elle change avec l'image de base, avec une mise à jour du socle de l'hébergeur, avec un passage de Debian 13 à 14. Or un changement d'ordre de tri **invalide les index sur les colonnes texte** : les requêtes rendent alors des résultats faux, et PostgreSQL ne le signale que par un avertissement au démarrage que personne ne lit.
+
+Sous ICU, la version est celle de la bibliothèque — 153.128 — versionnée indépendamment du système, et la locale est inscrite **dans la base** (`datlocale`) au lieu d'être héritée d'une variable d'environnement. Troisième effet, plus prosaïque : `en_US.utf8` doit **exister** dans l'image ; ICU n'a pas cette dépendance.
+
+**Ce qui est fait.** `POSTGRES_INITDB_ARGS: --locale-provider=icu --icu-locale=fr-BE --encoding=UTF8` dans `db/compose.yaml`. Et — c'est le point qui compte autant que le réglage — **la fixture Testcontainers LIT cette valeur dans le compose** au lieu de la redéclarer. Sans cela, les épreuves d'isolation tourneraient sur la collation par défaut de l'image pendant que la base locale et l'instance managée seraient en ICU : une divergence entre ce qu'on teste et ce qu'on exploite, qui ne se manifesterait pas par un test rouge mais par un ordre de résultats faux en production.
+
+**Ce qui la garde.** `back/Palier.Database.Tests/CollationTests.cs`, deux épreuves qui interrogent le **moteur** et non le fichier — un argument accepté par `initdb` n'est pas un argument appliqué (P11). Franchies le 20/08/2026 en retirant le réglage du compose : « Le cluster utilise le fournisseur de collation « c » et non « i » (ICU) », avec la commande de correction dans le message. La seconde épreuve vérifie l'ordre français lui-même, ce qui rend le motif d'écarter `alpine` **vérifiable** au lieu d'être une note dans un commentaire.
+
+**Ce que cela n'achète pas.** La version d'ICU changera, elle aussi — simplement de façon explicite et versionnée, au lieu de suivre l'image système. L'épreuve relève `datcollversion` sans l'asserter sur une valeur, précisément pour cette raison. Et rien n'a été mesuré sur l'instance managée d'OVHcloud, qui n'existe pas encore : si elle imposait un fournisseur ou une locale, cette décision se rouvrirait.
+
+**Ce qui la rouvrirait :** une contrainte d'OVHcloud sur le fournisseur de collation, ou un besoin de tri propre à une autre langue quand l'anglais arrivera — `docs/11-qualite.md` prévoit le français et l'anglais dès la première ligne, et la locale du **cluster** ne peut pas être les deux. Le cas échéant, la collation se pose par colonne ou par requête, pas par base.

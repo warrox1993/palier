@@ -37,6 +37,26 @@ services:
       POSTGRES_USER: palier_admin
       POSTGRES_PASSWORD: motdepasse_local_sans_valeur
       POSTGRES_DB: palier
+      # Collation ICU en `fr-BE`, et non le provider `libc` par défaut — D44.
+      #
+      # Le tri lui-même ne change PAS : mesuré le 20/08/2026, `en_US.utf8` sous
+      # glibc et `fr-BE` sous ICU rendent le même ordre sur
+      # « eau < Éclair < élan < Ève < œuf < zèbre ». La glibc applique ISO 14651,
+      # qui gère déjà les accents, la casse et la ligature « œ ».
+      #
+      # Ce qui change est la STABILITÉ de ce tri d'un environnement à l'autre.
+      # Sous `libc`, `datcollversion` est la version de la glibc de l'image —
+      # 2.41 ici. Elle bouge avec l'image de base, avec une mise à jour du socle
+      # OVHcloud, avec un passage de Debian 13 à 14. Et un changement d'ordre de
+      # tri INVALIDE les index sur les colonnes texte, ce que PostgreSQL ne
+      # signale que par un avertissement au démarrage que personne ne lit.
+      # Sous ICU, la version est celle de la bibliothèque — 153.128 — versionnée
+      # indépendamment du système, et la locale est inscrite DANS la base
+      # (`datlocale`) au lieu d'être héritée d'une variable d'environnement.
+      #
+      # Troisième effet, plus prosaïque : `en_US.utf8` doit EXISTER dans l'image.
+      # ICU n'a pas cette dépendance.
+      POSTGRES_INITDB_ARGS: --locale-provider=icu --icu-locale=fr-BE --encoding=UTF8
     ports:
       - '5432:5432'
     # Le montage est sur `/var/lib/postgresql`, PAS sur son sous-dossier

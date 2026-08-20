@@ -50,6 +50,20 @@ public sealed class BaseFixture : IAsyncLifetime
             "le compte d'administration"
         );
 
+        // Les arguments d'initialisation sont LUS eux aussi — D44. Sans cela,
+        // les épreuves tourneraient sur la collation par défaut de l'image
+        // (`libc`, `en_US.utf8`) pendant que la base locale et l'instance
+        // managée seraient en ICU `fr-BE`. Un tri qui diffère entre ce qu'on
+        // teste et ce qu'on exploite est exactement la divergence que ce projet
+        // a déjà payée quatre fois — et celle-ci ne se manifesterait pas par un
+        // test rouge, mais par un ordre de résultats faux en production.
+        ArgumentsInitialisation = Extraire(
+            compose,
+            @"^\s*POSTGRES_INITDB_ARGS:\s*(.+?)\s*$",
+            _cheminCompose,
+            "les arguments d'initialisation du cluster"
+        );
+
         MotDePasse = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var role in Roles)
         {
@@ -67,6 +81,7 @@ public sealed class BaseFixture : IAsyncLifetime
         _conteneur = new PostgreSqlBuilder(Tag)
             .WithDatabase(Base)
             .WithUsername(Administrateur)
+            .WithEnvironment("POSTGRES_INITDB_ARGS", ArgumentsInitialisation)
             // Le mot de passe du compte d'administration n'est PAS repris du
             // compose : ce conteneur est jetable, il n'écoute sur aucun port
             // fixe, et une valeur tirée au hasard supprime la question de sa
@@ -88,6 +103,13 @@ public sealed class BaseFixture : IAsyncLifetime
 
     /// <summary>Le tag de l'image PostgreSQL, lu dans <c>db/compose.yaml</c>.</summary>
     public string Tag { get; }
+
+    /// <summary>
+    /// Les arguments passés à <c>initdb</c>, lus dans <c>db/compose.yaml</c>.
+    /// Ils portent le fournisseur de collation et la locale : les épreuves
+    /// doivent trier comme la base locale et comme l'instance managée.
+    /// </summary>
+    public string ArgumentsInitialisation { get; }
 
     /// <summary>Le nom de la base, lu dans <c>db/compose.yaml</c>.</summary>
     public string Base { get; }
