@@ -1,15 +1,31 @@
 // @vitest-environment node
-import { existsSync, writeFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { describe, expect, it, afterAll } from 'vitest'
 import { lancerOutil } from '../../front/tests/harness/run-outil.js'
 
 const NON_TESTE = 'back/Palier.Domain/Energie/NonTeste.cs'
 
+// C'est ce projet, et non `back/coverage.runsettings`, qui porte le seuil : le
+// collecteur VSTest de coverlet ignore `Threshold` en silence (ruling P11).
+const PORTEUR_DU_SEUIL = 'back/Palier.Domain.Tests/Palier.Domain.Tests.csproj'
+
 afterAll(() => rmSync(NON_TESTE, { force: true }))
 
 describe('garde-fou : couverture du domaine', () => {
-  it('le fichier de configuration existe', () => {
-    expect(existsSync('back/coverage.runsettings'), 'Cible manquante').toBe(true)
+  // La sentinelle surveillait `back/coverage.runsettings`, sous le libellé
+  // « Cible manquante ». Depuis le déplacement du seuil, ce fichier ne porte
+  // plus aucun garde-fou : il ne décrit que le format du rapport. On pouvait
+  // donc vider le seuil sans qu'aucune sentinelle ne bouge. Elle surveille
+  // désormais le fichier qui l'applique, et la valeur, pas seulement l'existence.
+  it('le seuil de couverture est déclaré là où il est appliqué', () => {
+    expect(existsSync(PORTEUR_DU_SEUIL), `Cible manquante : ${PORTEUR_DU_SEUIL}`).toBe(true)
+    const projet = readFileSync(PORTEUR_DU_SEUIL, 'utf8')
+    expect(projet, `Le seuil de 100 % a disparu de ${PORTEUR_DU_SEUIL}`).toMatch(
+      /<Threshold>100<\/Threshold>/,
+    )
+    expect(projet, `Le seuil ne couvre plus ligne, branche et méthode`).toMatch(
+      /<ThresholdType>line,branch,method<\/ThresholdType>/,
+    )
   })
 
   it('refuse une fonction du domaine non couverte', () => {
