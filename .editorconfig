@@ -29,5 +29,13 @@ dotnet_naming_symbols.champs_prives.applicable_accessibilities = private
 dotnet_naming_style.underscore_camel.required_prefix = _
 dotnet_naming_style.underscore_camel.capitalization = camel_case
 
+# Un nom de méthode de test porte le scénario, séparé par des traits de
+# soulignement : c'est la convention xUnit, et la seule forme lisible dans un
+# rapport d'échec. CA1707 vise le nommage d'une API publique publiée ; un projet
+# de tests n'en publie aucune (`IsPackable` est faux). L'exception est étroite —
+# limitée aux projets `*.Tests` et à cette seule règle — jamais globale.
+[**/*.Tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+
 [*.{ts,tsx,js,jsx,json,md,yml,yaml}]
 indent_size = 2
