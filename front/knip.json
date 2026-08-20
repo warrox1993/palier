@@ -1,0 +1,14 @@
+{
+  "entry": [
+    "src/main.tsx",
+    "src/core/index.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "tests/**/*.test.ts",
+    "tests/**/*.spec.ts"
+  ],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["tests/harness/fixtures/**"],
+  "ignoreDependencies": ["@testing-library/jest-dom", "@testing-library/react"]
+}

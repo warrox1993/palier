@@ -12,6 +12,8 @@
     "lint:types": "oxlint --type-aware --ignore-pattern \"tests/harness/fixtures/**\" src",
     "format": "prettier --write . \"!tests/harness/fixtures/**\"",
     "format:check": "prettier --check . \"!tests/harness/fixtures/**\"",
+    "knip": "knip",
+    "jscpd": "jscpd src",
     "test": "vitest run --exclude \"tests/harness/accessibilite.test.ts\"",
     "test:harness": "vitest run tests/harness",
     "test:watch": "vitest"
@@ -40,7 +42,9 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
+    "jscpd": "^5.0.16",
     "jsdom": "^30.0.1",
+    "knip": "^6.32.2",
     "oxlint": "^1.79.0",
     "oxlint-tsgolint": "^7.0.2001",
     "prettier": "^3.9.6",

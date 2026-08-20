@@ -1,0 +1,6 @@
+{
+  "threshold": 3,
+  "reporters": ["console"],
+  "ignore": ["**/node_modules/**", "**/dist/**", "tests/harness/fixtures/**"],
+  "absolute": true
+}
