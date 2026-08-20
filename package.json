@@ -8,6 +8,7 @@
   "engines": { "node": "24.x" },
   "scripts": {
     "verify": "node scripts/verify.mjs",
+    "regles": "node scripts/regles-projet.mjs",
     "front": "npm --prefix front run",
     "front:dev": "npm --prefix front run dev"
   }
