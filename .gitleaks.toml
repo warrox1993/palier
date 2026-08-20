@@ -6,3 +6,25 @@ path = ".gitleaks.regles.toml"
 [[allowlists]]
 description = "Faux secret versionné, seule cible de l'épreuve du harnais"
 paths = ['''front/tests/harness/fixtures/faux-secret\.txt''']
+
+# Le plan et les briefs CITENT ce faux secret, puisqu'ils décrivent l'épreuve
+# qui l'utilise. Le hook de pré-commit ne les voyait pas — il scanne `--staged`,
+# donc seulement ce qui est indexé au moment du commit — mais la CI lance
+# `gitleaks git` sur l'HISTORIQUE ENTIER et les a trouvés dans trois commits
+# antérieurs à l'écriture de la règle. Premier échec de la CI, le 20/08/2026.
+#
+# La divergence est instructive : le local et l'intégration continue ne
+# scannaient pas le même objet. C'est le défaut que `verify` existe pour
+# empêcher, et gitleaks lui échappait — il vit dans le hook et dans la CI, pas
+# dans `verify`.
+#
+# L'exception est restreinte aux documents de travail du harnais, jamais au
+# code : un secret déposé dans `front/`, `back/` ou `scripts/` reste détecté.
+# L'épreuve « l'exception ne couvre que la fixture, pas le reste du dépôt »
+# provoque précisément ce cas et le vérifie.
+[[allowlists]]
+description = "Plans et briefs : ils citent le faux secret parce qu'ils décrivent l'épreuve"
+paths = [
+  '''docs/superpowers/plans/.*\.md''',
+  '''\.superpowers/sdd/.*\.md''',
+]

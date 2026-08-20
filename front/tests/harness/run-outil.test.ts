@@ -32,10 +32,16 @@ describe('lancerOutil — les défaillances ne se déguisent pas en refus', () =
     // Avec le maxBuffer par défaut, spawnSync rendrait status:null et une
     // sortie tronquée — le motif attendu disparaîtrait, et l'assertion sur le
     // motif rendrait un rouge illisible sur une violation réelle.
+    // `process.exitCode = 1` et NON `process.exit(1)`. Sur un tuyau, `exit()`
+    // termine le processus sans attendre que stdout soit vidé : la CI Linux a
+    // rendu 146 176 octets sur les 2 Mio écrits, et l'épreuve a échoué en
+    // accusant `maxBuffer` alors que la fixture perdait sa propre sortie.
+    // Sous Windows le tuyau se vidait avant la sortie, ce qui masquait le
+    // défaut. `exitCode` laisse le processus se terminer naturellement.
     const r = lancerOutil([
       'node',
       '-e',
-      'process.stdout.write("x".repeat(2*1024*1024)); process.stdout.write("MOTIF_FINAL"); process.exit(1)',
+      'process.stdout.write("x".repeat(2*1024*1024)); process.stdout.write("MOTIF_FINAL"); process.exitCode = 1',
     ])
     expect(r.code).toBe(1)
     expect(r.sortie.length).toBeGreaterThan(2 * 1024 * 1024)
