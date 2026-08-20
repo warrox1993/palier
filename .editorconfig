@@ -34,7 +34,14 @@ dotnet_naming_style.underscore_camel.capitalization = camel_case
 # rapport d'échec. CA1707 vise le nommage d'une API publique publiée ; un projet
 # de tests n'en publie aucune (`IsPackable` est faux). L'exception est étroite —
 # limitée aux projets `*.Tests` et à cette seule règle — jamais globale.
-[**/*.Tests/**/*.cs]
+#
+# Le motif est `**.cs` et non `**/*.cs` : mesuré le 20/08/2026, la seconde forme
+# ne couvre PAS la racine du projet de tests. `Palier.Domain.Tests/XTests.cs`
+# sortait en `error CA1707` pendant que `Palier.Domain.Tests/Energie/XTests.cs`
+# passait — le seul fichier de tests existant étant dans un sous-dossier, le
+# trou était invisible, et le prochain fichier créé à l'endroit le plus naturel
+# aurait cassé le build. Éprouvé aux deux profondeurs par `rigueur.test.mjs`.
+[**/*.Tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
 
 [*.{ts,tsx,js,jsx,json,md,yml,yaml}]
