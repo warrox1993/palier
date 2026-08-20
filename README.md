@@ -27,12 +27,16 @@ Dossier de spécification destiné à Claude Code.
 17. `docs/15-marque.md` — nom et dépôt de marque
 18. `docs/16-projet.md` — arborescence, conventions, variables d'environnement, glossaire
 19. `docs/17-donnees-sources.md` — licences des bases alimentaires, attribution, share-alike
+20. **`docs/decisions.md`** — le journal des décisions, **à lire au démarrage de chaque session**. Il porte ce qui a déjà été tranché, avec le motif et ce qui rouvrirait chaque décision. Une décision qu'on ne relit pas au démarrage se reprend.
+
+> **`docs/decisions.md` prime sur les autres documents quand ils divergent** — c'est lui qui est daté. Son absence de cet index jusqu'au 20/08/2026 a laissé sept documents décrire une pile Supabase + Vercel abandonnée le 19/08.
 
 ## Premier prompt
 
-> Lis `CLAUDE.md` puis l'ensemble de `docs/`. Vérifie que Superpowers est installé et actif.
-> Ne code rien pour l'instant. Lance `/superpowers:brainstorm` sur l'étape 1 de la roadmap et
-> pose-moi les questions nécessaires avant de proposer un plan.
+> Lis `CLAUDE.md`, `docs/decisions.md`, puis l'ensemble de `docs/`. Vérifie que Superpowers
+> est installé et actif — les noms de commandes varient selon la version, utilise ceux que
+> `/help` affiche. Ne code rien pour l'instant. Lance la commande de clarification sur l'étape 1
+> de la roadmap et pose-moi les questions nécessaires avant de proposer un plan.
 
 ## En cas de contradiction entre documents
 
@@ -48,10 +52,13 @@ Ordre de priorité : `01-conformite.md` > document spécialisé > `07-roadmap.md
 | `CLAUDE.md` disait « dix points », `08-workflow.md` en comptait douze | **Douze.** `CLAUDE.md` corrigé |
 | Noms de commandes Superpowers obsolètes (`/superpowers:brainstorm`) | Les noms **varient selon la version** — vérifier via `/help`. Version courante : `brainstorming`, `writing-plans`, `executing-plans` |
 | Clés API interdites à l'étape 0, exigées à l'étape 1 | **Les créer à l'étape 0**, avec plafond de dépense. L'étape 1 livre un appel de test |
+| Ce même document écrivait « dix points » deux lignes plus bas | **Douze.** Corrigé le 20/08/2026 — la correction annoncée n'avait pas été appliquée à sa propre section |
+| Sept documents décrivaient Supabase, Vercel et ESLint | **Backend .NET, OVHcloud, Oxlint** — décisions D9, D10, D15, D17. Propagées le 20/08/2026 |
+| `docs/decisions.md` n'était indexé nulle part | Ajouté à l'ordre de lecture ci-dessus. C'était la cause mécanique de la dérive documentaire |
 
 ## Les quatre règles à ne jamais contourner
 
 1. **Informer, jamais prescrire.** Un chiffre, une référence, un écart. Aucune action recommandée
 2. **Le LLM ne calcule pas.** Il reçoit des valeurs déjà produites par du code testé
 3. **Brainstorm, plan validé, puis exécution.** Jamais de code avant accord sur un plan
-4. **Produit fini, jamais prototype.** Les dix points de la définition de terminé sont cochés avant de passer à la suite
+4. **Produit fini, jamais prototype.** Les **douze** points de la définition de terminé sont cochés avant de passer à la suite

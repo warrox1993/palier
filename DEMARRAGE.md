@@ -6,14 +6,16 @@
 
 ## Étape 0 — Prérequis
 
+> **Ce document a été mis à jour le 20/08/2026** pour appliquer les décisions D3, D9, D10, D15 et D17 de `docs/decisions.md`. Il décrivait une pile Supabase + Vercel abandonnée le 19/08.
+
 ```bash
-node --version    # 20 ou plus
+node --version    # 24 — voir .nvmrc, et D3
+dotnet --version  # 10 ou plus
 git --version
 ```
 
-Comptes à créer, tous gratuits :
-- **Supabase** — projet créé **en région Francfort ou Paris**. Choix irréversible
-- **Vercel** — connecté à GitHub
+Comptes à créer :
+- **OVHcloud** — PostgreSQL managé et une instance pour le backend conteneurisé. **Région européenne** : c'est l'argument de conformité principal pour des données de santé (D15)
 - **GitHub** — dépôt privé
 
 **Clés API Anthropic et Google : à créer maintenant.** L'étape 1 de la roadmap livre l'abstraction `LLMProvider` avec un appel de test sur chaque fournisseur — sans clés, ce livrable est inatteignable.
@@ -78,7 +80,7 @@ Créer `.claude/settings.json` :
     "allow": [
       "Bash(npm run *)",
       "Bash(git *)",
-      "Bash(npx supabase *)"
+      "Bash(dotnet *)"
     ]
   }
 }
@@ -95,11 +97,11 @@ Créer `.claude/settings.json` :
 À ajouter au fur et à mesure, pas tous d'un coup. Pour démarrer, deux suffisent :
 
 ```
-/mcp add supabase
 /mcp add github
+/mcp add context7
 ```
 
-Playwright, Context7 et Sentry viendront quand le besoin apparaîtra. Un serveur MCP inutilisé consomme du contexte à chaque session.
+Context7 est utile dès le premier jour : sur une bibliothèque, il donne la documentation de la version installée là où le web donne celle d'il y a deux ans. Playwright et Sentry viendront quand le besoin apparaîtra. Un serveur MCP inutilisé consomme du contexte à chaque session.
 
 **Règle absolue : jamais d'accès en écriture sur la base de production.**
 
@@ -133,7 +135,7 @@ Une fois ses questions traitées :
 
 > Lance la commande de clarification de Superpowers (`brainstorming` ou son équivalent selon ta version) sur l'étape 1 de `docs/07-roadmap.md` — le harnais et le socle.
 >
-> Rappel : le harnais avant le produit. Rien ne s'écrit avant que TypeScript strict, ESLint, Prettier, Vitest, Playwright, les hooks pre-commit et pre-push, la CI et axe-core ne soient en place et vérifiés.
+> Rappel : le harnais avant le produit. Rien ne s'écrit avant que TypeScript strict, **Oxlint**, Prettier, Vitest, Playwright, les hooks pre-commit et pre-push, la CI et axe-core ne soient en place et vérifiés. Oxlint et non ESLint : `typescript-eslint` est incompatible avec TypeScript 7.
 
 Puis, après le brainstorm :
 
@@ -175,7 +177,7 @@ C'est la partie que la plupart des gens ratent. L'agent est bon dans la mesure o
 
 | Semaine | Objectif |
 |---|---|
-| 1 | Harnais complet, CI verte, projet Supabase, auth fonctionnelle |
+| 1 | Harnais complet front et backend, CI verte, solution .NET qui compile |
 | 2 | Schéma complet avec RLS, tests de politiques verts, seed chargé |
 | 3 | Premier écran de séance utilisable, avec ses quatre états |
 
