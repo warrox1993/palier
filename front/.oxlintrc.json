@@ -22,7 +22,7 @@
       "rules": { "typescript/no-explicit-any": "off" }
     },
     {
-      "files": ["src/core/**/*.ts", "tests/harness/fixtures/core-impur.ts"],
+      "files": ["src/core/**/*.ts", "tests/harness/fixtures/core-impur*.ts"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -35,12 +35,12 @@
               { "group": ["dexie"], "message": "core/ est pur : aucun accès stockage." },
               {
                 "group": [
-                  "@/lib/*",
-                  "@/ui/*",
-                  "@/features/*",
-                  "../lib/*",
-                  "../ui/*",
-                  "../features/*"
+                  "**/lib",
+                  "**/lib/**",
+                  "**/ui",
+                  "**/ui/**",
+                  "**/features",
+                  "**/features/**"
                 ],
                 "message": "core/ est pur : aucune dépendance applicative."
               }

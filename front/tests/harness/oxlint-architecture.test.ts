@@ -4,18 +4,45 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { lancerOutil } from './run-outil'
 
 const IMPUR = 'tests/harness/fixtures/core-impur.ts'
+const IMPUR_PROFOND = 'tests/harness/fixtures/core-impur-profond.ts'
 const FLOTTANTE = 'tests/harness/fixtures/promesse-flottante.ts'
 const MAL_EMPLOYEE = 'tests/harness/fixtures/promesse-mal-employee.ts'
 
+// Chaque forme est éprouvée séparément parce que chacune passait, ou non, par un
+// motif différent. Les motifs d'origine, `../lib/*` et `../ui/*`, ne couvraient
+// qu'un seul cran : `../../ui/bouton` depuis `src/core/sous/` sortait en code 0.
+// React et Dexie restaient attrapés — ce sont des spécificateurs nus, sans
+// profondeur —, seules les dépendances applicatives s'échappaient. Le lot 2
+// crée `core/nutrition/` et `core/entrainement/`.
+const ECHAPPEES = [
+  "'../ui/bouton'",
+  "'../../ui/bouton'",
+  "'../../../ui/bouton'",
+  "'@/ui/bouton'",
+  "'@/ui/sous/bouton'",
+  "'../../lib/format'",
+  "'../../../features/seance'",
+  "'../../ui'",
+  "'../../lib/sous/format'",
+]
+
 describe('garde-fou : pureté de front/src/core/', () => {
-  it('la fixture de violation existe', () => {
-    expect(existsSync(IMPUR), `Cible manquante : ${IMPUR}`).toBe(true)
+  it.each([IMPUR, IMPUR_PROFOND])('la fixture %s existe', (f) => {
+    expect(existsSync(f), `Cible manquante : ${f}`).toBe(true)
   })
 
   it('refuse un import de React depuis core/', () => {
     const r = lancerOutil(['npx', 'oxlint', IMPUR])
     expect(r.code, `Oxlint a accepté l'import impur :\n${r.sortie}`).not.toBe(0)
     expect(r.sortie).toMatch(/no-restricted-imports/)
+  })
+
+  it('refuse une dépendance applicative à toute profondeur', () => {
+    const r = lancerOutil(['npx', 'oxlint', IMPUR_PROFOND])
+    expect(r.code, `Oxlint a accepté les imports profonds :\n${r.sortie}`).not.toBe(0)
+    for (const forme of ECHAPPEES) {
+      expect(r.sortie, `${forme} n'a pas été refusé :\n${r.sortie}`).toContain(forme)
+    }
   })
 })
 
