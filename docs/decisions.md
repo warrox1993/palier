@@ -288,3 +288,26 @@ Ce n'est ni un problème de droits ni de syntaxe : la page de tarification confi
 **Ce qui la garde.** `tests-harness/ci.test.mjs` vérifie que le gardien existe, suit bien le workflow `CI` sur `main`, porte `issues: write` — sans quoi il tournerait vert sans rien ouvrir — et sait aussi bien ouvrir que fermer. Franchi le 20/08/2026 en retirant la permission : l'épreuve rougit.
 
 **Ce qui la rouvrirait :** un passage à un plan qui offre les règles de dépôt sur le privé, ou le jour où une deuxième personne rejoint le projet. À une seule paire de mains, la discipline peut tenir lieu de verrou ; à deux, elle ne le peut plus.
+
+## D30 — Les alertes Dependabot étaient éteintes côté GitHub, le fichier ne suffit pas
+
+**Tranché le :** 20/08/2026, après mesure d'un audit de complétude.
+
+**Le fait.** `.github/dependabot.yml` existait depuis la tâche 21, avec ses quatre écosystèmes et ses délais de refroidissement. Une épreuve (`tests-harness/ci.test.mjs`) vérifiait qu'il couvrait bien npm, NuGet et les actions. Tout était vert.
+
+Mais l'état du **service** GitHub, jamais interrogé :
+
+```
+GET  /repos/warrox1993/palier/vulnerability-alerts    → HTTP 404   (non activé)
+GET  /repos/warrox1993/palier/automated-security-fixes → {"enabled": false}
+```
+
+`docs/08-workflow.md` § 5 liste « `npm audit` / Dependabot » comme brique du harnais. Seule la moitié `npm audit` tournait — en intégration continue, sur `front/` seulement. **Aucune alerte de vulnérabilité n'était signalée sur le dépôt.**
+
+**Corrigé le jour même** par `PUT` sur les deux points d'entrée. Vérifié : `204` au lieu de `404`, et `{"enabled": true}`.
+
+**La leçon, qui dépasse ce cas.** L'épreuve assertait le **contenu d'un fichier**, jamais l'**état du service** que ce fichier est censé configurer. C'est exactement le faux vert que ce lot a chassé toute la journée — un réglage accepté sans erreur n'est pas un réglage appliqué (P11), une règle mal nommée est acceptée sans rien faire, un fichier d'exclusion rend une fixture invisible de sa propre épreuve (P9). Ici, la variante est plus retorse : **le fichier était juste, et il ne servait à rien**, parce que la fonctionnalité qu'il paramètre était désactivée en amont.
+
+**Ce qui reste ouvert.** Aucune épreuve ne garde cet état. La vérifier depuis la suite de tests demanderait un appel authentifié à l'API GitHub — fragile hors CI, et les droits par défaut de `GITHUB_TOKEN` ne couvrent pas forcément cette lecture. À traiter au lot 2 : soit une étape du job `securite`, soit une vérification manuelle inscrite au gabarit de rapport de lot.
+
+**Ce qui la rouvrirait :** rien. Mais la classe de défaut qu'elle illustre — _un fichier de configuration correct dont le service est éteint_ — doit être cherchée partout ailleurs où une épreuve lit un fichier au lieu d'interroger le système.
