@@ -95,11 +95,20 @@ describe('garde-fou : intégration continue', () => {
     expect(action).toMatch(/[0-9a-f]{64}/)
   })
 
-  it('Dependabot couvre les quatre écosystèmes, actions comprises', () => {
+  it('Dependabot couvre les cinq écosystèmes, actions et compose compris', () => {
+    // `docker-compose:/db` porte le tag PostgreSQL, seul endroit du dépôt où il
+    // est écrit (D34). Sans suivi, la base locale dérive de l'instance managée
+    // en silence — la divergence qu'une base locale existe pour supprimer.
     expect(existsSync(DEPENDABOT), `Cible manquante : ${DEPENDABOT}`).toBe(true)
     const conf = parse(readFileSync(DEPENDABOT, 'utf8'))
     const cles = conf.updates.map((u) => `${u['package-ecosystem']}:${u.directory}`)
-    for (const attendu of ['npm:/front', 'npm:/', 'nuget:/back', 'github-actions:/']) {
+    for (const attendu of [
+      'npm:/front',
+      'npm:/',
+      'nuget:/back',
+      'github-actions:/',
+      'docker-compose:/db',
+    ]) {
       expect(cles, `Écosystème non suivi par Dependabot : ${attendu}`).toContain(attendu)
     }
   })

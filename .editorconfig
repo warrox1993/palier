@@ -46,3 +46,15 @@ dotnet_diagnostic.CA1707.severity = none
 
 [*.{ts,tsx,js,jsx,json,md,yml,yaml}]
 indent_size = 2
+
+# Le SQL est la seule famille de fichiers du dépôt qu'AUCUN formateur ne
+# couvre : Prettier n'a pas de parseur SQL natif, et `db/**/*.sql` est donc
+# volontairement hors du glob de `format:scripts`. Ce bloc est tout ce qui
+# tient la cohérence de style du SQL — il n'est pas décoratif, il remplace un
+# outil absent.
+[*.sql]
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
