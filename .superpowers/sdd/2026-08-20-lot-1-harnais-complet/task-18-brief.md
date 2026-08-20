@@ -51,8 +51,9 @@ describe("garde-fou : point d'entrée unique", () => {
   it('verify couvre les deux écosystèmes', () => {
     const s = readFileSync('scripts/verify.mjs', 'utf8')
     for (const etape of [
-      'front:format', 'front:lint', 'front:typecheck', 'front:test', 'front:knip',
-      'regles', 'back:format', 'back:build', 'back:test', 'licences', 'front:build',
+      'front:format', 'front:lint', 'front:lint:types', 'front:typecheck', 'front:test',
+      'front:knip', 'regles', 'back:format', 'back:build', 'back:test', 'licences',
+      'front:build',
     ]) {
       expect(s, `Contrôle manquant dans verify : ${etape}`).toContain(etape)
     }
@@ -138,6 +139,7 @@ const SEUIL_MS = 90000 // deux harnais : seuil doublé par rapport au front seul
 const etapes = [
   ['front:format', ['npm', '--prefix', 'front', 'run', 'format:check']],
   ['front:lint', ['npm', '--prefix', 'front', 'run', 'lint']],
+  ['front:lint:types', ['npm', '--prefix', 'front', 'run', 'lint:types']],
   ['front:typecheck', ['npm', '--prefix', 'front', 'run', 'typecheck']],
   ['front:test', ['npm', '--prefix', 'front', 'run', 'test']],
   ['front:knip', ['npm', '--prefix', 'front', 'run', 'knip']],
@@ -184,6 +186,31 @@ if (total > SEUIL_MS) {
 
 Les épreuves du harnais ne figurent **pas** dans `verify` : elles font échouer des outils délibérément, et les mêler aux contrôles normaux rendrait la sortie illisible. Elles ont leur propre commande, appelée par la CI.
 
+- [ ] **Étape 3 bis : couvrir `scripts/*.mjs`**
+
+Signalé par l'implémenteur des tâches 6 à 10, confirmé en revue : **les scripts de la
+racine ne sont ni lintés, ni formatés, ni typés.** Oxlint et Prettier vivent dans
+`front/` et ne remontent pas d'un cran. Or `scripts/regles-projet.mjs`,
+`scripts/verifier-licences.mjs` et `scripts/verify.mjs` portent des règles bloquantes
+du projet : ce sont les fichiers les moins surveillés du dépôt et parmi les plus
+critiques.
+
+Ajouter au `package.json` de la racine :
+
+```json
+{
+  "scripts": {
+    "lint:scripts": "npm --prefix front exec -- oxlint --config front/.oxlintrc.json scripts",
+    "format:scripts": "npm --prefix front exec -- prettier --check \"scripts/**/*.mjs\""
+  }
+}
+```
+
+Puis les deux étapes correspondantes dans `verify`, et la même chose dans la CI.
+
+Vérifier que les trois scripts passent, et **corriger ce qui ressort** plutôt que de
+désarmer les règles : ce sont eux qui décident si le reste du dépôt est conforme.
+
 - [ ] **Étape 4 : ajouter les scripts racine**
 
 ```json
@@ -213,6 +240,15 @@ Les épreuves du harnais ne figurent **pas** dans `verify` : elles font échouer
 >
 > `tests-harness/verify.test.mjs` vit à la racine et sera donc ramassé par la configuration
 > backend : ajouter `'tests-harness/**/*.test.mjs'` à son `include`.
+
+> **`front:lint:types` ajouté après la revue des tâches 6 à 10.** Il manquait, et c'était
+> le ruling P2 à l'identique : un contrôle qui existe, fonctionne, et que rien n'appelle.
+> `no-floating-promises` et `no-misused-promises` sont déclarées bloquantes et justifiées
+> par « des pertes de données silencieuses » dans la file de retry hors ligne — elles
+> n'auraient jamais tourné, ni au pré-envoi ni en intégration continue.
+>
+> Le contrôle est distinct de `front:lint` : mesuré, une promesse flottante dans `src/`
+> passe `npm run lint` en code 0 sans une ligne de sortie, et échoue sur `lint:types`.
 
 - [ ] **Étape 5 : lancer l'épreuve pour la voir passer**
 

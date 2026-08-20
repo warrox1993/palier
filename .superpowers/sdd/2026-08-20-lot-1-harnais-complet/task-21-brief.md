@@ -75,6 +75,7 @@ jobs:
       - run: npm --prefix front ci
       - run: npm --prefix front run format:check
       - run: npm --prefix front run lint
+      - run: npm --prefix front run lint:types
       - run: npm --prefix front run typecheck
       - run: npm --prefix front run test
       - run: npm --prefix front run knip
