@@ -1,0 +1,4 @@
+/* Violation délibérée : docs/02-design.md § 2 et § 4 interdisent l'ombre portée. */
+.carte {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
