@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, extname, sep } from 'node:path'
+import { join, extname } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -170,10 +170,19 @@ describe('garde-fou : la base locale et son compose', () => {
     // panne : cette branche reste donc franchissable après l'activation de
     // WSL2, quand le démon répondra. Sans cela elle redeviendrait une branche
     // qu'on ne provoque jamais.
-    const chemin = (process.env.PATH ?? '')
-      .split(sep === '\\' ? ';' : ':')
-      .filter((d) => !/docker/i.test(d))
-      .join(sep === '\\' ? ';' : ':')
+    // Un PATH VIDE, et non un PATH filtré sur le nom des répertoires. Le filtre
+    // par nom marchait sous Windows, où Docker vit dans `…\DockerDesktop\…`,
+    // et ne retirait rien sous Linux, où il vit dans `/usr/bin` — un répertoire
+    // dont le nom ne dit pas ce qu'il contient. En intégration continue, le
+    // moteur répondait donc réellement, `db:up` démarrait le conteneur, et
+    // l'épreuve rougissait faute du message qu'elle attendait.
+    //
+    // Quatrième divergence entre le poste de développement et l'intégration
+    // continue sur ce projet, et la plus retorse : l'épreuve de l'ABSENCE
+    // échouait parce que la chose était PRÉSENTE.
+    //
+    // `process.execPath` est absolu : Node démarre sans PATH.
+    const chemin = ''
     const r = spawnSync(process.execPath, ['scripts/db.mjs', 'up', 'palier-db'], {
       encoding: 'utf8',
       env: { ...process.env, PATH: chemin, Path: chemin },
