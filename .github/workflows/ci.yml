@@ -139,6 +139,13 @@ jobs:
           global-json-file: global.json
       - uses: ./.github/actions/installer-gitleaks
       - run: npm --prefix front ci
+      # Les épreuves de `tests-harness/` importent `yaml`, déclaré dans le
+      # `package.json` de la RACINE. Sans cette installation, elles échouent sur
+      # ERR_MODULE_NOT_FOUND — invisible en local, où `node_modules/` existe
+      # depuis longtemps. Troisième divergence entre le poste de développement
+      # et l'intégration continue trouvée sur ce lot, après le périmètre de
+      # gitleaks et le vidage de stdout.
+      - run: npm ci
       - run: npm --prefix front run e2e:install
       - name: La CI n'appelle-t-elle que verify en local ?
         run: grep -q 'npm run verify' .husky/pre-push

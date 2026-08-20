@@ -51,6 +51,18 @@ describe('garde-fou : intégration continue', () => {
     }
   })
 
+  it('le franchissement installe les dépendances des DEUX package.json', () => {
+    // Les épreuves de `tests-harness/` importent `yaml`, déclaré à la racine.
+    // Sans `npm ci` racine, le job échoue sur ERR_MODULE_NOT_FOUND — invisible
+    // en local, où `node_modules/` existe depuis longtemps. Mesuré en CI le
+    // 20/08/2026. Le job installait `front` seulement.
+    const etapes = flux.jobs.franchissement.steps.map((e) => String(e.run ?? ''))
+    expect(etapes, 'les dépendances du front ne sont pas installées').toContain(
+      'npm --prefix front ci',
+    )
+    expect(etapes, 'les dépendances de la racine ne sont pas installées').toContain('npm ci')
+  })
+
   it('le franchissement lance bien les épreuves du harnais', () => {
     const etapes = JSON.stringify(flux.jobs.franchissement.steps)
     expect(etapes).toContain('npm run test:harness')
