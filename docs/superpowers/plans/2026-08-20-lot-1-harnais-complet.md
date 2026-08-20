@@ -2035,6 +2035,61 @@ describe("garde-fou : point d'entrée unique", () => {
 
 Le troisième test est ce qui empêche la dérive : le jour où quelqu'un ajoute un contrôle au hook sans le mettre dans `verify`, le local et la CI cessent de vérifier la même chose.
 
+- [ ] **Étape 1 bis : l'épreuve des commandes, et non des outils**
+
+`front/tests/harness/commandes.test.ts` :
+
+```typescript
+// @vitest-environment node
+import { describe, expect, it } from 'vitest'
+import { lancerOutil } from './run-outil'
+
+// Aucune autre épreuve de cette suite ne lance un script npm : toutes appellent
+// `npx <outil>` directement. Elles prouvent donc que les OUTILS refusent, jamais
+// que les COMMANDES du projet refusent — or ce sont les scripts que le hook de
+// pré-commit, `verify` et la CI exécutent réellement.
+//
+// Ce trou a laissé passer deux régressions, trouvées seulement en revue :
+// un script `lint` réécrit sans `--ignore-pattern` (les fixtures faisaient
+// rougir le lint du code sain), et un `test:harness` dont le drapeau
+// `--exclude ''` ne réactivait pas ce qu'il prétendait réactiver.
+describe('garde-fou : les commandes du projet, pas seulement les outils', () => {
+  it('npm run lint est vert sur le code réel', () => {
+    const r = lancerOutil(['npm', '--prefix', 'front', 'run', 'lint'], { cwd: '..' })
+    expect(r.code, `Le script lint échoue sur le code sain :\n${r.sortie}`).toBe(0)
+  })
+
+  it('npm run typecheck est vert sur le code réel', () => {
+    const r = lancerOutil(['npm', '--prefix', 'front', 'run', 'typecheck'], { cwd: '..' })
+    expect(r.code, `Le script typecheck échoue sur le code sain :\n${r.sortie}`).toBe(0)
+  })
+
+  it('les fixtures restent visibles de leurs propres épreuves', () => {
+    // Le pendant du test précédent. Si l'exclusion migrait de la ligne de
+    // commande vers `ignorePatterns`, le lint resterait vert ET les fixtures
+    // deviendraient invisibles : les épreuves passeraient au vert en ne
+    // contrôlant rien. Ce test le rend impossible.
+    const r = lancerOutil(['npx', 'oxlint', 'tests/harness/fixtures/any-explicite.ts'])
+    expect(r.code, `La fixture est devenue invisible d'Oxlint :\n${r.sortie}`).not.toBe(0)
+    expect(r.sortie).toContain('no-explicit-any')
+  })
+
+  it('test:harness voit toutes les épreuves, y compris celle d’accessibilité', () => {
+    const r = lancerOutil(['npm', '--prefix', 'front', 'run', 'test:harness', '--', '--list'], {
+      cwd: '..',
+    })
+    expect(r.code, `test:harness ne démarre pas :\n${r.sortie}`).toBe(0)
+    expect(r.sortie, "l'épreuve d'accessibilité est exclue de test:harness").toContain(
+      'accessibilite',
+    )
+  })
+})
+```
+
+> **Ce fichier vit dans `front/tests/harness/` et lance des scripts npm.** Il n'y a
+> pas de récursion : `lint` et `typecheck` ne relancent pas les tests. Ne jamais
+> y appeler `npm run test` — la suite s'appellerait elle-même sans fin.
+
 - [ ] **Étape 2 : lancer l'épreuve pour la voir échouer**
 
 Attendu : ÉCHEC — `scripts/verify.mjs` n'existe pas.
