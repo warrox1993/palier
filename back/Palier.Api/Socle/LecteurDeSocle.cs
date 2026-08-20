@@ -115,6 +115,14 @@ internal sealed class LecteurDeSocle(PalierDbContext contexte)
             var isContournement = false;
             using (var commande = connexion.CreateCommand())
             {
+                // nosemgrep: csharp.lang.security.sqli.csharp-sqli -- `_requeteRole`
+                // est un `private const string` littéral, ligne 70. Aucune
+                // concaténation, aucune interpolation, et ce lecteur n'a pas un
+                // seul paramètre d'entrée. semgrep ne suit pas les `const` C# et
+                // ne lit pas le `#pragma CA2100` que Roslyn honore déjà.
+                // L'exclusion est posée LIGNE PAR LIGNE et RÈGLE PAR RÈGLE :
+                // l'écarter au niveau du fichier ou du dossier rendrait le
+                // détecteur aveugle sur du code qui, lui, prendra des entrées.
                 commande.CommandText = _requeteRole;
                 var lecteur = await commande.ExecuteReaderAsync(jeton).ConfigureAwait(false);
                 await using (lecteur.ConfigureAwait(false))
@@ -181,6 +189,10 @@ internal sealed class LecteurDeSocle(PalierDbContext contexte)
     {
         var commande = connexion.CreateCommand();
 #pragma warning disable CA2100
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli -- voir le
+        // commentaire de documentation ci-dessus : `sql` ne reçoit que des
+        // `private const` de ce fichier. Même motif que ligne 118, et même
+        // raison de l'écarter ici plutôt qu'au niveau du fichier.
         commande.CommandText = sql;
 #pragma warning restore CA2100
         return commande;
