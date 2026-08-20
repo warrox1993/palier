@@ -311,3 +311,28 @@ GET  /repos/warrox1993/palier/automated-security-fixes → {"enabled": false}
 **Ce qui reste ouvert.** Aucune épreuve ne garde cet état. La vérifier depuis la suite de tests demanderait un appel authentifié à l'API GitHub — fragile hors CI, et les droits par défaut de `GITHUB_TOKEN` ne couvrent pas forcément cette lecture. À traiter au lot 2 : soit une étape du job `securite`, soit une vérification manuelle inscrite au gabarit de rapport de lot.
 
 **Ce qui la rouvrirait :** rien. Mais la classe de défaut qu'elle illustre — _un fichier de configuration correct dont le service est éteint_ — doit être cherchée partout ailleurs où une épreuve lit un fichier au lieu d'interroger le système.
+
+## D31 — Deux points de la définition de terminé ne peuvent pas être gardés au lot 1
+
+**Tranché le :** 20/08/2026, après un audit de complétude qui a compté 4 points pleinement tenus sur 12, 7 partiels et 1 absent.
+
+**Le fait.** `docs/08-workflow.md` § 9 exige douze cases cochées, et `CLAUDE.md` § 1 rappelle qu'« il n'y a pas de _on finira plus tard_ ». Deux de ces points ne sont pourtant pas gardables aujourd'hui, pour une raison qui n'est pas de la paresse :
+
+| Point                                              | Pourquoi il n'est pas gardable                                                                                                                                                                                 |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **États de chargement, d'erreur, vide et partiel** | On ne peut pas éprouver qu'un écran possède un état vide **sans écran**. Le mot n'apparaît nulle part dans le harnais, le plan, les décisions ni le journal — c'est le seul des douze points totalement absent |
+| **Navigation au clavier**                          | axe-core couvre l'accessibilité statique du DOM ; le parcours au clavier se teste sur un parcours, et il n'y en a aucun                                                                                        |
+
+**Ce qui n'est pas reporté, et qui existe déjà.** La moitié i18n du point est outillée : `chaine-en-dur` dans `scripts/regles-projet.mjs` refuse la copie en dur dans le JSX — nœuds de texte multilignes compris, ainsi que `title`, `alt`, `placeholder` et `aria-label`. Elle a mordu sur du vrai code (`App.tsx`) pendant le lot.
+
+**Ce qui est reporté, nommément.** `i18next` n'est **pas installé**. L'installer maintenant produirait une dépendance que rien n'importe — Knip la signalerait comme morte, et il aurait raison. Elle arrive avec le premier écran.
+
+**L'engagement, qui est le fond de cette décision.** Ces deux garde-fous s'écrivent **avec le premier écran du lot 2, pas après lui**. Concrètement, la première tâche qui produit un composant doit livrer dans le même lot :
+
+1. une épreuve de franchissement qui **refuse** un écran dépourvu d'état vide ou d'état d'erreur ;
+2. un parcours Playwright au clavier seul sur ce même écran ;
+3. `i18next` installé et câblé, avec `chaine-en-dur` étendue aux constantes exportées — l'audit a montré qu'une chaîne déplacée dans une constante lui échappe.
+
+**Pourquoi l'écrire plutôt que de le faire.** Écrire un garde-fou sans cible, c'est écrire une branche jamais franchie — le défaut que ce lot a combattu vingt-trois fois. Un contrôle qui n'a rien à contrôler passe au vert et ment. Mieux vaut une dette datée qu'un faux vert.
+
+**Ce qui la rouvrirait :** le premier écran. Si le lot 2 se termine sans ces trois livrables, cette décision a échoué et il faut le dire au lieu de la reconduire.
