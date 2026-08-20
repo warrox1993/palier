@@ -75,6 +75,35 @@ Aucune fonctionnalité n'est écrite avant que TypeScript strict, **Oxlint**, Pr
 
 Des boucles de rétroaction rapides conditionnent tout le reste : si le build est lent, l'agent tourne en rond.
 
+### L'outillage installé, et quand s'en servir
+
+Vingt-deux extensions sont installées. **La plupart ne servent pas à ce projet**, et une extension inutile coûte du contexte à chaque session. Ce tableau dit ce qu'on utilise vraiment ; le reste s'ignore.
+
+| Quand                                      | Quoi                                                                                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Avant toute conception                     | `superpowers:brainstorming`, puis `writing-plans` — imposé par le § 1                                                             |
+| Avant d'écrire du code                     | `superpowers:test-driven-development`                                                                                             |
+| Devant un bug                              | `superpowers:systematic-debugging` — cause racine, jamais le symptôme                                                             |
+| Avant de dire « c'est fini »               | `superpowers:verification-before-completion`                                                                                      |
+| Sur une bibliothèque, une API, une version | **`context7` AVANT le web.** Une version affirmée de mémoire est périmée par construction                                         |
+| Revue d'un lot                             | `/code-review ultra` — multi-agents, à demander au porteur du projet                                                              |
+| Chasse aux défauts silencieux              | `pr-review-toolkit:silent-failure-hunter` — le mode de défaillance le plus fréquent de ce dépôt                                   |
+| Audit de sécurité                          | `claude-security:scan`, `semgrep`, `voltagent-qa-sec:security-auditor`                                                            |
+| RGPD, article 9, AIPD                      | `voltagent-qa-sec:compliance-auditor`, `voltagent-biz:legal-advisor`                                                              |
+| Accessibilité                              | `voltagent-qa-sec:accessibility-tester` — WCAG, lecteurs d'écran, clavier                                                         |
+| Écrans et composants                       | `avoid-ai-design` puis `frontend-design` — la direction visuelle refuse le générique (D42, `docs/design/references-visuelles.md`) |
+| Navigation, renommage sûr                  | `typescript-lsp`                                                                                                                  |
+| Parcours de bout en bout                   | `playwright`                                                                                                                      |
+
+**Ce qu'on n'utilise PAS, et pourquoi le dire évite d'y revenir :**
+
+- **`vercel`** — plus de trente skills pour une plateforme **abandonnée par D15**. L'hébergement est OVHcloud. À désinstaller.
+- Les serveurs de langage **Go, Python, Java** — aucun de ces langages dans le projet. C# et TypeScript sont les seuls.
+- **`plugin-dev`, `skill-creator`** — le § 1 interdit de créer un agent ou une skill maison.
+- Les agents de domaine sans rapport : `wordpress-master`, `blockchain-developer`, `game-developer`, `quant-analyst`, `iot-engineer`, `embedded-systems`, `m365-admin`, `healthcare-admin` (administration hospitalière américaine, sans rapport avec le RGPD belge).
+
+**Ce qui manque :** aucun serveur de langage pour **C#**, qui est pourtant la moitié du projet.
+
 ### Contexte
 
 Toute investigation dépassant trois lectures de fichiers part en sous-agent, avec une question précise, un périmètre borné et un format de rapport attendu. Le contexte principal reste propre — vingt lectures suivies d'une tentative de planification avec ce bruit chargé est l'erreur la plus coûteuse du travail agentique.
