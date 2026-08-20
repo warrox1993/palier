@@ -9,12 +9,32 @@
     "eslint/no-unused-vars": "error",
     "unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
     "import/no-cycle": "error",
-    "eslint/no-console": "error"
+    "eslint/no-console": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-unsafe-assignment": "warn",
+    "typescript/strict-boolean-expressions": "warn"
   },
   "overrides": [
     {
       "files": ["**/*.test.{ts,tsx}", "**/*.spec.ts"],
       "rules": { "typescript/no-explicit-any": "off" }
+    },
+    {
+      "files": ["src/core/**/*.ts", "tests/harness/fixtures/core-impur.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              { "group": ["react", "react-dom", "react/*"], "message": "core/ est pur : aucune dépendance UI." },
+              { "group": ["dexie"], "message": "core/ est pur : aucun accès stockage." },
+              { "group": ["@/lib/*", "@/ui/*", "@/features/*", "../lib/*", "../ui/*", "../features/*"], "message": "core/ est pur : aucune dépendance applicative." }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

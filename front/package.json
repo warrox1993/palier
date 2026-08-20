@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint": "oxlint --ignore-pattern \"tests/harness/fixtures/**\" .",
+    "lint:types": "oxlint --type-aware --ignore-pattern \"tests/harness/fixtures/**\" src",
     "test": "vitest run --exclude \"tests/harness/accessibilite.test.ts\"",
     "test:harness": "vitest run tests/harness",
     "test:watch": "vitest"
@@ -39,6 +40,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "jsdom": "^30.0.1",
     "oxlint": "^1.79.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.11"
