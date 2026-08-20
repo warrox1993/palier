@@ -52,6 +52,19 @@ git add . && git commit -m "ajoute le dossier de spécification"
 
 **Critère :** `cat CLAUDE.md | head -5` affiche le fichier.
 
+### Sur un dépôt déjà constitué, après un clone
+
+```bash
+npm install               # À LA RACINE : c'est ce qui ARME les hooks Git
+npm --prefix front ci
+git config --get core.hooksPath   # doit rendre .husky/_
+```
+
+**L'installation à la racine n'est pas optionnelle.** C'est son script `prepare`
+qui pose `core.hooksPath` ; sans elle, `.husky/pre-commit` existe sur le disque
+et **git ne l'appelle jamais**. Le contrôle de secrets serait alors absent sans
+qu'aucun message ne le dise — d'où la troisième commande, qui le vérifie.
+
 ---
 
 ## Étape 2 — Claude Code et les plugins
