@@ -2,6 +2,15 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { lancerOutil } from './run-outil'
+import { exigerGitleaks } from '../../../scripts/outil-gitleaks.mjs'
+
+// gitleaks est un binaire Go installe hors npm : il ne descend pas avec
+// `npm ci`. Mesure du 20/08/2026 : `winget install Gitleaks.Gitleaks` reussit
+// et ne cree AUCUN lien dans le PATH — l'outil n'etait appelable par son nom
+// depuis aucun terminal, et ces trois epreuves echouaient. Le resolveur cherche
+// aux emplacements connus, et LEVE avec les commandes d'installation quand il
+// ne trouve rien : l'absence de l'outil doit refuser, jamais passer.
+const GITLEAKS = exigerGitleaks()
 
 const FIXTURE = 'tests/harness/fixtures/faux-secret.txt'
 
@@ -34,7 +43,7 @@ describe('garde-fou : secrets', () => {
   it('gitleaks détecte une clé au format reconnu', () => {
     const r = lancerOutil(
       [
-        'gitleaks',
+        GITLEAKS,
         'dir',
         FIXTURE_DEPUIS_RACINE,
         '--config',
@@ -72,16 +81,7 @@ describe('garde-fou : secrets', () => {
     writeFileSync(localement, `ANTHROPIC_API_KEY=${faux}\n`)
     try {
       const r = lancerOutil(
-        [
-          'gitleaks',
-          'dir',
-          depuisRacine,
-          '--config',
-          CONFIG_REELLE,
-          '--redact',
-          '--no-banner',
-          '-v',
-        ],
+        [GITLEAKS, 'dir', depuisRacine, '--config', CONFIG_REELLE, '--redact', '--no-banner', '-v'],
         DEPUIS_LA_RACINE,
       )
       expect(r.code, `L'exception de .gitleaks.toml est trop large :\n${r.sortie}`).not.toBe(0)
@@ -94,7 +94,7 @@ describe('garde-fou : secrets', () => {
   it('la configuration réelle laisse passer la fixture, et elle seule', () => {
     const r = lancerOutil(
       [
-        'gitleaks',
+        GITLEAKS,
         'dir',
         FIXTURE_DEPUIS_RACINE,
         '--config',

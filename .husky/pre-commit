@@ -5,13 +5,12 @@ npx lint-staged
 # aucun exécutable, un README pour tout contenu. Il s'installe donc par le
 # gestionnaire du système, et son absence REFUSE le commit : un contrôle de
 # secrets qui se laisse sauter ne protège personne.
-if ! command -v gitleaks >/dev/null 2>&1; then
-  echo "gitleaks est introuvable."
-  echo "  Windows : winget install Gitleaks.Gitleaks"
-  echo "  macOS   : brew install gitleaks"
-  echo "  Linux   : https://github.com/gitleaks/gitleaks/releases"
-  echo "Le commit est refusé tant qu'aucun contrôle de secrets ne peut tourner."
-  exit 1
-fi
+#
+# `command -v gitleaks` ne suffit pas : mesuré le 20/08/2026, winget installe
+# le binaire sous %LOCALAPPDATA%\Microsoft\WinGet\Packages et **ne crée aucun
+# lien dans le PATH**. Le hook aurait refusé tous les commits sur une machine
+# où l'outil est pourtant bien installé. Le résolveur cherche aux emplacements
+# connus et sort en 1 avec les commandes d'installation s'il ne trouve rien.
+GITLEAKS="$(node scripts/outil-gitleaks.mjs)" || exit 1
 
-gitleaks git --staged --redact --no-banner -v --config .gitleaks.toml
+"$GITLEAKS" git --staged --redact --no-banner -v --config .gitleaks.toml
