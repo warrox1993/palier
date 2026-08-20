@@ -186,3 +186,97 @@ converti les 2 561 lignes du fichier en CRLF (`io.open` en mode `w` sans
 `newline=''`). Détecté parce que le remplacement suivant ne trouvait plus son
 motif, réparé avant tout commit. Sans ce hasard, `.gitattributes` l'aurait
 masqué à la validation et le diff aurait été illisible.
+
+## Tâches 6 à 10 — fil front, livrées
+
+Commits `0b01150`, `3c66393`, `815990e`, `6567325`, `3aa3372`. Tests 20/3 → 34/7.
+Installés : `oxlint-tsgolint` 7.0.2001, `prettier` 3.9.6, `knip` 6.32.2,
+`jscpd` 5.0.16, `@playwright/test` 1.62.1, `@axe-core/playwright` 4.13.0.
+
+**Ruling P9 — le ruling P6 vaut pour Prettier aussi, et le plan le reproduisait.**
+L'étape 5 de la tâche 8 demandait de mettre les fixtures dans `.prettierignore`.
+Mesuré par l'implémenteur : `prettier --check tests/harness/fixtures/format-casse.ts`
+rend alors **code 0** avec « All matched files use Prettier code style! ». L'épreuve
+serait passée au vert sur un fichier délibérément mal formaté. Exclusion portée par
+les scripts via le motif nié `"!tests/harness/fixtures/**"`, et `.prettierignore`
+porte un avertissement pour empêcher la régression.
+*Leçon :* P6 n'était pas une particularité d'Oxlint. **Tout outil qui a un fichier
+d'exclusion a ce piège** — la question à poser à chaque nouvel outil est « un fichier
+ignoré reste-t-il ignoré quand on le nomme explicitement ? », et la réponse est oui
+pour Oxlint comme pour Prettier.
+
+**Ruling P10 — une épreuve qui rougit ne rougit pas forcément pour sa raison.**
+`knip.fixtures.json` tel qu'écrit au plan rougissait sur 11 fichiers et 2 dépendances :
+l'épreuve serait passée **sans l'orphelin qu'elle prétend détecter**. Resserré à
+`project: ["export-orphelin.ts"]` + `include: ["files"]`, puis vérifié par désarmement.
+Même famille que P8, à l'autre bout : P8 dit qu'un code non nul ne prouve pas le refus ;
+P10 dit qu'un rouge ne prouve pas la bonne cause.
+
+Signalé sans y toucher : `scripts/*.mjs` à la racine n'est ni linté, ni formaté, ni
+typé — Oxlint et Prettier vivent dans `front/` et ne remontent pas d'un cran.
+À traiter en tâche 18 ou 21.
+
+## Tâches 11 à 17 — fil backend, livrées
+
+Commits `2931eea`, `9864f09`, `9ec8c49`, `318a59d`, `d32aa3d`, `7afc376`, `c089f11`.
+13 épreuves vertes, solution à 0 avertissement, `Palier.Domain` à 100 % ligne,
+branche et méthode. 24 dépendances vérifiées.
+
+**Le franchissement de la référence circulaire, constaté :**
+```
+error MSB4006: Il existe une dépendance circulaire dans le graphique de
+dépendance cible qui implique la cible "_GenerateRestoreProjectPathWalk".
+```
+C'est le garde-fou dont `01-conformite.md` § 3 dépend : un calcul de conformité ne
+*peut pas* atteindre la base. Vérifié en le provoquant, pas en lisant le `.csproj`.
+
+**Ruling P11 — le seuil de couverture n'appliquait rien.**
+Le collecteur VSTest de coverlet **ignore** `Threshold` : sa propre documentation
+l'exclut. Une fonction non couverte sortait en **code 0**. Le seuil est déplacé dans
+le `.csproj` via `coverlet.msbuild`, et `CollectCoverage=true` y est permanent — le
+seuil ne peut plus être contourné en oubliant `--settings`.
+*Leçon :* un réglage accepté sans erreur par un fichier de configuration n'est pas
+un réglage appliqué. C'est la même famille que « une règle mal nommée est acceptée
+par `.oxlintrc.json` et ne fait rien ».
+
+**Ruling P12 — une assertion négative est verte quand l'outil se tait.**
+L'épreuve des vulnérabilités du plan affirmait `not.toMatch(/High|Critical/i)` sur du
+texte libre : elle passait au vert si `dotnet list` n'imprimait rien du tout. Réécrite
+sur le rapport JSON, elle affirme **positivement** que les cinq projets ont été
+inspectés. Franchie avec `Newtonsoft.Json 12.0.3` (GHSA-5crp-9r3c-p9vr), retiré depuis.
+
+**Six autres défauts du plan, mesurés et corrigés par l'implémenteur :**
+1. `dotnet new sln` de .NET 10 crée un `.slnx`, pas `Palier.sln` — tout le plan aval
+   en dépendait.
+2. L'épreuve de rigueur restait **verte** quand on retirait `Directory.Build.props` :
+   la fixture porte ses propres réglages. Troisième épreuve ajoutée sur `Palier.Domain`.
+3. `.editorconfig` (T12) refusait les noms de test de T13 via CA1707. Exception
+   `[**/*.Tests/**/*.cs]`, cette règle seule.
+4. La fixture de couverture nommée `Double` était refusée par CA1720 : la compilation
+   cassait **avant** toute mesure.
+5. Mon motif `/threshold|seuil|coverage/i` matchait le **chemin**
+   `back/coverage.runsettings` — faux positif de ma main. Remplacé par
+   `/coverage is below the specified/i`.
+6. `licenseExpression` n'existe pas sur l'API de recherche NuGet : les cinq paquets
+   ressortaient « licence non standard ». Lu dans l'entrée de catalogue.
+
+**Trouvé sur du code réel, pas sur des fixtures :** `Program.cs` en CRLF là où
+`.editorconfig` exige LF, et le bras par défaut du `switch` sur `Sexe` jamais franchi
+(91,66 % / 75 %). Quatre tests ajoutés.
+
+**Ruling P13 — MPL-2.0 admise par exception nominative.**
+Le contrôle de licences refuse `@axe-core/playwright`, or `CLAUDE.md` § 3 impose
+axe-core nommément et `lightningcss` arrive en transitif de Vite 8. MPL-2.0 est un
+copyleft **par fichier**, sans clause réseau : sa section 3.3 autorise la combinaison
+avec du code propriétaire, la 3.2 n'oblige à publier que les fichiers modifiés. C'est
+la différence de fond avec RPL-1.5, qui a motivé D13. Inscrite dans `EXCEPTIONS` avec
+son motif et ce qui la rouvrirait — un besoin de patcher axe-core. La liste blanche
+reste inchangée.
+*Signalé :* le contrôle ne lit que les dépendances **directes**. `lightningcss` lui
+échappe aujourd'hui.
+
+**Signalé, à traiter avant d'appliquer D12 :** MediatR et `Mediator.SourceGenerator`
+publient tous deux un fichier de licence sans expression SPDX. Le contrôle les arrête
+tous les deux — MediatR est donc refusé pour « pas d'expression », pas pour
+« RPL-1.5 ». `Mediator.SourceGenerator` devra passer par `EXCEPTIONS` le jour où on
+l'ajoutera.
