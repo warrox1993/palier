@@ -11,7 +11,7 @@ Une décision qu'on ne relit pas au démarrage se reprend : le débat recommence
 **Tranché le :** 19/08/2026
 **Motif :** recommandation de `15-marque.md` § 3 — cohérent avec le système de progression, positif, prononçable.
 **Ce qui la rouvrirait :** une antériorité trouvée aux registres BOIP ou EUIPO, ou une priorité donnée à l'international (le document note que le nom est « très francophone »).
-**Reste à faire :** la recherche d'antériorité, que `15-marque.md` § 4 demande *avant* de s'attacher au nom.
+**Reste à faire :** la recherche d'antériorité, que `15-marque.md` § 4 demande _avant_ de s'attacher au nom.
 
 ## D2 — Gestionnaire de paquets front : npm
 
@@ -72,6 +72,7 @@ Ces décisions **remplacent** la pile décrite dans `CLAUDE.md` § 3. Les docume
 
 **Tranché le :** 19/08/2026, après hésitation explicite entre C# et Java.
 **Motif :** quatre critères penchent du même côté, aucun ne penche vers Java dans ce contexte.
+
 1. .NET SDK 10.0.303 est installé localement ; aucun JDK ne l'est.
 2. C'est le langage compilé que le porteur du projet pratique.
 3. L'écosystème web .NET est concentré — ASP.NET Core et EF Core — là où Java est fragmenté entre Spring Boot, Quarkus, Micronaut et plusieurs couches d'accès aux données. Moins de variantes, moins d'erreurs.
@@ -85,7 +86,7 @@ Ces décisions **remplacent** la pile décrite dans `CLAUDE.md` § 3. Les docume
 **Tranché le :** 19/08/2026, par le porteur du projet.
 **Motif :** frontières explicites entre domaine, cas d'usage, infrastructure et exposition.
 **Avis donné avant la décision, conservé :** une variante à trois projets avait été recommandée par YAGNI, l'arithmétique nutritionnelle ne justifiant pas une couche d'indirection par requête.
-**Bénéfice décisif conservé dans les deux cas :** `Palier.Domain` ne référence aucun autre projet. Un calcul nutritionnel ne *peut pas* atteindre la base ou le réseau — l'impossibilité est vérifiée par le compilateur, non par une règle de style. `01-conformite.md` § 3 en dépend directement.
+**Bénéfice décisif conservé dans les deux cas :** `Palier.Domain` ne référence aucun autre projet. Un calcul nutritionnel ne _peut pas_ atteindre la base ou le réseau — l'impossibilité est vérifiée par le compilateur, non par une règle de style. `01-conformite.md` § 3 en dépend directement.
 **Ce qui la rouvrirait :** une lourdeur constatée sur les premiers cas d'usage.
 
 ## D12 — CQRS sans MediatR
@@ -138,3 +139,98 @@ Ces décisions **remplacent** la pile décrite dans `CLAUDE.md` § 3. Les docume
 **Conséquence assumée :** les sept exigences de `09-comptes.md` § 1 sont à implémenter — Google OAuth, vérification d'email obligatoire avant l'accès nutrition, contrôle du mot de passe contre HaveIBeenPwned, limitation à 5 tentatives par IP et par compte sur 15 minutes avec verrouillage progressif, 2FA TOTP, rotation des jetons de rafraîchissement, fusion des comptes email et Google. ASP.NET Identity en couvre une partie, pas tout.
 **Ce que cela déplace :** la sécurité de l'authentification devient un traitement que vous opérez, non un service délégué. `13-juridique.md` doit en tenir compte dans l'AIPD et le registre.
 **Ce qui la rouvrirait :** un retard imputable à cette réécriture.
+
+---
+
+# Décisions d'exécution du lot 1 — 20/08/2026
+
+Ces décisions n'ont pas été prises en conception : elles ont été **mesurées** pendant la construction du harnais, et chacune a corrigé un défaut réel.
+
+## D18 — Linter front : Oxlint, et non ESLint
+
+**Tranché le :** 20/08/2026, à l'implémentation.
+**Motif :** `typescript-eslint` déclare une contrainte de pair `typescript <6.1.0`. Le dépôt est sur TypeScript 7. La chaîne ESLint + `typescript-eslint` est donc mécaniquement inutilisable, pas seulement déconseillée. Oxlint 1.79 couvre les cinq règles bloquantes du plan sous leurs noms propres (`typescript/no-explicit-any`, `eslint/no-unused-vars`, `unicorn/filename-case`, `import/no-cycle`, `eslint/no-console`), et `oxlint-tsgolint` fournit les règles à information de types (`no-floating-promises`, `no-misused-promises`, `await-thenable`) sous la commande distincte `lint:types`.
+**Ce que cela coûte :** l'écosystème de greffons ESLint n'est pas disponible. Les règles maison vivent donc dans `scripts/regles-projet.mjs`, une heuristique textuelle assumée comme telle.
+**Ce qui la rouvrirait :** `typescript-eslint` publiant une version compatible TypeScript 7 **et** un besoin de règle qu'Oxlint ne couvre pas. Le second sans le premier ne suffit pas.
+
+## D19 — Deux assertions par épreuve : le code de sortie et le motif
+
+**Tranché le :** 20/08/2026, après mesure (ruling P8).
+**Motif :** un code de sortie non nul prouve qu'il s'est passé _quelque chose_, jamais que l'outil a _refusé_. Mesuré trois fois sur ce lot :
+
+- Prettier non installé rend le code 2 avec « No files matching the pattern were found » — une épreuve à assertion unique serait passée au vert sans que Prettier ait rien lu ;
+- Playwright sans test collecté rend « No tests found », également en code non nul ;
+- `gitleaks` absent du PATH rend le code 1 sous `cmd.exe` avec « n'est pas reconnu en tant que commande interne », **sans** que `lancerOutil` puisse lever : `cmd.exe` absorbe l'erreur de démarrage et rend un code ordinaire.
+
+La réciproque est vraie aussi (ruling P10) : un rouge ne prouve pas la bonne cause. `knip.fixtures.json` rougissait sur onze fichiers — l'épreuve serait passée **sans l'orphelin qu'elle prétend détecter**.
+**Ce qui la rouvrirait :** rien. Le coût est d'une ligne par épreuve.
+
+## D20 — L'exclusion appartient à la commande, jamais au fichier de configuration
+
+**Tranché le :** 20/08/2026, après mesure (rulings P6 et P9).
+**Motif :** quatre outils du harnais, aucune exception à ce jour, portent le même piège — **un fichier ignoré par la configuration reste ignoré même nommé explicitement en argument** :
+
+| Outil      | Ce qui trompe          | Effet mesuré                                                                                                          |
+| ---------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Oxlint     | `ignorePatterns`       | fixture invisible même nommée ; `--no-ignore` ne l'annule pas                                                         |
+| Prettier   | `.prettierignore`      | `--check` sur une fixture délibérément mal formatée rend **code 0** et « All matched files use Prettier code style! » |
+| Playwright | `testIgnore`           | l'argument positionnel filtre la liste **déjà collectée** → « No tests found »                                        |
+| gitleaks   | `[[allowlists]] paths` | dossier nommé en argument, fichier sauté : 7 459 octets scannés contre 7 756 sans l'exception                         |
+
+Dans les quatre cas, l'épreuve du harnais serait passée **au vert sans rien contrôler** — le pire mode de défaillance possible pour cette suite.
+
+**La parade, appliquée partout :** l'exclusion est portée par la ligne de commande de ce qui n'en veut pas (`--ignore-pattern`, motif nié `"!…"`), ou par une configuration dédiée à l'épreuve (`knip.fixtures.json`, `playwright.fixtures.config.ts`, `.gitleaks.regles.toml`, `tsconfig.fixtures.json`). Sous `cmd.exe`, ces motifs prennent des **guillemets doubles** : les simples ne délimitent pas et le motif échoue en silence.
+**La question à poser à chaque nouvel outil :** _un fichier ignoré reste-t-il ignoré quand on le nomme explicitement ?_ La réponse est oui partout jusqu'ici.
+**Ce qui la rouvrirait :** un outil dont l'argument explicite l'emporte réellement sur son fichier d'exclusion — à vérifier, pas à supposer.
+
+## D21 — Aucun commentaire dans un fichier de configuration d'outil
+
+**Tranché le :** 20/08/2026, après mesure (ruling P14).
+**Motif :** un `"_note"` posé dans les options de `no-restricted-imports` pour documenter le choix des motifs a fait passer **neuf violations à code 0**, sans erreur ni avertissement. Ce n'est pas « la clé est ignorée » : c'est la règle entière qui cesse de s'appliquer. Même famille que le seuil `Threshold` accepté et ignoré par le collecteur VSTest de coverlet (ruling P11), et qu'une règle mal nommée acceptée par `.oxlintrc.json` sans rien faire.
+**Conséquence :** le motif d'un choix vit dans **l'épreuve qui le protège**, jamais dans le fichier de configuration qu'il documente.
+**L'exception, et sa condition :** les formats qui portent nativement des commentaires — YAML, `.mjs`, TOML — les acceptent, à condition de l'avoir **vérifié sur cet outil-là**. `.lintstagedrc.mjs` et `back/vitest.config.mjs` sont dans ce cas ; `front/knip.json` porte des commentaires JSONC, tolérés par Knip et vérifiés comme tels.
+**Ce qui la rouvrirait :** rien.
+
+## D22 — `lancerOutil` lève au lieu de rendre un code, quand l'outil n'a pas tourné
+
+**Tranché le :** 20/08/2026, après mesure.
+**Motif :** la primitive partagée par toutes les épreuves du harnais rendait « refusé » dans **trois** situations où l'outil n'avait jamais tourné : binaire introuvable, délai dépassé, sortie tronquée au-delà du tampon par défaut de Node (1 Mio — `gitleaks`, `knip` et `dotnet format` le dépassent, et `spawnSync` rend alors `status: null` **et** une sortie amputée du motif attendu). Une épreuve serait restée verte en ne contrôlant rien. Le tampon est porté à 64 Mio, le délai à cinq minutes, et les trois cas lèvent une erreur explicite au lieu de rendre un code.
+**Ce que cela ne couvre pas, mesuré :** sous Windows, `shell: true` fait passer la commande par `cmd.exe`, qui absorbe l'erreur de démarrage et rend un code de sortie ordinaire. `lancerOutil` ne peut donc pas lever pour un binaire manquant sur cette plateforme — c'est la seconde assertion de D19 qui rattrape ce cas, et elle seule.
+**Ce qui la rouvrirait :** rien.
+
+## D23 — gitleaks s'installe hors de npm, et son absence refuse le commit
+
+**Tranché le :** 20/08/2026, à l'implémentation.
+**Motif :** le plan prévoyait `npm install -D gitleaks`. Vérifié le 20/08/2026 : le paquet `gitleaks` du registre npm est un **squat vide** — version 1.0.0, dépôt `ycjcl868/gitleaks`, aucun exécutable, un README pour tout contenu. L'installer aurait donné un harnais où `npx gitleaks` ne lance rien. Aucun des paquets voisins du registre n'est publié par le projet officiel. gitleaks est un binaire Go : il s'installe par le gestionnaire du système (`winget install Gitleaks.Gitleaks`, `brew install gitleaks`, ou les publications GitHub), et `DEMARRAGE.md` § 0 le porte en prérequis au même titre que Node et .NET.
+**Le hook échoue fermé.** `.husky/pre-commit` teste la présence du binaire et **refuse le commit** s'il manque, avec les trois commandes d'installation. Un contrôle de secrets qui se laisse sauter ne protège personne. Les deux branches ont été franchies le 20/08/2026 : secret indexé → refus ; gitleaks absent → refus avec le message.
+**Écart de commande, mesuré :** gitleaks 8.30.1 n'a plus `detect` ni `protect`. Les formes en vigueur sont `gitleaks dir <chemin>` et `gitleaks git --staged`.
+**Ce qui la rouvrirait :** une publication npm officielle par le projet gitleaks, ou une action GitHub officielle qui rendrait le binaire local inutile en intégration continue — ce qui ne dispenserait pas du hook local.
+
+## D24 — Trois signalements de Knip écartés, nommément
+
+**Tranché le :** 20/08/2026, mesuré en retirant les exceptions et en comptant.
+**Motif :** sans exception, Knip signale trois choses, toutes des faux positifs à ce stade :
+
+| Signalement                                         | Motif de l'écartement                                                                                                                                         | Ce qui le rouvrirait                                                                                                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/core/index.ts` — fichier inutilisé             | espace réservé dont le contenu entier est `export {}`. Il n'existe que pour donner une cible à la barrière de pureté d'Oxlint (`overrides` sur `src/core/**`) | **le lot 2** : dès que `core/` portera des modules réellement importés, cette ligne SORT de `entry`, sans quoi tout `core/` échappe définitivement à la détection de code mort |
+| `@testing-library/jest-dom` — dépendance inutilisée | aucun test de composant n'existe encore ; `src/` ne contient aucun fichier de test                                                                            | le lot 2, qui livre le premier test de rendu                                                                                                                                   |
+| `@testing-library/react` — dépendance inutilisée    | idem                                                                                                                                                          | idem                                                                                                                                                                           |
+
+**Ce que cette décision n'autorise pas :** ajouter une exception sans l'inscrire ici avec sa condition de sortie. Une liste d'exceptions qu'on n'a pas datées devient une liste qu'on n'ose plus toucher.
+**Ce qui la rouvrirait :** le lot 2, pour les trois lignes à la fois.
+
+## D25 — Un seul point d'entrée de vérification : `npm run verify`
+
+**Tranché le :** 20/08/2026.
+**Motif :** deux plans séparés définissaient chacun leur liste de contrôles. Deux listes divergent — c'est précisément le défaut que le point d'entrée unique existe pour empêcher. `scripts/verify.mjs` porte les quinze étapes des deux écosystèmes, le hook de pré-envoi n'appelle **que** lui, et une épreuve (`tests-harness/verify.test.mjs`) refuse un hook qui énumérerait des contrôles au lieu de déléguer.
+**Le corollaire, mesuré :** aucune des 84 épreuves d'alors ne lançait un **script npm** — toutes appelaient `npx <outil>` directement. Elles prouvaient que les outils refusent, jamais que les commandes du projet refusent. Deux régressions sont passées par ce trou. `front/tests/harness/commandes.test.ts` le ferme.
+**Ce qui la rouvrirait :** rien sur le principe. La composition de la liste, elle, bouge à chaque lot.
+
+## D26 — La durée de `verify` est mesurée et affichée, le seuil n'est pas relevé
+
+**Tranché le :** 20/08/2026, mesuré.
+**État :** `npm run verify` prend **119 s** sur la machine de développement (Windows 11, quinze étapes, toutes vertes), pour un seuil d'avertissement fixé à 90 s. L'avertissement se déclenche donc à chaque exécution.
+**Motif de ne pas relever le seuil :** `08-workflow.md` § 5 fait de la lenteur de la boucle un **défaut à traiter**, pas un fait à enregistrer. Relever le seuil à 120 s ferait taire le signal sans rien changer au temps d'attente. Le détail par étape est affiché à chaque exécution, ce qui rend le prochain arbitrage mesurable plutôt qu'argumentaire.
+**Le détail, au 20/08/2026 :** `front:test` 39 s · `back:format` 18 s · `back:build` 11 s (`--no-incremental`) · `back:audit` 12 s (réseau) · `back:test` 11 s · `licences` 5 s (réseau) · `front:knip` 5 s · le reste sous 3 s chacun.
+**Ce qui la rouvrirait :** le porteur du projet, à l'arbitrage. Trois leviers sont chiffrés et aucun n'a été appliqué d'office : sortir les épreuves du harnais de `front:test` (−39 s, mais `src/` ne contient aucun test aujourd'hui, donc l'étape deviendrait vide et verte sans rien contrôler) ; retirer `--no-incremental` de `back:build` ; mettre en cache les réponses des registres npm et NuGet du contrôle de licences.
