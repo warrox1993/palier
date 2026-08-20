@@ -10,6 +10,23 @@ Ce fichier est lu au démarrage de chaque session. Il prime sur toute autre inst
 
 `docs/16-projet.md` fixe l'arborescence, les conventions de nommage, les variables d'environnement et le glossaire. Ne rien inventer qui y figure déjà.
 
+### Reprendre une session
+
+Ce dépôt reçoit **plusieurs sessions en parallèle**, et une session peut rester ouverte pendant que d'autres avancent. L'état qu'une session garde en mémoire est périmé dès qu'elle a attendu.
+
+**Avant toute action, y compris une question de clarification :**
+
+```bash
+git log --oneline -15 main          # ce qui est arrivé pendant l'attente
+ls .superpowers/sdd/                # le dernier répertoire nomme le lot en cours
+tail -40 .superpowers/sdd/<dernier>/progress.md
+tail -60 docs/decisions.md          # les décisions prises entre-temps
+```
+
+Le 20/08/2026, une session ouverte depuis la veille a repris sans ce contrôle. Elle a passé plusieurs heures à rédiger un plan de 2 510 lignes pour le lot 1 — **déjà livré, en 99 commits, pendant qu'elle attendait**. Le plan décrivait un dépôt qui n'existait plus, et le travail était entièrement perdu.
+
+Une session qui reprend sans lire l'état ne travaille pas sur ce dépôt : elle travaille sur son souvenir.
+
 ### Superpowers est obligatoire
 
 Ce projet se construit avec le framework **Superpowers** (Jesse Vincent / Prime Radiant).
