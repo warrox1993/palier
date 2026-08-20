@@ -251,3 +251,40 @@ Dans les quatre cas, l'épreuve du harnais serait passée **au vert sans rien co
 **Le corollaire, sans lequel l'épinglage nuit :** un pointeur figé ne se met plus à jour. `.github/dependabot.yml` suit donc l'écosystème `github-actions` — l'épinglage protège de la substitution, Dependabot de l'obsolescence. L'un sans l'autre laisse une faille ouverte.
 **Ce qui le garde :** `tests-harness/ci.test.mjs` refuse toute valeur `uses:` qui ne serait pas un `owner/repo@` suivi de quarante caractères hexadécimaux. Franchi le 20/08/2026 en remettant une étiquette.
 **Ce qui la rouvrirait :** rien.
+
+## D29 — Aucune protection de branche : GitHub Free ne l'offre pas sur les dépôts privés
+
+**Tranché le :** 20/08/2026, après échec de la configuration.
+
+**Le fait, mesuré.** Les deux mécanismes de GitHub rendent le même refus, en HTTP 403, avec des droits d'administration pleins :
+
+```
+PUT  /repos/warrox1993/palier/branches/main/protection   → « Upgrade to GitHub Pro or make this repository public »
+POST /repos/warrox1993/palier/rulesets                   → idem
+```
+
+Ce n'est ni un problème de droits ni de syntaxe : la page de tarification confirme que les _repository rules_ du plan Free sont réservées aux dépôts **publics**. `palier` est privé, et le restera — c'est un service commercial propriétaire, avec un abonnement prévu à 20 €/mois.
+
+**Conséquence à ne pas édulcorer.** Il n'existe **aucune barrière côté serveur**. Rien n'empêche un push sur `main`, rien ne refuse une fusion dont la CI est rouge. Les 115 épreuves de franchissement produisent un rapport, pas un verrou.
+
+**Ce qui a été écarté :**
+
+| Option                                                                           | Pourquoi non                                                                                                |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| GitHub Pro                                                                       | Payant. Écarté par le porteur du projet, qui demande une solution gratuite                                  |
+| Rendre le dépôt public                                                           | Le code deviendrait lisible par tous, sur un projet propriétaire                                            |
+| Migrer vers un hébergeur dont les branches protégées sont gratuites sur le privé | Réel, mais impose de réécrire toute la CI et de quitter l'écosystème Actions. Coût sans rapport avec le lot |
+| Interdire le push direct sur `main` par le hook local                            | Contournable par `git push --no-verify`, comme le hook lui-même                                             |
+| Rétablir `main` automatiquement quand la CI échoue                               | Un robot qui réécrit l'historique sur un échec qu'il n'a pas compris fait plus de dégâts qu'il n'en répare  |
+
+**Ce qui est fait à la place, et gratuitement.** `.github/workflows/gardien-main.yml` transforme la barrière absente en alarme :
+
+- une CI rouge sur `main` ouvre une issue nominative, avec les jobs fautifs et le lien du journal ;
+- l'alerte **se ferme d'elle-même** au premier passage vert, donc sa présence signifie toujours « `main` est cassée maintenant », jamais « elle l'a été un jour » ;
+- il couvre exactement le trou que le hook local ne peut pas voir : trois défauts propres à Linux ont été trouvés le 20/08/2026, tous invisibles sous Windows.
+
+**Ce que cela ne fait pas, et qu'il ne faut pas croire.** Le gardien n'empêche rien — le code cassé est déjà sur `main` quand il s'exécute. Il ne bloque aucune fusion. Il ne voit pas davantage un `--no-verify` que le hook. **La différence entre une alarme et un verrou reste entière**, et c'est le porteur du projet qui la comble, en regardant les issues ouvertes.
+
+**Ce qui la garde.** `tests-harness/ci.test.mjs` vérifie que le gardien existe, suit bien le workflow `CI` sur `main`, porte `issues: write` — sans quoi il tournerait vert sans rien ouvrir — et sait aussi bien ouvrir que fermer. Franchi le 20/08/2026 en retirant la permission : l'épreuve rougit.
+
+**Ce qui la rouvrirait :** un passage à un plan qui offre les règles de dépôt sur le privé, ou le jour où une deuxième personne rejoint le projet. À une seule paire de mains, la discipline peut tenir lieu de verrou ; à deux, elle ne le peut plus.

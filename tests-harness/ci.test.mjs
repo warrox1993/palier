@@ -124,6 +124,38 @@ describe('garde-fou : intégration continue', () => {
     }
   })
 
+  it('le gardien de main existe et surveille la CI', () => {
+    // Il n'y a AUCUNE protection de branche sur ce dépôt : GitHub Free ne
+    // l'autorise que sur les dépôts publics, et `palier` est privé. Vérifié le
+    // 20/08/2026, les deux API rendent 403 avec des droits d'administration
+    // pleins. Ce gardien est ce qui remplace la barrière absente — il n'empêche
+    // rien, il rend l'échec impossible à ignorer. Décision D29.
+    //
+    // Cette épreuve existe parce qu'un fichier de workflow se supprime sans que
+    // rien ne bouge : il n'est appelé par aucun script, aucun test, aucune
+    // commande. C'est exactement le mode de défaillance du ruling P2.
+    const chemin = '.github/workflows/gardien-main.yml'
+    expect(existsSync(chemin), `Cible manquante : ${chemin}`).toBe(true)
+    const gardien = parse(readFileSync(chemin, 'utf8'))
+
+    // `on:` est lu par YAML comme le booléen `true` — piège classique de
+    // YAML 1.1, et la raison pour laquelle on lit les deux clés.
+    const declencheur = gardien.on ?? gardien[true]
+    expect(declencheur?.workflow_run?.workflows, 'le gardien ne suit pas la CI').toContain('CI')
+    expect(
+      declencheur?.workflow_run?.branches,
+      'le gardien ne surveille pas la branche par défaut',
+    ).toContain('main')
+
+    // Sans `issues: write`, le gardien tourne, réussit, et n'ouvre rien : il
+    // afficherait vert en ne protégeant rien.
+    expect(gardien.permissions?.issues, "le gardien ne peut pas ouvrir d'alerte").toBe('write')
+
+    const script = JSON.stringify(gardien.jobs)
+    expect(script, "l'alerte ne se ferme jamais toute seule").toContain('gh issue close')
+    expect(script, "l'alerte ne s'ouvre jamais").toContain('gh issue create')
+  })
+
   it('le seuil Lighthouse est déclaré et bloquant', () => {
     const chemin = 'front/.lighthouserc.json'
     expect(existsSync(chemin), `Cible manquante : ${chemin}`).toBe(true)
