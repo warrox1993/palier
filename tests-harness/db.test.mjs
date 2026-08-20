@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, extname } from 'node:path'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { extname } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
@@ -22,18 +22,7 @@ const TAG_MAJEUR = 'postgres:18'
  * que le ruling P21 — l'exception est restreinte aux documents, jamais aux
  * répertoires de code.
  */
-const HORS_CODE = new Set([
-  'docs',
-  '.superpowers',
-  'node_modules',
-  '.git',
-  'dist',
-  'coverage',
-  'bin',
-  'obj',
-  'playwright-report',
-  'test-results',
-])
+const HORS_CODE = new Set(['docs', '.superpowers'])
 
 const EXTENSIONS_LUES = new Set([
   '.yaml',
@@ -51,18 +40,18 @@ const EXTENSIONS_LUES = new Set([
   '.md',
 ])
 
-function fichiersDeCode(depart = '.') {
-  const out = []
-  const parcourir = (d) => {
-    for (const e of readdirSync(d)) {
-      if (HORS_CODE.has(e)) continue
-      const p = join(d, e)
-      if (statSync(p).isDirectory()) parcourir(p)
-      else if (EXTENSIONS_LUES.has(extname(e))) out.push(p)
-    }
+function fichiersDeCode() {
+  const git = spawnSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+  if (git.status !== 0) {
+    throw new Error(
+      `git ls-files a rendu ${git.status} : ${(git.stderr ?? '').trim() || '(rien sur stderr)'}. ` +
+        "Ce contrôle lit l'index git ; privé de dépôt il n'a plus de cible, et il le dit.",
+    )
   }
-  parcourir(depart)
-  return out
+  return git.stdout
+    .split('\0')
+    .filter(Boolean)
+    .filter((f) => EXTENSIONS_LUES.has(extname(f)) && !HORS_CODE.has(f.split('/')[0]))
 }
 
 /** Le nom de service que `db:up` passe à `docker compose`. C'est le dernier
@@ -102,6 +91,23 @@ describe('garde-fou : la base locale et son compose', () => {
       .map((f) => f.replaceAll('\\', '/').replace(/^\.\//, ''))
       .filter((f) => f !== COMPOSE && f !== soi && readFileSync(f, 'utf8').includes(TAG_MAJEUR))
     expect(ailleurs, `Le tag ${TAG_MAJEUR} est redéclaré hors de ${COMPOSE}`).toEqual([])
+  })
+
+  it('le parcours ne voit que ce que git suit, jamais ce que le disque porte', () => {
+    // Épreuve de franchissement : un parcours du disque compte comme faisant
+    // partie du dépôt toute copie locale — worktree, sauvegarde, clone. Le
+    // témoin est ÉCRIT, pas décrit : la branche qui se déclenche le jour venu
+    // est la seule qu'on n'a pas éprouvée.
+    const temoin = 'temoin-hors-index.yaml'
+    writeFileSync(temoin, `image: ${TAG_MAJEUR}\n`)
+    try {
+      expect(
+        fichiersDeCode(),
+        `${temoin} n'est pas versionné : le parcours ne doit pas le voir`,
+      ).not.toContain(temoin)
+    } finally {
+      rmSync(temoin)
+    }
   })
 
   it("db/compose.yaml ne déclare qu'un seul service — D33", () => {
