@@ -6,36 +6,36 @@ Worktree isolé : `.claude/worktrees/lot-1-execution`, branche `feat/lot-1-execu
 
 ### Paires de tâches partageant un fichier ou une interface
 
-| Paire | Ce qui est produit / consommé | Constat |
-|---|---|---|
-| T3 → T4 à T10 | l'emplacement de tout le front | **CONFLIT P1** — les tâches 4 à 10 viennent d'un plan où le front était à la racine |
-| T2 → T4 à T19 | `lancerOutil(commande, options)` | OK, signature stable ; son emplacement dépend de P1 |
-| T5 → T6 | `front/.oxlintrc.json`, section `rules` puis `overrides` | OK — T6 ajoute, n'écrase pas |
-| T6 → T7 | la frontière front/domaine, en deux moitiés | OK — T6 fait les imports, T7 les motifs. Complémentaires, pas redondantes |
-| T7 → T18 | `scripts/regles-projet.mjs` | **CONFLIT P2** — `verify` ne l'appelle pas |
-| T3 → T18 | `package.json` racine déclare `verify` | **CONFLIT P3** — le script n'existe qu'à T18 |
-| T5 → T19 | `oxlint --fix` dans lint-staged | OK — Oxlint installé à T5, hooks à T19 |
-| T11 → T12 à T17 | `back/Palier.sln` | OK |
-| T12 → T15 | `.editorconfig` lu par `dotnet format` | OK |
-| T13 → T14 | `Palier.Domain.Tests` et son seuil de couverture | OK |
-| T18 → T19, T21 | `npm run verify` | OK — un seul point de définition, c'est l'objet de la refonte |
-| T9 → T18 | `front/knip.json` et son script | OK |
-| T16 → T18 | `scripts/verifier-licences.mjs` | OK — présent dans `verify` sous le nom `licences` |
+| Paire           | Ce qui est produit / consommé                            | Constat                                                                             |
+| --------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| T3 → T4 à T10   | l'emplacement de tout le front                           | **CONFLIT P1** — les tâches 4 à 10 viennent d'un plan où le front était à la racine |
+| T2 → T4 à T19   | `lancerOutil(commande, options)`                         | OK, signature stable ; son emplacement dépend de P1                                 |
+| T5 → T6         | `front/.oxlintrc.json`, section `rules` puis `overrides` | OK — T6 ajoute, n'écrase pas                                                        |
+| T6 → T7         | la frontière front/domaine, en deux moitiés              | OK — T6 fait les imports, T7 les motifs. Complémentaires, pas redondantes           |
+| T7 → T18        | `scripts/regles-projet.mjs`                              | **CONFLIT P2** — `verify` ne l'appelle pas                                          |
+| T3 → T18        | `package.json` racine déclare `verify`                   | **CONFLIT P3** — le script n'existe qu'à T18                                        |
+| T5 → T19        | `oxlint --fix` dans lint-staged                          | OK — Oxlint installé à T5, hooks à T19                                              |
+| T11 → T12 à T17 | `back/Palier.sln`                                        | OK                                                                                  |
+| T12 → T15       | `.editorconfig` lu par `dotnet format`                   | OK                                                                                  |
+| T13 → T14       | `Palier.Domain.Tests` et son seuil de couverture         | OK                                                                                  |
+| T18 → T19, T21  | `npm run verify`                                         | OK — un seul point de définition, c'est l'objet de la refonte                       |
+| T9 → T18        | `front/knip.json` et son script                          | OK                                                                                  |
+| T16 → T18       | `scripts/verifier-licences.mjs`                          | OK — présent dans `verify` sous le nom `licences`                                   |
 
 ### Cohérence interne de chaque tâche
 
-| Tâche | Constat |
-|---|---|
-| 3 | OK — la seule à ne rien créer, et à tout déplacer. Comptage des tests avant/après explicite |
-| 4 à 10 | chemins relatifs sans préfixe : voir **P1** |
-| 5, 6 | OK — noms de règles Oxlint vérifiés via Context7 (`typescript/no-explicit-any`, `eslint/no-restricted-imports`, `unicorn/filename-case`) |
-| 7 | OK sur le fond ; le test appelle `node ../scripts/regles-projet.mjs`, chemin relatif dépendant de P1 |
-| 11 | OK — la référence circulaire provoquée à l'étape 7 est le point fort du lot |
-| 12 à 17 | OK — chemins depuis la racine, cohérents entre eux |
-| 18 | voir **P2** |
-| 19 | OK |
-| 20 | OK — `docs/decisions.md` existe déjà, la tâche y ajoute |
-| 21 | OK — cinq jobs, empreintes SHA à relever |
+| Tâche   | Constat                                                                                                                                  |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 3       | OK — la seule à ne rien créer, et à tout déplacer. Comptage des tests avant/après explicite                                              |
+| 4 à 10  | chemins relatifs sans préfixe : voir **P1**                                                                                              |
+| 5, 6    | OK — noms de règles Oxlint vérifiés via Context7 (`typescript/no-explicit-any`, `eslint/no-restricted-imports`, `unicorn/filename-case`) |
+| 7       | OK sur le fond ; le test appelle `node ../scripts/regles-projet.mjs`, chemin relatif dépendant de P1                                     |
+| 11      | OK — la référence circulaire provoquée à l'étape 7 est le point fort du lot                                                              |
+| 12 à 17 | OK — chemins depuis la racine, cohérents entre eux                                                                                       |
+| 18      | voir **P2**                                                                                                                              |
+| 19      | OK                                                                                                                                       |
+| 20      | OK — `docs/decisions.md` existe déjà, la tâche y ajoute                                                                                  |
+| 21      | OK — cinq jobs, empreintes SHA à relever                                                                                                 |
 
 ### Rulings
 
@@ -48,7 +48,7 @@ Plutôt que de réécrire soixante chemins — opération mécanique à fort ris
 - tâches 4 à 10 : `front/`
 - tâches 3, 11 à 21 : la racine du dépôt
 
-*Coût si erroné :* un implémenteur créerait un fichier au mauvais endroit. Détecté immédiatement — l'épreuve de la tâche échouerait en ne trouvant pas sa cible, ce que le premier test de chaque épreuve vérifie explicitement.
+_Coût si erroné :_ un implémenteur créerait un fichier au mauvais endroit. Détecté immédiatement — l'épreuve de la tâche échouerait en ne trouvant pas sa cible, ce que le premier test de chaque épreuve vérifie explicitement.
 
 **Ruling P2 — `verify` doit appeler `regles-projet.mjs`.**
 
@@ -56,7 +56,7 @@ La tâche 7 produit `scripts/regles-projet.mjs`, qui porte sept règles bloquant
 
 L'étape `['regles', ['node', 'scripts/regles-projet.mjs']]` est ajoutée à `verify`, entre `front:knip` et `back:format`. Le test de la tâche 18 qui vérifie la liste des contrôles doit inclure `regles`.
 
-*Coût si erroné :* aucun. Une étape de plus dans une liste.
+_Coût si erroné :_ aucun. Une étape de plus dans une liste.
 
 **Ruling P3 — le trou de `verify` entre T3 et T18 est accepté et documenté.**
 
@@ -64,7 +64,7 @@ La tâche 3 crée un `package.json` racine déclarant `"verify": "node scripts/v
 
 C'est acceptable : le hook de pré-envoi n'est installé qu'à la tâche 19, donc rien ne l'appelle avant. Mais l'implémenteur de la tâche 3 doit le savoir, sans quoi il tentera de « réparer » un script manquant. La mention est portée dans son dispatch.
 
-*Coût si erroné :* un implémenteur perdrait dix minutes à chercher un fichier absent.
+_Coût si erroné :_ un implémenteur perdrait dix minutes à chercher un fichier absent.
 
 ## Exécution
 
@@ -77,12 +77,12 @@ Vérifié par le contrôleur : `front/` existe, racine nettoyée, `package.json`
 **Ruling P4 — trouvé par l'implémenteur, manqué par mon scan de pré-vol.**
 L'étape 4 de la tâche 3 demandait de corriger `.husky/pre-commit` et `.husky/pre-push`. Ces fichiers n'existent pas : la tâche 11 de l'ancien plan, qui installait Husky, n'a jamais été exécutée, et dans le plan unifié c'est la tâche 19 qui le fait — après la réorganisation. L'étape était donc sans objet.
 Le plan est corrigé : l'étape devient conditionnelle et explique pourquoi. La tâche 19 écrit déjà les hooks avec des chemins tenant compte de `front`/`back`.
-*Coût si erroné :* nul. Aucun hook n'existe, aucun n'est appelé avant la tâche 19.
+_Coût si erroné :_ nul. Aucun hook n'existe, aucun n'est appelé avant la tâche 19.
 
 **Ruling P5 — le commit scindé en deux est validé.**
 Le brief prévoyait un commit unique. L'implémenteur en a fait deux, après avoir constaté qu'un commit unique cassait `git log --follow front/package.json` : recréer un `package.json` à la racine dans le même commit que le déplacement fait perdre la détection de renommage à git. Vérifié par `git diff --cached --find-renames`, corrigé, revérifié.
 C'est exactement le raisonnement attendu : le brief disait quoi obtenir, pas comment tromper la détection de renommage.
-*Coût si erroné :* un commit de plus dans l'historique.
+_Coût si erroné :_ un commit de plus dans l'historique.
 
 Task 3: signalé sans y toucher — `docs/16-projet.md` documente encore l'ancienne arborescence. Déjà inscrit dans la spec d'architecture § 13 parmi les sept documents à reprendre ; relève du contenu métier, donc de l'arbitrage du porteur du projet.
 
@@ -96,10 +96,11 @@ Task 3: important, hors périmètre : `docs/16-projet.md` § Arborescence montre
 
 Task 4: revue — spec ✅, qualité approuvée, aucun critique ni important.
 Le relecteur a vérifié les trois points sensibles indépendamment :
+
 - l'épreuve discrimine la bonne raison d'échec : elle teste le code de sortie ET le motif du message. En ROUGE l'échec venait de TS5058 (config absente), qui ne correspond pas au motif — donc rouge pour la bonne raison, pas par accident.
 - le test de cible manquante mord : la preuve n'est pas simulée, le rapport le montre rouge avant la création réelle de la fixture.
 - `tsconfig.fixtures.json` isole : vérifié par `tsc --showConfig`, le champ `files` résolu ne contient que la fixture. Et `"exclude": []` n'est pas cosmétique — `extends` remplace `include`/`exclude` au lieu de les fusionner, sans quoi l'exclusion héritée aurait annulé l'inclusion.
-Task 4: complete (commit 7f93a99, revue propre)
+  Task 4: complete (commit 7f93a99, revue propre)
 
 Task 4: minor (deferred) : la vérification du motif d'erreur dépend du texte anglais de `tsc`. Aucune locale n'est fixée dans le dépôt aujourd'hui ; à surveiller si une locale française est introduite dans l'outillage.
 
@@ -112,7 +113,7 @@ Le brief affirmait que nommer explicitement un fichier en ligne de commande cont
 Aggravant : j'avais déjà identifié exactement ce risque au scan de pré-vol du plan précédent, sous le ruling C5, en écrivant « ne pas les placer dans `ignores` de la flat config ». En réécrivant la tâche pour Oxlint, j'ai remis les fixtures dans `ignorePatterns` et reproduit le défaut que j'avais moi-même diagnostiqué.
 
 Correctif retenu, celui de l'implémenteur : exclusion portée par `--ignore-pattern` dans le script `lint`, avec des **guillemets doubles** — sous `cmd.exe`, les guillemets simples ne délimitent pas et le motif échoue silencieusement. Le plan est corrigé aux trois endroits concernés.
-*Coût si erroné :* aucun. La configuration actuelle est vérifiée : lint propre sur le code réel, épreuves qui voient leurs cibles.
+_Coût si erroné :_ aucun. La configuration actuelle est vérifiée : lint propre sur le code réel, épreuves qui voient leurs cibles.
 
 Task 5: minor (deferred) : incertitude sur la stabilité des noms internes affichés par `--print-config` (`no-unused-vars` sans préfixe `eslint/`) d'une version d'Oxlint à l'autre. Sans effet aujourd'hui.
 
@@ -130,12 +131,12 @@ protection sans un signal.
 
 ### Les quatre bloquants, corrigés et éprouvés (commit 63c8300)
 
-| # | Défaut | Preuve du correctif |
-|---|---|---|
-| 1 | `--exclude ''` s'ajoute aux globs, il ne les remplace pas | sonde `accessibilite.test.ts` : `test` → 3 fichiers, `test:harness` → 4 |
-| 2 | `lancerOutil` déguisait 3 défaillances en refus | les 4 épreuves rougissent quand on désarme ; celle du délai en 30 287 ms |
-| 3 | `no-console`, `no-cycle`, `plugins` supprimables en silence | les 3 épreuves rougissent avec les règles retirées |
-| 4 | `vitest.config.ts` hors typecheck et hors lint | `testTimeouts` → TS2769 avec la suggestion exacte |
+| #   | Défaut                                                      | Preuve du correctif                                                      |
+| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 1   | `--exclude ''` s'ajoute aux globs, il ne les remplace pas   | sonde `accessibilite.test.ts` : `test` → 3 fichiers, `test:harness` → 4  |
+| 2   | `lancerOutil` déguisait 3 défaillances en refus             | les 4 épreuves rougissent quand on désarme ; celle du délai en 30 287 ms |
+| 3   | `no-console`, `no-cycle`, `plugins` supprimables en silence | les 3 épreuves rougissent avec les règles retirées                       |
+| 4   | `vitest.config.ts` hors typecheck et hors lint              | `testTimeouts` → TS2769 avec la suggestion exacte                        |
 
 **Ruling P7 — le plan avait un quatrième endroit, et le ruling P6 en annonçait trois.**
 L'étape 6 de la tâche 6 réécrivait le script `lint` sans `--ignore-pattern`,
@@ -143,7 +144,7 @@ défaisant P6 douze tâches avant qu'on ne s'en aperçoive. Le brief était déj
 extrait avec la valeur périmée. Corrigé aux deux endroits, brief régénéré, et
 l'étape « vérifier que le front réel est propre » — présente en tâche 5,
 disparue en tâche 6 — rétablie.
-*Leçon :* une correction de plan n'atteint son lecteur que si le brief est
+_Leçon :_ une correction de plan n'atteint son lecteur que si le brief est
 régénéré. Le ledger ne remplace pas l'extraction.
 
 **Ruling P8 — la doctrine des deux assertions devient uniforme.**
@@ -159,7 +160,7 @@ les quatre autres l'ont désormais.
 - **`npm run verify` est cassé** : `scripts/verify.mjs` n'a jamais existé. Connu
   et accepté (ruling P3), mais aucune dimension ne l'avait lancé.
 - **Aucune des 22 épreuves ne lance un script npm** — elles éprouvent les
-  *outils*, jamais les *commandes* que le hook, `verify` et la CI exécutent
+  _outils_, jamais les _commandes_ que le hook, `verify` et la CI exécutent
   réellement. Cause commune des bloquants 1 et 2. À traiter en tâche 18.
 - **Lighthouse CI était absent du plan entier**, alors que `08-workflow.md` § 5
   en fait le 10e élément du harnais et § 9 un critère de sortie. Ajouté en T21.
@@ -181,7 +182,7 @@ les quatre autres l'ont désormais.
   en bout.
 - Le backend entier, et les tâches 6 à 21 par construction.
 
-*Incident de méthode, à ma charge :* un script Python de correction du plan a
+_Incident de méthode, à ma charge :_ un script Python de correction du plan a
 converti les 2 561 lignes du fichier en CRLF (`io.open` en mode `w` sans
 `newline=''`). Détecté parce que le remplacement suivant ne trouvait plus son
 motif, réparé avant tout commit. Sans ce hasard, `.gitattributes` l'aurait
@@ -200,7 +201,7 @@ rend alors **code 0** avec « All matched files use Prettier code style! ». L'�
 serait passée au vert sur un fichier délibérément mal formaté. Exclusion portée par
 les scripts via le motif nié `"!tests/harness/fixtures/**"`, et `.prettierignore`
 porte un avertissement pour empêcher la régression.
-*Leçon :* P6 n'était pas une particularité d'Oxlint. **Tout outil qui a un fichier
+_Leçon :_ P6 n'était pas une particularité d'Oxlint. **Tout outil qui a un fichier
 d'exclusion a ce piège** — la question à poser à chaque nouvel outil est « un fichier
 ignoré reste-t-il ignoré quand on le nomme explicitement ? », et la réponse est oui
 pour Oxlint comme pour Prettier.
@@ -223,19 +224,21 @@ Commits `2931eea`, `9864f09`, `9ec8c49`, `318a59d`, `d32aa3d`, `7afc376`, `c089f
 branche et méthode. 24 dépendances vérifiées.
 
 **Le franchissement de la référence circulaire, constaté :**
+
 ```
 error MSB4006: Il existe une dépendance circulaire dans le graphique de
 dépendance cible qui implique la cible "_GenerateRestoreProjectPathWalk".
 ```
+
 C'est le garde-fou dont `01-conformite.md` § 3 dépend : un calcul de conformité ne
-*peut pas* atteindre la base. Vérifié en le provoquant, pas en lisant le `.csproj`.
+_peut pas_ atteindre la base. Vérifié en le provoquant, pas en lisant le `.csproj`.
 
 **Ruling P11 — le seuil de couverture n'appliquait rien.**
 Le collecteur VSTest de coverlet **ignore** `Threshold` : sa propre documentation
 l'exclut. Une fonction non couverte sortait en **code 0**. Le seuil est déplacé dans
 le `.csproj` via `coverlet.msbuild`, et `CollectCoverage=true` y est permanent — le
 seuil ne peut plus être contourné en oubliant `--settings`.
-*Leçon :* un réglage accepté sans erreur par un fichier de configuration n'est pas
+_Leçon :_ un réglage accepté sans erreur par un fichier de configuration n'est pas
 un réglage appliqué. C'est la même famille que « une règle mal nommée est acceptée
 par `.oxlintrc.json` et ne fait rien ».
 
@@ -246,6 +249,7 @@ sur le rapport JSON, elle affirme **positivement** que les cinq projets ont ét�
 inspectés. Franchie avec `Newtonsoft.Json 12.0.3` (GHSA-5crp-9r3c-p9vr), retiré depuis.
 
 **Six autres défauts du plan, mesurés et corrigés par l'implémenteur :**
+
 1. `dotnet new sln` de .NET 10 crée un `.slnx`, pas `Palier.sln` — tout le plan aval
    en dépendait.
 2. L'épreuve de rigueur restait **verte** quand on retirait `Directory.Build.props` :
@@ -272,7 +276,7 @@ avec du code propriétaire, la 3.2 n'oblige à publier que les fichiers modifié
 la différence de fond avec RPL-1.5, qui a motivé D13. Inscrite dans `EXCEPTIONS` avec
 son motif et ce qui la rouvrirait — un besoin de patcher axe-core. La liste blanche
 reste inchangée.
-*Signalé :* le contrôle ne lit que les dépendances **directes**. `lightningcss` lui
+_Signalé :_ le contrôle ne lit que les dépendances **directes**. `lightningcss` lui
 échappe aujourd'hui.
 
 **Signalé, à traiter avant d'appliquer D12 :** MediatR et `Mediator.SourceGenerator`
@@ -290,21 +294,22 @@ des garde-fous qui existaient déjà et que rien ne surveillait.
 
 **Ruling P9 étendu — le piège du fichier d'exclusion vaut pour TOUT outil.**
 Constaté sur trois outils, aucune exception à ce jour :
-| Outil | Ce qui trompe | Effet |
-|---|---|---|
-| Oxlint | `ignorePatterns` | fichier ignoré même nommé en argument, `--no-ignore` ne l'annule pas |
-| Prettier | `.prettierignore` | `--check` sur la fixture rend **code 0** et « All matched files use Prettier code style! » |
-| Playwright | `testIgnore` | l'argument positionnel filtre la liste **déjà collectée** → `Error: No tests found` |
-La question à poser à chaque nouvel outil du harnais : *un fichier ignoré reste-t-il
-ignoré quand on le nomme explicitement ?* La réponse est oui partout jusqu'ici.
-La parade est toujours la même : **l'exclusion appartient à la commande qui n'en veut
-pas**, jamais au fichier de configuration — ou à une configuration dédiée à l'épreuve.
+
+| Outil                                                                                  | Ce qui trompe     | Effet                                                                                      |
+| -------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------ |
+| Oxlint                                                                                 | `ignorePatterns`  | fichier ignoré même nommé en argument, `--no-ignore` ne l'annule pas                       |
+| Prettier                                                                               | `.prettierignore` | `--check` sur la fixture rend **code 0** et « All matched files use Prettier code style! » |
+| Playwright                                                                             | `testIgnore`      | l'argument positionnel filtre la liste **déjà collectée** → `Error: No tests found`        |
+| La question à poser à chaque nouvel outil du harnais : *un fichier ignoré reste-t-il   |
+| ignoré quand on le nomme explicitement ?* La réponse est oui partout jusqu'ici.        |
+| La parade est toujours la même : **l'exclusion appartient à la commande qui n'en veut  |
+| pas**, jamais au fichier de configuration — ou à une configuration dédiée à l'épreuve. |
 
 **Ruling P14 — une clé inconnue peut désactiver la règle entière, en silence.**
 Un `"_note"` posé dans les options de `no-restricted-imports` pour documenter le choix
 de motifs a fait passer **9 violations à code 0**, sans erreur ni avertissement. Ce
 n'est pas « la clé est ignorée » : c'est la règle qui cesse de s'appliquer.
-*Conséquence de méthode :* **aucun commentaire dans un fichier de configuration
+_Conséquence de méthode :_ **aucun commentaire dans un fichier de configuration
 d'outil.** Le motif d'un choix vit dans l'épreuve qui le protège, jamais dans le JSON
 qu'il documente. Même famille que P11 (`Threshold` accepté et ignoré par le collecteur
 VSTest) et que « une règle mal nommée est acceptée par `.oxlintrc.json` et ne fait rien ».
@@ -321,7 +326,7 @@ Réécrite : analyse du fichier entier, ancrage sur `>…</` (la balise fermante
 un nœud de texte d'une comparaison), attributs cherchés dans les balises ouvrantes
 seulement, commentaires neutralisés en conservant les décalages pour garder les
 numéros de ligne justes.
-*Limites assumées, à connaître :* c'est une heuristique, pas un analyseur syntaxique.
+_Limites assumées, à connaître :_ c'est une heuristique, pas un analyseur syntaxique.
 Un nœud de texte contenant `<` ou `>` n'est pas vu ; une valeur d'attribut construite
 par concaténation ou gabarit n'est pas vue ; seuls quatre attributs sont couverts.
 L'alternative — l'API JS de TypeScript 7 — est exposée sous `unstable/*` et lance un
@@ -336,10 +341,12 @@ déclarait pourtant « appelé par `verify` »). Tous branchés.
 **Ruling P16 — le contrôle de licences était aveugle à l'ordre des attributs XML.**
 `/PackageReference\s+Include="…"/` exigeait que `Include` suive immédiatement le nom
 d'élément. Mesuré à variable unique, même paquet, même fichier :
+
 ```
 <PackageReference Version="5.7.0" Include="NHibernate" />  →  24 dépendances, toutes permissives.  code 0
 <PackageReference Include="NHibernate" Version="5.7.0" />  →  nuget NHibernate LGPL-2.1-only        code 1
 ```
+
 Une dépendance sous licence réciproque traversait D13 **pendant que le script annonçait
 que tout était permissif**. Sur un contrôle juridique, un faux vert ne se tait pas :
 il rassure. Corrigé, et le contrôle lit désormais aussi `Directory.Build.props` — un
@@ -352,6 +359,7 @@ protection existait en double et la moitié efficace n'était documentée nulle 
 Elle l'est maintenant, dans le code que quelqu'un lira.
 
 ### Trouvé sur du code réel, pas sur des fixtures
+
 - `App.tsx` portait une chaîne en dur, refusée par `chaine-en-dur`.
 - `Program.cs` en CRLF là où `.editorconfig` exige LF.
 - Le bras par défaut du `switch` sur `Sexe` jamais franchi : 91,66 % lignes / **75 %
@@ -362,6 +370,7 @@ Elle l'est maintenant, dans le code que quelqu'un lira.
   racine du domaine. Retiré ; `Palier.Api` n'expose plus aucune route jusqu'au lot 2.
 
 ### Incident du worktree partagé, à ne pas reproduire
+
 **L'index git est partagé.** Deux agents commitant en parallèle : entre le `git add` de
 l'un et son `git commit`, l'autre a indexé ses fichiers. Résultat, `468a7b4` porte
 `back/Palier.Api/Program.cs` sous un message qui parle du front. Rien n'est perdu, le
@@ -371,8 +380,107 @@ qu'un pair commite détruirait son travail.
 en une seule étape. La forme `git add` puis `git commit` laisse une fenêtre.
 
 ### Signalé, non traité
+
 - **`scripts/*.mjs` n'a pas de `.prettierrc` à la racine.** Le formater depuis `front/`
   applique les **défauts** de Prettier — guillemets doubles, points-virgules —, l'inverse
   du style du dépôt. La tâche 18 devra ajouter une configuration à la racine avant de
   couvrir ces fichiers, sinon elle retournera leur style.
 - **`.claude/settings.json`** est un second fichier suivi sans saut de ligne final.
+
+## Tâches 18 à 21 — clôture du lot, 20/08/2026
+
+Commits `25d985f`, `487a2f3`, `f6bae20`, `8f4b1d8`, `9cfcdb3`, `ba209e7`.
+**115 épreuves de franchissement vertes** — 79 front sur 10 fichiers, 36 racine et
+backend sur 9. `npm run verify` : **15 étapes, 129,1 s, code 0**.
+
+**Ruling P17 — deux paquets npm du plan étaient des squats vides.**
+`gitleaks` sur npm : version 1.0.0, dépôt `ycjcl868/gitleaks`, **aucun exécutable**,
+un README pour tout contenu. `semgrep` sur npm : version 0.0.1. Le plan prescrivait
+`npx gitleaks` et `npx semgrep` : le harnais aurait installé deux outils de sécurité
+qui ne scannent rien, et les épreuves auraient dû être écrites autour de leur silence.
+Remplacés par le binaire officiel (empreinte SHA-256 vérifiée, action composite en CI)
+et `pipx install semgrep`.
+_Leçon :_ pour un outil de sécurité, **vérifier que le paquet est le paquet officiel**
+avant de l'installer. Un nom qui correspond ne prouve rien.
+
+**Ruling P18 — `lancerOutil` ne lève PAS pour un binaire absent sous Windows.**
+Mesuré : `cmd.exe` absorbe l'erreur et rend un code 1 ordinaire avec « n'est pas
+reconnu en tant que commande interne », là où un `spawn` direct rendrait `ENOENT`.
+La garde `if (r.error)` ajoutée aux correctifs de la revue **ne peut pas** attraper ce
+cas quand `shell: true`. C'est la seconde assertion sur le motif (P8) qui l'a attrapé,
+exactement comme elle est faite pour.
+_Conséquence :_ la doctrine des deux assertions n'est pas une ceinture de sécurité
+redondante sur Windows — c'est **la seule** protection contre « l'outil n'a pas tourné ».
+
+**Ruling P19 — le harnais dépendait d'un état de machine.**
+`npm run verify` échouait sur trois épreuves de secrets alors que le rapport de la
+tâche 19 annonçait un code 0. Cause : `winget install Gitleaks.Gitleaks` réussit,
+place le binaire sous `%LOCALAPPDATA%\Microsoft\WinGet\Packages\…` et **ne crée aucun
+lien dans le PATH**. L'outil n'était appelable par son nom depuis aucun terminal.
+Sur une machine neuve, `npm ci && npm run verify` échouait donc.
+`scripts/outil-gitleaks.mjs` résout aux emplacements connus — PATH d'abord, puis les
+dossiers de winget — et **lève** avec les commandes d'installation. Les deux branches
+sont éprouvées en provoquant l'état, `LOCALAPPDATA` pointé sur un chemin inexistant.
+_Leçon :_ un rapport d'agent qui dit « code 0 » se relance. Celui-ci était sincère —
+son PATH portait le binaire au moment de la mesure — et faux vingt minutes plus tard.
+
+**Ruling P20 — un `.prettierrc` manquait à la racine.**
+Formater `scripts/*.mjs` depuis `front/` leur applique les **défauts** de Prettier —
+guillemets doubles, points-virgules — soit l'inverse du style du dépôt. La tâche 18
+aurait retourné le style des trois fichiers les plus critiques du projet. Configuration
+posée à la racine **avant** le premier formatage, style vérifié sur diff.
+
+### Ce que la mesure de `verify` dit
+
+| étape            | s        |     | étape       | s         |
+| ---------------- | -------- | --- | ----------- | --------- |
+| front:format     | 2,6      |     | back:format | 20,6      |
+| front:lint       | 2,3      |     | back:build  | 14,0      |
+| front:lint:types | 2,9      |     | back:test   | 11,0      |
+| front:typecheck  | 3,0      |     | licences    | 7,6       |
+| **front:test**   | **39,9** |     | back:audit  | 12,7      |
+| front:knip       | 5,0      |     | front:build | 2,8       |
+| scripts:lint     | 2,2      |     |             |           |
+| scripts:format   | 2,3      |     | **TOTAL**   | **129,1** |
+| regles           | 0,3      |     |             |           |
+
+**Le seuil de 90 s n'a pas été relevé** : l'avertissement se déclenche à chaque
+exécution, et c'est le comportement voulu — `08-workflow.md` § 5 fait de la lenteur un
+défaut à traiter, pas une contrainte à absorber. Le levier principal, sortir les
+épreuves de franchissement de `front:test` (−39 s), **ne peut pas être appliqué
+aujourd'hui** : `front/src/` ne contient aucun test, l'étape deviendrait vide et verte
+sans rien contrôler. C'est un arbitrage pour le lot 2.
+Gain obtenu au passage : `npm --prefix front exec --` coûtait 13,9 s de démarrage npm
+pour 0,2 s d'outil ; l'appel direct au binaire ramène les deux étapes à 4,3 s.
+
+### Trous fermés en chemin, sans y avoir été invité
+
+- `scripts/verifier-licences.mjs` ne lisait que `front/package.json` : husky et
+  lint-staged échappaient à D13. 24 → 27 dépendances vérifiées.
+- **lint-staged aurait reformaté `format-casse.ts` au commit**, désarmant l'épreuve
+  Prettier. Filtre ajouté, éprouvé, y compris sa branche de chemins Windows.
+- Le hook de pré-commit a refusé le commit de la tâche 19 elle-même, parce que
+  l'épreuve portait un littéral `sk-ant-…`. Assemblé depuis. Le garde-fou a mordu sur
+  celui qui l'installait.
+
+### À soumettre au porteur du projet
+
+**D27 — `@lhci/cli` amène 10 vulnérabilités, dont 7 hautes.** La chaîne
+`extract-zip → @puppeteer/browsers → puppeteer-core → lighthouse` porte un avis sur
+`extract-zip` dont la plage est `*` : **aucune version corrigée, aucun `overrides` ne
+peut le réparer**. Le déclarer en dépendance casserait `npm audit --audit-level=high`
+du job `securite`, ou forcerait à en abaisser le seuil — ce qui masquerait de vraies
+vulnérabilités du produit. Retenu : installation éphémère à version figée dans le seul
+job `performance`. Le risque n'est pas éliminé, il est **déplacé hors de la vue de
+`npm audit`**. C'est le point qui revient au porteur.
+
+### Ce qui n'a été éprouvé nulle part
+
+- **Rien n'a tourné sous Linux.** Toutes les mesures viennent de Windows via `cmd.exe`.
+  Les motifs d'exclusion à guillemets doubles, la casse des chemins, `pipx`, la branche
+  `shell: false` de `lancerOutil` et de `verify.mjs` : la CI est le premier endroit où
+  ils seront éprouvés. `ci.yml` est validé **structurellement**, jamais exécuté.
+- **Lighthouse CI n'a jamais tourné** : la configuration est vérifiée, pas la mesure.
+- **semgrep n'a jamais tourné**, ni localement ni en CI.
+- `core.hooksPath` est partagé entre tous les worktrees : `npx husky` l'a posé pour la
+  checkout principale aussi, où `.husky/` n'existera qu'après fusion.
