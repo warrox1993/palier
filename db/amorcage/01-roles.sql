@@ -40,11 +40,20 @@ create role palier_app
   login password 'motdepasse_local_application'
   nosuperuser nobypassrls nocreatedb nocreaterole;
 
--- `pg_dump` / `pg_restore`. SEUL rôle du produit à porter BYPASSRLS — sous
--- FORCE, `pg_dump` pose `row_security = off` et « If the user does not have
--- sufficient privileges to bypass row security, then an error is thrown »
--- (app-pgdump.html). Le prix exact se mesure à la tâche 10 ; l'attribut est
--- posé ici parce que c'est le seul endroit où un rôle se crée.
+-- `pg_dump`. SEUL rôle du produit à porter BYPASSRLS, et la tâche 10 l'a
+-- MESURÉ DANS LES DEUX SENS le 20/08/2026, sur PostgreSQL 18.6 :
+--   * avec BYPASSRLS et SELECT sur les tables ET les séquences → code 0 ;
+--   * sans BYPASSRLS, mêmes privilèges → code 1, « query would be affected by
+--     row-level security policy », et un fichier tronqué de 40 829 octets là où
+--     le dump complet en fait 41 287 — un dump raté ressemble à un dump.
+-- L'attribut est donc NÉCESSAIRE, pas prudentiel. Détail dans db/README.md
+-- § Sauvegarder et restaurer.
+--
+-- BYPASSRLS contourne les POLITIQUES, jamais les PRIVILÈGES : les `grant select`
+-- de ce rôle vivent dans la migration, avec les objets qu'ils visent.
+--
+-- Ce rôle ne RESTAURE pas : il ne crée rien. La restauration se fait sous
+-- `palier_migrations`, qui est propriétaire.
 -- Sur l'instance managée, ce rôle n'est peut-être pas créable ainsi : « Only
 -- superuser roles or roles with BYPASSRLS can specify BYPASSRLS »
 -- (sql-createrole.html), et le compte d'administration d'Aiven n'est pas

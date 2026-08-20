@@ -667,6 +667,41 @@ namespace Palier.Infrastructure.Migrations
                   using (true);
                 """
             );
+
+            // ---- Les privilèges de `palier_sauvegarde` -----------------------
+            //
+            // AJOUTÉ À LA TÂCHE 10, ET C'EST UN DÉFAUT DU PLAN CORRIGÉ. D37 crée
+            // le rôle de sauvegarde et lui donne BYPASSRLS ; PERSONNE ne lui
+            // accordait le moindre privilège de lecture. Mesuré le 20/08/2026 :
+            //
+            //     pg_dump: error: query failed:
+            //       ERROR: permission denied for table __EFMigrationsHistory
+            //
+            // BYPASSRLS contourne les POLITIQUES, jamais les PRIVILÈGES — deux
+            // barrières distinctes, et le rôle butait sur la seconde. Puis, une
+            // fois les tables accordées :
+            //
+            //     pg_dump: error: failed to get data for sequence
+            //       "AspNetRoleClaims_Id_seq"; user may lack SELECT privilege
+            //
+            // Les séquences sont donc accordées elles aussi.
+            //
+            // `on all tables in schema public` ET NON objet par objet, à l'écart
+            // délibéré de ce que D37 impose à `palier_app`. Le motif est
+            // inverse : les privilèges de l'API diffèrent d'une table à l'autre,
+            // et l'énumération est ce qui force à relire chacune. Ceux de la
+            // sauvegarde sont les mêmes partout, et une table OUBLIÉE fait
+            // échouer le dump entier — « une sauvegarde jamais restaurée n'est
+            // pas une sauvegarde ». Ce n'est PAS un `alter default privileges` :
+            // la portée est celle des objets existants à cette migration, et
+            // `SauvegardeTests` refuse le dépôt le jour où une table nouvelle
+            // n'aura pas été accordée.
+            migrationBuilder.Sql(
+                """
+                grant select on all tables in schema public to palier_sauvegarde;
+                grant select on all sequences in schema public to palier_sauvegarde;
+                """
+            );
         }
 
         /// <inheritdoc />
@@ -690,6 +725,7 @@ namespace Palier.Infrastructure.Migrations
                 drop policy if exists migrations_referentiel on public."__EFMigrationsHistory";
                 drop policy if exists lecture_version on public."__EFMigrationsHistory";
                 revoke select on public."__EFMigrationsHistory" from palier_app;
+                revoke select on public."__EFMigrationsHistory" from palier_sauvegarde;
                 alter table public."__EFMigrationsHistory" no force row level security;
                 alter table public."__EFMigrationsHistory" disable row level security;
                 """

@@ -1,3 +1,4 @@
+using DotNet.Testcontainers.Containers;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -158,6 +159,39 @@ public sealed class BaseFixture : IAsyncLifetime
         return $"Host={_conteneur.Hostname};Port={_conteneur.GetMappedPublicPort(5432)};"
             + $"Database={Base};Username={role};Password={motDePasse}{pool}";
     }
+
+    /// <summary>
+    /// Une URI de connexion utilisable DEPUIS L'INTÉRIEUR du conteneur : les
+    /// outils <c>pg_dump</c> et <c>pg_restore</c> vivent dans l'image, et ils y
+    /// voient le serveur sur <c>localhost:5432</c>, jamais sur le port publié.
+    ///
+    /// La forme URI plutôt que <c>PGPASSWORD</c> : <c>ExecAsync</c> ne transmet
+    /// aucune variable d'environnement, et un mot de passe local sans entropie
+    /// dans une ligne de commande à l'intérieur d'un conteneur jetable n'ouvre
+    /// rien.
+    /// </summary>
+    public string ConnexionInterne(string role, string? baseDeDonnees = null)
+    {
+        if (!MotDePasse.TryGetValue(role, out var motDePasse))
+        {
+            throw new InvalidOperationException(
+                $"Rôle inconnu « {role} » : {_cheminAmorcage} n'en déclare que "
+                    + $"{string.Join(", ", Roles)}."
+            );
+        }
+
+        return $"postgresql://{role}:{motDePasse}@localhost:5432/{baseDeDonnees ?? Base}";
+    }
+
+    /// <summary>
+    /// Exécute une commande DANS le conteneur. C'est le seul moyen d'éprouver
+    /// <c>pg_dump</c> et <c>pg_restore</c> sans exiger le client PostgreSQL sur
+    /// le poste — or `docs/14-contenu.md` § 7 : « une sauvegarde jamais
+    /// restaurée n'est pas une sauvegarde », et une épreuve qu'on ne peut lancer
+    /// que sur une machine outillée n'est jamais lancée.
+    /// </summary>
+    public Task<ExecResult> ExecuterDansLeConteneurAsync(params string[] commande) =>
+        _conteneur.ExecAsync(commande);
 
     public async Task InitializeAsync()
     {

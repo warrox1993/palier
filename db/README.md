@@ -212,7 +212,110 @@ conteneur en conservant le volume — c'est la commande de tous les jours.
 
 ## Sauvegarder et restaurer
 
-<!-- Écrit à la tâche 10 du lot 2. -->
+**Trois rôles, trois pouvoirs, et ils ne se remplacent pas.** `palier_sauvegarde`
+sait **lire** tout le contenu ; il ne sait **rien créer**. `palier_migrations`
+sait créer les objets ; sous `FORCE`, il ne sait **pas** tout lire. La sauvegarde
+et la restauration se font donc sous **deux rôles différents**, et se tromper de
+rôle échoue — bruyamment pour l'un, sournoisement pour l'autre.
+
+Les mots de passe viennent d'`amorcage/01-roles.sql` en local, d'un secret en
+exploitation. `PGPASSWORD` plutôt qu'une URI : une chaîne complète dans un
+fichier suivi est refusée par `.gitleaks.regles.toml`, et une URI en clair reste
+dans l'historique du shell.
+
+### 1. Sauvegarder — sous `palier_sauvegarde`
+
+```bash
+export PGPASSWORD=…    # le mot de passe de palier_sauvegarde
+pg_dump -h localhost -p 5432 -U palier_sauvegarde -d palier \
+  -F c -f palier-$(date +%F).dump
+echo "code de sortie : $?"     # 0, et RIEN D'AUTRE ne vaut confirmation
+```
+
+> ⚠️ **LE CODE DE SORTIE EST LA SEULE PREUVE. Un dump raté ressemble à un dump.**
+> Mesuré le 20/08/2026 : privé de `BYPASSRLS`, `pg_dump` écrit tout le schéma,
+> bute sur le premier `COPY` refusé, et laisse un fichier de **40 829 octets** là
+> où le dump complet en fait **41 287**. Un opérateur qui regarde `ls -l` voit un
+> fichier de taille normale. Vérifier le code de sortie, et le journaliser.
+
+### 2. Restaurer **dans une base neuve** — sous `palier_migrations`
+
+Jamais par-dessus une base existante. Restaurer dans la base courante mélange
+l'ancien et le nouveau sans le dire.
+
+```bash
+# La base de destination est créée par le compte d'administration : ni
+# palier_migrations ni palier_sauvegarde n'ont CREATEDB — D37.
+createdb -h localhost -p 5432 -U palier_admin palier_restauree
+psql -h localhost -p 5432 -U palier_admin -d palier_restauree \
+  -c 'grant create, usage on schema public to palier_migrations;'
+psql -h localhost -p 5432 -U palier_admin -d postgres \
+  -c 'grant create on database palier_restauree to palier_migrations;'
+
+export PGPASSWORD=…    # le mot de passe de palier_migrations
+pg_restore -h localhost -p 5432 -U palier_migrations -d palier_restauree \
+  palier-2026-08-20.dump
+echo "code de sortie : $?"
+```
+
+**Puis on COMPTE, des deux côtés.** Un dump vide se restaure parfaitement.
+
+```bash
+psql -h localhost -p 5432 -U palier_migrations -d palier_restauree -c "
+  select (select count(*) from public.nutrient_refs)                      as lignes,
+         (select count(*) from pg_policies where schemaname='public')     as politiques,
+         (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+           where n.nspname='public' and c.relkind='r'
+             and (not c.relrowsecurity or not c.relforcerowsecurity))     as sans_force;"
+```
+
+Attendu, le 20/08/2026 : `13` tables, `13` politiques, **`0` table sans
+`FORCE`** — l'isolation survit à la restauration. `SauvegardeTests` compare ces
+quatre nombres automatiquement, sur un conteneur, à chaque `npm run verify`.
+
+### 3. Réinitialiser
+
+Voir [§ Réinitialiser](#réinitialiser) ci-dessus : `npm run db:reset` détruit le
+volume local. C'est la seule commande destructrice du projet.
+
+### Ce qui échoue si l'on se trompe de rôle
+
+| Commande     | Rôle employé        | Ce qui se produit                                                                                                        |
+| ------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `pg_dump`    | `palier_migrations` | `ERROR: query would be affected by row-level security policy for table "AspNetRoleClaims"` — code **1**, fichier tronqué |
+| `pg_dump`    | `palier_app`        | `permission denied` : le rôle n'a SELECT que sur cinq tables                                                             |
+| `pg_dump`    | `palier_sauvegarde` | **succès**, code 0                                                                                                       |
+| `pg_restore` | `palier_sauvegarde` | `permission denied for schema public` : le rôle ne crée rien                                                             |
+| `pg_restore` | `palier_migrations` | **succès**, code 0                                                                                                       |
+
+### Pourquoi `palier_sauvegarde` porte `BYPASSRLS` — mesuré dans les deux sens
+
+C'est le **prix de `FORCE ROW LEVEL SECURITY`**, et il a été payé plutôt que
+supposé. Mesures du 20/08/2026, sur PostgreSQL 18.6 :
+
+| Configuration du rôle                               | `pg_dump`                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `BYPASSRLS` **et** `SELECT` sur tables et séquences | **code 0**, 41 287 octets                                                      |
+| `BYPASSRLS`, **sans** `SELECT`                      | code 1 — `permission denied for table __EFMigrationsHistory`                   |
+| `BYPASSRLS` et `SELECT` sur les tables seules       | code 1 — `failed to get data for sequence "AspNetRoleClaims_Id_seq"`           |
+| **`NOBYPASSRLS`** avec `SELECT` complet             | code 1 — `query would be affected by row-level security policy`, 40 829 octets |
+
+**Deux barrières distinctes, et `BYPASSRLS` n'en lève qu'une.** Il contourne les
+**politiques**, jamais les **privilèges** : le rôle avait besoin des deux, et le
+lot 2 ne lui accordait aucun `SELECT` — défaut trouvé à la tâche 10, corrigé dans
+la migration.
+
+**Le verdict :** `BYPASSRLS` est **nécessaire** sur `palier_sauvegarde`. Ce n'est
+pas une précaution ; sans lui, la sauvegarde de ce schéma est **impossible**.
+
+**Ce qui reste ouvert, et qui appartient au porteur du projet.** « Only superuser
+roles or roles with `BYPASSRLS` can specify `BYPASSRLS` » (`sql-createrole.html`)
+— or l'offre managée d'OVHcloud repose sur Aiven, dont le compte d'administration
+**n'est pas superutilisateur**. Si ce rôle ne peut pas être créé sur l'instance
+réelle, `FORCE` s'échange contre la capacité de sauvegarder la base, et
+l'arbitrage revient au porteur. Ni retirer `FORCE`, ni accorder `BYPASSRLS` au
+rôle propriétaire : ce sont **les deux façons d'éteindre RLS sans que rien ne le
+signale**.
 
 ## Ce que le formatage automatique ne couvre pas
 
