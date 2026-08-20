@@ -116,9 +116,32 @@ jobs:
       - name: Le service Dependabot est-il réellement allumé ?
         env:
           JETON: ${{ secrets.JETON_ETAT_DEPENDABOT || secrets.GITHUB_TOKEN }}
+          JETON_DEDIE: ${{ secrets.JETON_ETAT_DEPENDABOT != '' }}
           DEPOT: ${{ github.repository }}
         run: |
           set -u
+
+          # Tant que le secret dédié n'existe pas, ce contrôle NE PEUT PAS
+          # s'exécuter : GITHUB_TOKEN rend 403, quoi qu'on déclare dans
+          # `permissions:`. Le faire échouer laisserait `main` rouge en
+          # permanence — et une CI rouge en permanence cesse d'être lue, ce qui
+          # coûte plus que le contrôle ne rapporte.
+          #
+          # L'étape signale donc bruyamment, et ne bloque pas. La distinction
+          # qui compte est écrite dans le message : « je n'ai pas pu vérifier »
+          # n'est pas « c'est allumé ». La vérification manuelle reste inscrite
+          # au gabarit de rapport de lot, avec ses deux commandes.
+          #
+          # Dès que le secret existe, `JETON_DEDIE` passe à `true` et l'étape
+          # redevient bloquante sans qu'on touche à ce fichier.
+          if [ "${JETON_DEDIE}" != "true" ]; then
+            echo "::warning::Le secret JETON_ETAT_DEPENDABOT est absent : l'état du service Dependabot N'A PAS ÉTÉ VÉRIFIÉ. Ce n'est pas un feu vert."
+            echo "Pour l'activer : jeton à granularité fine avec « Administration: read », déposé en secret de dépôt sous ce nom."
+            echo "En attendant, vérification manuelle à porter au rapport de lot :"
+            echo "  gh api -i repos/$DEPOT/vulnerability-alerts      # attendu : HTTP 204"
+            echo "  gh api repos/$DEPOT/automated-security-fixes     # attendu : {\"enabled\":true,\"paused\":false}"
+            exit 0
+          fi
           # Fichier de réponse UNIQUE, jamais un chemin fixe : deux étapes
           # concurrentes se marcheraient dessus, et un `/tmp` partagé rend le
           # résultat dépendant de ce qui traînait avant.
