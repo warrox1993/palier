@@ -27,6 +27,34 @@ function gravites(rapport) {
   return trouvees
 }
 
+// La protection contre une dépendance vulnérable vient de DEUX mécanismes, et
+// le plus efficace est le moins visible :
+//
+//  1. L'audit NuGet, actif par défaut, émet NU1903 à la restauration. Le
+//     `TreatWarningsAsErrors` de `Directory.Build.props` le promeut en ERREUR :
+//     la restauration meurt, donc la compilation, donc tout. Mesuré le
+//     20/08/2026 avec `Newtonsoft.Json 12.0.3` :
+//       error NU1903: Avertissement comme erreur : Le package
+//       'Newtonsoft.Json' 12.0.3 présente une vulnérabilité de gravité
+//       élevé(e) connue — ÉCHEC de la build, 1 erreur.
+//     Rien dans le dépôt ne le nomme, aucune épreuve ne le franchit — c'est
+//     pourtant lui qui arrête réellement le paquet, avant même que quiconque
+//     lance un contrôle.
+//     Il n'est pas testé ici parce qu'il rend cette épreuve-là INEXÉCUTABLE :
+//     mesuré le 20/08/2026 avec `Newtonsoft.Json 12.0.3`, `dotnet list` sortait
+//     « Échec de la restauration » et code 1, sur la PREMIÈRE assertion. Les
+//     assertions qui font l'intérêt de cette épreuve — les cinq projets
+//     inspectés, le filtre High|Critical — n'étaient jamais atteintes.
+//
+//  2. Cette épreuve, qui énumère et juge. Pour qu'elle puisse énumérer, il faut
+//     que la restauration ait réussi : d'où le `dotnet restore` explicite avec
+//     `NuGetAudit=false`, puis `--no-restore`. Neutraliser l'audit ICI ne
+//     désarme rien — il reste armé partout ailleurs, y compris au build de la
+//     CI et du hook.
+//
+// Si un jour on retire l'audit ou `TreatWarningsAsErrors`, le mécanisme 1
+// disparaît en silence et seul le 2 subsiste. C'est écrit ici pour que celui
+// qui le retire le sache.
 describe('garde-fou : vulnérabilités des dépendances', () => {
   it('aucune vulnérabilité connue dans les paquets du backend', () => {
     // `--format json` plutôt que la sortie de texte prévue au plan.
@@ -40,9 +68,20 @@ describe('garde-fou : vulnérabilités des dépendances', () => {
     // texte libre passe aussi quand l'outil n'a rien imprimé. Le rapport
     // structuré permet au contraire d'affirmer POSITIVEMENT que les cinq
     // projets ont été inspectés, ce qu'aucune lecture du texte ne donne.
+    // Restauration explicite, audit neutralisé : voir le commentaire au-dessus
+    // du `describe`. Sans elle, `dotnet list` restaure implicitement, NU1903
+    // devient une erreur et la commande meurt AVANT d'énumérer quoi que ce soit.
+    const restauration = lancerOutil([
+      'dotnet', 'restore', 'back/Palier.sln', '-p:NuGetAudit=false',
+    ])
+    expect(
+      restauration.code,
+      `La restauration a échoué — l'énumération qui suit ne prouverait rien :\n${restauration.sortie}`,
+    ).toBe(0)
+
     const r = lancerOutil([
       'dotnet', 'list', 'back/Palier.sln', 'package', '--vulnerable', '--include-transitive',
-      '--format', 'json',
+      '--format', 'json', '--no-restore',
     ])
     expect(r.code, `La commande a échoué :\n${r.sortie}`).toBe(0)
 
