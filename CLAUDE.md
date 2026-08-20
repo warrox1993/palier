@@ -155,6 +155,45 @@ Documents de référence, à lire avant de commencer :
 - Aucune chaîne de caractères en dur : tout passe par i18next, y compris erreurs et états vides
 - Aucun libellé nutritionnel en dur : ils vivent en base, versionnés et validés (voir `docs/09-comptes.md`)
 
+### KISS et DRY, dans cet ordre
+
+**KISS.** La solution la plus simple qui répond au besoin, pas la plus élégante ni la plus extensible. Un besoin futur supposé ne justifie aucune abstraction aujourd'hui.
+
+**DRY, au sens strict : une connaissance, un endroit.** Pas « deux blocs se ressemblent, donc on factorise ». Deux choses qui se ressemblent aujourd'hui et divergeront demain doivent rester séparées — factoriser prématurément coûte plus cher que dupliquer. C'est pourquoi D6 laisse `jscpd` en avertissement et non en blocage.
+
+**Quand les deux se contredisent, KISS gagne.** Une abstraction qui évite trois lignes de répétition mais oblige à comprendre deux fichiers pour lire un traitement est un mauvais échange.
+
+### Sécurité — c'est une priorité, pas une étape
+
+La sécurité se traite à chaque ligne, pas à la fin. Elle prime sur la vitesse de livraison, et le porteur du projet accepte explicitement le coût : `npm run verify` prend cinq minutes et c'est assumé.
+
+**Le code lui-même, pas seulement la chaîne d'outils.** Un pipeline exemplaire ne protège pas d'une requête non paramétrée, d'une autorisation oubliée ou d'une donnée de santé écrite dans un journal. Le harnais attrape ce qui est mécanique ; le reste demande de la vigilance à l'écriture.
+
+### Dépendances — la doctrine
+
+**npm est un vecteur d'attaque actif.** Des paquets sont compromis chaque semaine, et le vecteur habituel est le script `postinstall`, qui s'exécute avant que quiconque ait lu le code.
+
+1. **Éviter d'ajouter une dépendance.** Une dépendance directe en amène des dizaines de transitives — 4 déclarées côté front en amènent 130. C'est l'arbre entier qui est la surface d'attaque, pas ce qu'on déclare.
+2. **Mais ne JAMAIS remplacer une dépendance mature par du code maison au nom de la sécurité.** Un parseur YAML écrit à la main serait buggé, donc moins sûr que le paquet qu'il remplace. La règle est : _retirer ce qui ne sert pas, verrouiller le reste._
+3. **`--ignore-scripts` à l'installation.** Le paquet est téléchargé, son code reste inerte tant que rien ne l'importe. C'est la différence entre subir un paquet malveillant et l'exécuter avec ses droits.
+4. **Vérifier la provenance** : `npm audit signatures` contrôle les attestations cryptographiques des paquets construits en CI publique.
+5. **Un délai avant adoption.** Dependabot a un `cooldown` de 3 à 30 jours selon la gravité — un paquet compromis est généralement retiré en quelques heures.
+6. **Toute nouvelle dépendance directe demande une décision datée** dans `docs/decisions.md`, avec son motif, ce qu'elle remplace, et ce qui la rouvrirait.
+
+Ce qu'on ne réécrit pas, parce que le coût dépasserait le risque : Vite, TypeScript, Oxlint, Prettier, Vitest, Playwright, EF Core, Npgsql.
+
+### Ce qu'un garde-fou doit être
+
+Ces règles viennent du lot 1, où chacune a été payée au moins une fois. Le détail et les mesures sont dans `.superpowers/sdd/2026-08-20-lot-1-harnais-complet/progress.md` (rulings P1 à P23).
+
+- **Un garde-fou non éprouvé ment.** On provoque la violation qu'il doit refuser, on constate le refus, et l'épreuve reste dans la suite. Un contrôle dont on n'a jamais vu le rouge ne protège rien.
+- **Deux assertions par épreuve** : le code de sortie **et** un motif propre à la cause. Un code non nul ne prouve pas que l'outil a refusé — un binaire absent, un mauvais chemin ou une cible manquante en rendent un aussi.
+- **Une branche jamais franchie est une branche qui ment.** Y compris la branche « l'outil n'est pas là » et la branche « la cible a disparu ».
+- **L'exclusion appartient à la commande, jamais au fichier de configuration.** Cinq outils ont porté ce piège : un fichier ignoré par la configuration reste ignoré même nommé explicitement en argument, et la fixture devient invisible pour sa propre épreuve.
+- **Aucun commentaire dans un fichier de configuration d'outil.** Une clé inconnue peut désactiver la règle entière en silence — mesuré, neuf violations passées à zéro. Le motif d'un choix vit dans l'épreuve qui le protège.
+- **Un réglage accepté n'est pas un réglage appliqué**, et **un fichier correct dont le service est éteint ne protège rien**. On interroge le système, on ne relit pas le fichier.
+- **Vérifier à la source, jamais de mémoire.** Une version, une API, une limite de plateforme affirmées de mémoire sont périmées par construction. Context7 ou la documentation officielle avant d'écrire.
+
 ---
 
 ## 5. Hiérarchie en cas de contradiction
