@@ -1,0 +1,4 @@
+namespace Palier.Domain;
+    public   static class MalFormate {
+public static int Valeur( ) {return    1;}
+        }
