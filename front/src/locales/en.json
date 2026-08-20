@@ -1,0 +1,13 @@
+{
+  "navigation": {
+    "allerAuContenu": "Skip to main content"
+  },
+  "commun": {
+    "chargement": "Loading…",
+    "vide": "Nothing to show yet",
+    "erreur": {
+      "titre": "Something went wrong",
+      "reessayer": "Try again"
+    }
+  }
+}

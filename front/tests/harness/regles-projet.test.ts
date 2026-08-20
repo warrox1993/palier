@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterAll, describe, expect, it } from 'vitest'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { lancerOutil } from './run-outil'
@@ -21,6 +21,7 @@ const FIXTURES = [
   'litteral-jsx.tsx',
   'comparaison-numerique.tsx',
   'chaine-en-commentaire.tsx',
+  'chaine-en-constante.ts',
   'ombre-portee.css',
   'fleche-unicode.tsx',
   'booleen-mal-nomme.ts',
@@ -130,6 +131,27 @@ describe('garde-fou : chaînes de texte en dur', () => {
     expect(r.code, `Un commentaire a été refusé :\n${r.sortie}`).toBe(0)
     expect(r.sortie).toMatch(/aucune violation des règles de projet/)
   })
+
+  // Le trou mesuré au lot 1, D31 livrable 3 : la règle ne regardait que le JSX.
+  // Une chaîne d'interface déplacée dans une constante exportée d'un `.ts` lui
+  // échappait entièrement — et c'est le déplacement le plus naturel du monde
+  // quand on veut réutiliser un libellé à deux endroits.
+  it('refuse une chaîne de copie dans une constante exportée', () => {
+    const r = surFixture('chaine-en-constante.ts')
+    expect(r.code, `La constante exportée a été acceptée :\n${r.sortie}`).not.toBe(0)
+    expect(r.sortie).toMatch(/i18n/i)
+    expect(r.sortie).toMatch(/MESSAGE_VIDE/)
+  })
+
+  // Faux positif à borner explicitement. `jetons.ts` porte des noms de jetons
+  // et des valeurs techniques — `cubic-bezier(…)` en particulier —, pas de la
+  // copie destinée à l'écran. L'exclusion est portée par la RÈGLE, dans le
+  // script, jamais par une clé ajoutée à un fichier de configuration (D21).
+  it('accepte les valeurs techniques de src/ui/jetons.ts', () => {
+    const r = lancerOutil(['node', SCRIPT, '--fichier', 'front/src/ui/jetons.ts'])
+    expect(r.code, `Les jetons ont été refusés :\n${r.sortie}`).toBe(0)
+    expect(r.sortie).toMatch(/aucune violation des règles de projet/)
+  })
 })
 
 // Un contrôle qui plante rend le même silence qu'un contrôle qui approuve — et
@@ -164,5 +186,68 @@ describe('garde-fou : le contrôle crie quand il ne peut pas tourner', () => {
     expect(r.code, `Une arborescence sans front/src n'a pas été signalée :\n${r.sortie}`).toBe(2)
     expect(r.sortie).toMatch(/répertoire introuvable/)
     expect(r.sortie).not.toMatch(/ENOENT/)
+  })
+})
+
+// Contrôle TRANSVERSE, et non une règle de contenu : il compare deux fichiers
+// au lieu de chercher un motif dans un seul. `docs/17-donnees-sources.md`
+// interdit de fusionner des sources aux licences différentes sans les tracer ;
+// un fichier de référentiel sans ligne d'attribution est exactement la fuite
+// que ce document existe pour empêcher.
+describe('garde-fou : toute source de données est attribuée', () => {
+  it('la fixture de violation existe', () => {
+    expect(existsSync('tests/harness/fixtures/99-sonde.sql'), 'Cible manquante').toBe(true)
+  })
+
+  it('refuse un fichier de référentiel absent de db/SOURCES.md', () => {
+    // La règle est TRANSVERSE : elle ne cherche pas un motif dans un seul
+    // fichier, elle se lance donc sans --fichier.
+    const r = lancerOutil(['node', SCRIPT, '--source', dansLaRacine('99-sonde.sql')])
+    expect(r.code, `Le fichier non attribué a été accepté :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion : le message doit NOMMER le fichier. Un code non nul
+    // seul ne prouve pas que c'est cette règle-là qui a mordu — D19.
+    expect(r.sortie).toMatch(/99-sonde\.sql/)
+    expect(r.sortie).toMatch(/SOURCES\.md/)
+  })
+
+  it('refuse proprement --source sans valeur, avec un code distinct des violations', () => {
+    const r = lancerOutil(['node', SCRIPT, '--source'])
+    expect(r.code, `--source sans valeur n'a pas été refusé :\n${r.sortie}`).toBe(2)
+    expect(r.sortie).toMatch(/--source employée sans valeur/)
+  })
+
+  it('crie sur une source inexistante au lieu de la déclarer non attribuée', () => {
+    // Trouvé le 20/08/2026 en lançant la commande de l'étape 5 du brief telle
+    // qu'elle y était écrite : le contrôle compare des NOMS, et rendait donc
+    // une violation pour un chemin mort. Un refus sincère et faux est la forme
+    // inverse du faux vert — ruling P22.
+    const r = lancerOutil(['node', SCRIPT, '--source', 'db/referentiel/99-sonde.sql'])
+    expect(r.code, `Un chemin mort a été traité comme une violation :\n${r.sortie}`).toBe(2)
+    expect(r.sortie).toMatch(/source introuvable/)
+    expect(r.sortie).not.toMatch(/violation\(s\) des règles de projet/)
+  })
+
+  it('accepte le référentiel réel du dépôt', () => {
+    const r = lancerOutil(['node', SCRIPT])
+    expect(r.code, `Le référentiel réel porte une source non attribuée :\n${r.sortie}`).toBe(0)
+    expect(r.sortie).toMatch(/aucune violation des règles de projet/)
+  })
+
+  it('crie quand db/SOURCES.md manque, au lieu de rendre « aucune violation »', () => {
+    // Quatrième question du franchissement. L'absence est PROVOQUÉE — le
+    // catalogue est réellement déplacé — et non simulée sur une arborescence
+    // construite : la seule branche non éprouvée est celle qui se déclenche le
+    // jour venu.
+    const catalogue = resolve('..', 'db', 'SOURCES.md')
+    const abri = `${catalogue}.hors-service`
+    renameSync(catalogue, abri)
+    try {
+      const r = lancerOutil(['node', SCRIPT])
+      expect(r.code, `L'absence du catalogue n'a pas été signalée :\n${r.sortie}`).toBe(2)
+      expect(r.sortie).toMatch(/SOURCES\.md/)
+      expect(r.sortie).not.toMatch(/aucune violation/)
+    } finally {
+      renameSync(abri, catalogue)
+    }
   })
 })

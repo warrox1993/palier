@@ -3,7 +3,7 @@
 // Remplace no-restricted-syntax, eslint-plugin-i18next et naming-convention,
 // absents d'Oxlint. Aucune dépendance : on lit ce qu'on exécute.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, extname, dirname, resolve } from 'node:path'
+import { join, extname, basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // Toutes les cibles se résolvent depuis la racine du dépôt, jamais depuis le
@@ -246,6 +246,22 @@ const ATTRIBUT_DE_COPIE = /(?<![-.\w$])(title|alt|placeholder|aria-label)\s*=\s*
 /** Chaîne littérale glissée dans une accolade JSX : `<span>{'Texte'}</span>`. */
 const LITTERAL_DANS_JSX = />\s*\{\s*(['"])([^'"\n]*)\1\s*\}\s*<\//g
 
+/**
+ * Constante exportée dont la valeur est un littéral de texte :
+ * `export const MESSAGE_VIDE = 'Aucune séance enregistrée'`.
+ *
+ * C'est le trou mesuré au lot 1 — D31 livrable 3. La règle ne regardait que le
+ * JSX ; déplacer un libellé dans une constante exportée, ce qu'on fait dès
+ * qu'on veut le réutiliser à deux endroits, le faisait disparaître du contrôle.
+ * Le `d` donne la position du littéral, d'où se calcule le numéro de ligne.
+ *
+ * Seules les constantes EXPORTÉES sont vues : une constante privée peut porter
+ * un identifiant technique — `const NOM_APPLICATION = 'palier'` dans App.tsx —
+ * et le nom de la marque n'a aucune clé de traduction.
+ */
+const CONSTANTE_EXPORTEE =
+  /export\s+const\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(['"`])((?:[^\\]|\\.)*?)\2/dg
+
 function resume(texte) {
   const plat = texte.replace(/\s+/g, ' ').trim()
   return plat.length > 60 ? `${plat.slice(0, 57)}…` : plat
@@ -273,6 +289,15 @@ function chainesEnDur(contenu) {
   for (const m of contenu.matchAll(LITTERAL_DANS_JSX)) {
     if (!MOT_DE_COPIE.test(m[2])) continue
     trouvees.push({ index: m.index, detail: `littéral dans une accolade JSX « ${resume(m[2])} »` })
+  }
+
+  for (const m of contenu.matchAll(CONSTANTE_EXPORTEE)) {
+    const texte = m[3]
+    if (texte === '' || CODE_DANS_LE_TEXTE.test(texte) || !MOT_DE_COPIE.test(texte)) continue
+    trouvees.push({
+      index: m.indices[3][0],
+      detail: `constante exportée ${m[1]} = « ${resume(texte)} »`,
+    })
   }
 
   return trouvees.sort((a, b) => a.index - b.index)
@@ -319,7 +344,18 @@ const REGLES = [
     // à chaque ligne prise isolément ne voit plus rien du tout.
     portee: 'fichier',
     chercher: chainesEnDur,
-    extensions: ['.tsx'],
+    // `.ts` autant que `.tsx` depuis le lot 2 : le détecteur des constantes
+    // exportées vise précisément les fichiers sans JSX, où le libellé se range
+    // quand on le sort d'un composant.
+    extensions: ['.ts', '.tsx'],
+    // Faux positif MESURÉ le 20/08/2026, et un seul : `export const courbe =
+    // 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'`. C'est une valeur technique, pas
+    // de la copie, et aucune clé i18next ne lui correspondra jamais. La borne
+    // est posée ICI — dans le script, comme celle de `couleur-hors-jetons` —
+    // et jamais par une clé ajoutée à un fichier de configuration d'outil
+    // (D21). Le fichier ne porte aucun JSX : l'exclusion ne coûte rien aux
+    // trois autres détecteurs.
+    exclure: [/src[\\/]ui[\\/]jetons\./],
     message:
       'Aucune chaîne de texte en dur : tout passe par i18next, y compris les erreurs et les états vides — CLAUDE.md § 4.',
   },
@@ -360,14 +396,93 @@ function fichiers(racine) {
   return out
 }
 
+// ---------------------------------------------------------------------------
+// Contrôle transverse : toute source de données est attribuée
+// ---------------------------------------------------------------------------
+
+/** Le catalogue d'attribution. Sa disparition est une PANNE du contrôle, pas
+ * une absence de violation — d'où le CODE_USAGE et non le silence. */
+const CATALOGUE = 'db/SOURCES.md'
+const REFERENTIEL = 'db/referentiel'
+
+/**
+ * Cette règle ne rentre pas dans `REGLES` : les autres cherchent un motif dans
+ * un fichier, celle-ci COMPARE DEUX FICHIERS. Elle s'exécute après la boucle
+ * par fichier et alimente le même tableau `violations` — un seul point de
+ * sortie, un seul format de message.
+ *
+ * `--source <chemin>` la lance sur une cible unique, ce dont l'épreuve du
+ * harnais a besoin : sa fixture vit dans `front/tests/harness/fixtures/`, hors
+ * du parcours, parce qu'une fixture posée dans `db/referentiel/` ferait échouer
+ * `npm run regles` sur le dépôt réel. **L'argument explicite l'emporte donc sur
+ * le périmètre du parcours** — c'est la réponse mesurée à la question de D20
+ * pour cet outil, et c'est la forme voulue : une exclusion qui survit à
+ * l'argument rend la fixture invisible pour sa propre épreuve.
+ */
+function sourcesNonAttribuees(sourceUnique) {
+  const catalogue = resolve(RACINE, CATALOGUE)
+  if (!existsSync(catalogue)) {
+    abandonner(
+      `catalogue introuvable : ${catalogue}. Toute source de ${REFERENTIEL}/ doit y porter ` +
+        'une ligne — nom, source, licence, millésime, date, URL. Sans lui, ce contrôle ' +
+        "n'a plus de cible et ne peut donc rien conclure.",
+    )
+  }
+  const attribution = readFileSync(catalogue, 'utf8')
+  // Le contrôle ne lit pas la source : il compare son NOM au catalogue. Sans
+  // cette garde, `--source db/referentiel/absent.sql` rendait une violation
+  // pour un fichier qui n'existe pas — un refus sincère et faux, la forme
+  // inverse du faux vert (ruling P22). Mesuré le 20/08/2026 en lançant la
+  // commande de l'étape 5 du brief telle qu'elle y est écrite.
+  if (sourceUnique !== null && !existsSync(sourceUnique)) {
+    abandonner(
+      `source introuvable : ${sourceUnique}. --source nomme un fichier existant ; ` +
+        "un chemin mort n'est pas une violation d'attribution.",
+    )
+  }
+  const sources =
+    sourceUnique !== null
+      ? [sourceUnique]
+      : fichiers(REFERENTIEL).filter((f) => extname(f).toLowerCase() === '.sql')
+
+  const out = []
+  for (const f of sources) {
+    const nom = basename(f)
+    if (attribution.includes(nom)) continue
+    out.push({
+      fichier: f,
+      ligne: 1,
+      regle: 'source-non-attribuee',
+      detail: `« ${nom} » n'a aucune ligne dans ${CATALOGUE}`,
+      message:
+        `Toute source de données porte son attribution : ajouter une ligne pour ${nom} dans ` +
+        `${CATALOGUE} — source, licence, version, date de relevé, URL. ` +
+        'docs/17-donnees-sources.md interdit de fusionner des sources aux licences ' +
+        "différentes ; une source non tracée ne peut plus s'en séparer.",
+    })
+  }
+  return { violations: out, nombre: sources.length }
+}
+
 const iFichier = process.argv.indexOf('--fichier')
 if (iFichier !== -1 && process.argv[iFichier + 1] === undefined) {
   abandonner('option --fichier employée sans valeur. Usage : --fichier <chemin depuis la racine>.')
 }
+const iSource = process.argv.indexOf('--source')
+if (iSource !== -1 && process.argv[iSource + 1] === undefined) {
+  abandonner('option --source employée sans valeur. Usage : --source <chemin depuis la racine>.')
+}
+const sourceUnique = iSource !== -1 ? resolve(RACINE, process.argv[iSource + 1]) : null
+
+// `--source` vise le contrôle transverse seul : la boucle par fichier n'a rien
+// à dire d'un `.sql`, et lui faire parcourir tout le front rendrait l'épreuve
+// dépendante de l'état du front.
 const cibles =
-  iFichier !== -1
-    ? [resolve(RACINE, process.argv[iFichier + 1])]
-    : fichiers('front/src').concat(fichiers('front/tests').filter((f) => !f.includes('fixtures')))
+  sourceUnique !== null
+    ? []
+    : iFichier !== -1
+      ? [resolve(RACINE, process.argv[iFichier + 1])]
+      : fichiers('front/src').concat(fichiers('front/tests').filter((f) => !f.includes('fixtures')))
 
 function indexDesLignes(contenu) {
   const debuts = [0]
@@ -426,6 +541,15 @@ for (const f of cibles) {
   }
 }
 
+// Le contrôle transverse tourne APRÈS la boucle par fichier, et jamais sous
+// `--fichier`, qui vise une règle de contenu sur une cible unique.
+let nbSources = 0
+if (iFichier === -1) {
+  const attribution = sourcesNonAttribuees(sourceUnique)
+  nbSources = attribution.nombre
+  violations.push(...attribution.violations)
+}
+
 if (violations.length > 0) {
   console.error(`${violations.length} violation(s) des règles de projet :\n`)
   for (const v of violations) {
@@ -435,4 +559,6 @@ if (violations.length > 0) {
   process.exit(CODE_VIOLATIONS)
 }
 
-console.log(`${cibles.length} fichiers vérifiés, aucune violation des règles de projet.`)
+console.log(
+  `${cibles.length + nbSources} fichiers vérifiés, aucune violation des règles de projet.`,
+)

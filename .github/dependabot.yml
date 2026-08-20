@@ -69,6 +69,21 @@ updates:
   # `github-actions` ne supporte que `default-days` — vérifié dans la référence
   # des options Dependabot, les clés SemVer sont réservées aux écosystèmes qui
   # versionnent en SemVer.
+  # `db/compose.yaml` porte le tag PostgreSQL, et c'est le SEUL endroit du dépôt
+  # où il est écrit (D34). Sans ce bloc, l'image de la base locale resterait sur
+  # une version figée pendant que les correctifs sortent — et la divergence
+  # avec l'instance managée grandirait en silence, ce qu'une base locale existe
+  # précisément pour empêcher.
+  - package-ecosystem: docker-compose
+    directory: /db
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -1,0 +1,51 @@
+# La base locale du développement. UN SEUL service — D33 : le backend reste sur
+# l'hôte, avec `dotnet run`, le débogueur et `dotnet ef` natifs. Pas de
+# Dockerfile, pas de compose de production.
+#
+# Le tag est écrit ICI ET NULLE PART AILLEURS — D34. Le builder Testcontainers
+# de la tâche 5 le LIT dans ce fichier au lieu de le redéclarer : deux
+# déclarations du même tag divergent, et la divergence se ferme par une lecture,
+# jamais par une discipline. `tests-harness/db.test.mjs` parcourt le dépôt pour
+# vérifier qu'aucune seconde déclaration n'est apparue.
+#
+# Pas la variante `alpine`, pour une raison mesurable et non esthétique : musl
+# n'implémente pas LC_COLLATE comme glibc, le tri y est octet par octet, et
+# l'instance managée tourne sur glibc. Un `ORDER BY` sur un nom d'exercice
+# trierait différemment sur le poste et en production — exactement la divergence
+# qu'une base locale existe pour supprimer.
+#
+# Le tag n'est délibérément PAS épinglé par empreinte, contrairement aux actions
+# GitHub de D28 : ce conteneur n'exécute rien qui touche au dépôt et ne voit
+# aucun secret. Sa mutabilité y est un bénéfice — elle apporte les correctifs.
+services:
+  palier-db:
+    image: postgres:18.6
+    # Le mot de passe local reste EN CLAIR ici, et c'est délibéré : il ne donne
+    # accès à rien d'autre qu'à un conteneur vide sur la machine, et gitleaks
+    # l'accepte sous cette forme — mesuré le 20/08/2026.
+    #
+    # Ce qui est refusé, c'est une chaîne de connexion COMPLÈTE dans un fichier
+    # de code : la règle `chaine-connexion-postgres` de `.gitleaks.regles.toml`
+    # la reconnaît, et elle mord. Ces chaînes vont en `dotnet user-secrets` ou
+    # en variable d'environnement, jamais dans `appsettings.Development.json`.
+    #
+    # Le motif exact n'est PAS recopié ici : écrit en toutes lettres dans ce
+    # commentaire, il déclenchait la règle sur ce fichier même — mesuré, et
+    # corrigé en retirant le motif plutôt qu'en élargissant l'exception, qui
+    # aurait rendu la règle aveugle sur tout le dossier.
+    environment:
+      POSTGRES_USER: palier_admin
+      POSTGRES_PASSWORD: motdepasse_local_sans_valeur
+      POSTGRES_DB: palier
+    ports:
+      - '5432:5432'
+    volumes:
+      - palier-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U palier_admin -d palier']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  palier-db-data:

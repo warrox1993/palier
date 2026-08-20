@@ -108,7 +108,9 @@ Ces décisions **remplacent** la pile décrite dans `CLAUDE.md` § 3. Les docume
 
 **Ce que le contrôle ne voit pas, à ce jour :** les dépendances **transitives** (`lightningcss`, MPL-2.0, arrive par Vite 8 et lui échappe). Une comparaison par jetons SPDX a remplacé la comparaison par sous-chaîne, qui acceptait `MITNFA` parce qu'il contient `MIT`.
 
-**À traiter au lot 2 :** `Mediator.SourceGenerator`, retenu par D12, ne publie **pas** d'expression SPDX — le contrôle le refuse aujourd'hui, pour cette raison et non pour sa licence, qui est MIT. Il devra entrer dans `EXCEPTIONS` le jour où CQRS sera implémenté, sans quoi `verify` cassera.
+**~~À traiter au lot 2~~ — amendé le 20/08/2026, en conception du lot 2.** `Mediator.SourceGenerator`, retenu par D12, ne publie **pas** d'expression SPDX — le contrôle le refuse aujourd'hui, pour cette raison et non pour sa licence, qui est MIT. Il devra entrer dans `EXCEPTIONS` le jour où CQRS sera implémenté, sans quoi `verify` cassera. **Or le lot 2 n'installe pas CQRS** : une route de santé ne justifie pas un générateur de source, et D12 prévoit explicitement le repli des « handlers écrits à la main, une cinquantaine de lignes, zéro dépendance ». L'exception **n'est donc pas due au lot 2**, et l'inscrire d'avance créerait une exception sans cible — précisément ce que D24 refuse. Elle est **redatée au lot qui installe réellement le paquet** : au découpage proposé par D43, le lot des cas d'usage, pas avant.
+
+**Ce qui rend ce report inoffensif, et ce qui l'autorise.** L'échéance n'a pas besoin d'être surveillée, parce qu'elle **se signale d'elle-même** : le premier `dotnet restore` qui ramène `Mediator.SourceGenerator` fait échouer l'étape `licences`, donc `verify`, donc `git push`. C'est un report **détectable**, pas un report en silence — et c'est la seule raison pour laquelle il est légitime de le déplacer. Une échéance qu'aucun instrument ne peut déclencher se laisse expirer sans bruit ; c'est le défaut que D30 a mesuré et que D43 corrige pour le calendrier.
 
 **Ce qui la rouvrirait :** rien. Le coût est nul, le risque évité est juridique.
 
@@ -336,3 +338,230 @@ GET  /repos/warrox1993/palier/automated-security-fixes → {"enabled": false}
 **Pourquoi l'écrire plutôt que de le faire.** Écrire un garde-fou sans cible, c'est écrire une branche jamais franchie — le défaut que ce lot a combattu vingt-trois fois. Un contrôle qui n'a rien à contrôler passe au vert et ment. Mieux vaut une dette datée qu'un faux vert.
 
 **Ce qui la rouvrirait :** le premier écran. Si le lot 2 se termine sans ces trois livrables, cette décision a échoué et il faut le dire au lieu de la reconduire.
+
+---
+
+# Décisions de conception du lot 2 — 20/08/2026
+
+Ces décisions ont été prises **en conception**, avant toute ligne de code du socle de données, et chacune a été mesurée sur le dépôt ou vérifiée à la source. Elles se lisent avec deux avertissements.
+
+**Quatre d'entre elles portent un arbitrage qui ne m'appartient pas** — D33 (activer WSL2 ou Hyper-V), D37 (`FORCE ROW LEVEL SECURITY`), D39 (l'écart au « schéma complet » de la feuille de route) et D42 (Tailwind). L'arbitrage est nommé dans l'entrée, avec ce qu'il coûte de trancher dans un sens et dans l'autre. **Tant qu'il n'est pas rendu, la décision est proposée, pas prise.**
+
+**D36 a été soumise à un jury de trois lentilles adversariales.** Les trois l'ont retenue — et les trois ont exigé des amendements bloquants avant adoption, parce que son plan de vérification réintroduisait en silence le mode de défaillance qu'elle prétendait supprimer. Ces amendements sont inscrits dans l'entrée, au même rang que la solution. Une décision qui cache son mode de défaillance est pire qu'une décision absente.
+
+## D32 — Arborescence à trois racines : `front/`, `back/`, `db/`. Les migrations restent dans `back/`
+
+**Tranché le :** 20/08/2026, en conception. La séparation `front` / `back` / `db` a été demandée par le porteur du projet ; l'emplacement des migrations est l'arbitrage technique qui en découle.
+
+**Tranche :** `db/` est créé et porte exactement `compose.yaml`, `amorcage/` (rôles et privilèges), `referentiel/` (données de production — EFSA, exercices, programmes), `demonstration/` (jeu de développement synthétique), `SOURCES.md` (licence, version et date, fichier par fichier) et `README.md` (lever, appliquer, réinitialiser, sauvegarder). **Aucun `.csproj` sous `db/`.** Les migrations EF Core, le `DbContext`, les entités et les tests de politiques restent sous `back/Palier.Infrastructure/Migrations/` et `back/Palier.Database.Tests/`. Le SQL de `db/referentiel/` atteint les migrations par `<EmbeddedResource Include="..\..\db\referentiel\*.sql" />` dans `Palier.Infrastructure.csproj` — effet de bord voulu : si un fichier de référentiel disparaît, la compilation échoue au lieu de produire un schéma sans limites hautes EFSA.
+
+**Motif :** mesuré configuration par configuration. Un `db/` de SQL, YAML et Markdown n'oblige à toucher que **trois** fichiers : `format:scripts` dans `package.json`, un bloc `docker-compose` dans `.github/dependabot.yml`, un bloc `[*.sql]` dans `.editorconfig`. Un `db/` portant un `.csproj` en casse **cinq de plus, dont deux en silence** — les deux ont été relus dans le dépôt le 20/08/2026 :
+
+| Ce qui casserait en silence                                                            | Ce qui a été lu                                                                                  |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `scripts/verifier-licences.mjs` parcourt littéralement `parcourir('back')` (ligne 196) | un projet sous `db/` échapperait **entièrement** au contrôle de licences de D13, sans un message |
+| `.gitignore` n'ignore que `back/**/bin/` et `back/**/obj/` (lignes 6-7)                | les binaires de `db/` deviendraient des fichiers suivis au premier `git add -A`                  |
+
+Sur un projet dont la leçon centrale du lot 1 est « un fichier de configuration juste dont le périmètre est faux ne dit rien » (D21, D24, D30), ajouter deux angles morts pour gagner un rangement est le mauvais échange.
+
+**Ce qui a été écarté :** le déplacement des migrations vers un projet séparé. Il est supporté par EF Core, mais impose `MigrationsAssembly(...)`, un `IDesignTimeDbContextFactory` et deux options sur chaque commande — et si `MigrationsAssembly` manque, EF ne trouve aucune migration et **n'échoue pas** : il croit la base à jour. Le bénéfice que Microsoft donne à ce montage (projet de démarrage spécifique à une plateforme, ou plusieurs jeux de migrations) n'existe dans aucun des deux cas de `palier`.
+
+**Ce qui la rouvrirait :** un second jeu de migrations (une base de recette au schéma distinct), ou EF Core 11 stable, qui apporte `.config/dotnet-ef.json` et supprime le coût ergonomique des deux options — au 20/08/2026 `Microsoft.EntityFrameworkCore` est stable en 10.0.11 et 11.0.0 n'existe qu'en `preview.7` (relevé sur api.nuget.org).
+
+## D33 — Docker : oui, au lot 2, et pour PostgreSQL seul
+
+**Tranché le :** 20/08/2026. Docker a été demandé par le porteur du projet en séance ; son **périmètre** est tranché ici.
+
+**Tranche :** deux usages, pas un de plus — `db/compose.yaml` avec **un seul service** PostgreSQL pour le développement, et `Testcontainers.PostgreSql` pour les tests d'intégration. **Pas** de conteneur pour le backend en développement : `dotnet run` et `dotnet watch` restent sur l'hôte, avec le débogueur et `dotnet ef` natifs. **Pas** de `Dockerfile`. **Pas** de compose de production. L'image de production se fabriquera au lot 9 par `dotnet publish --os linux --arch x64 /t:PublishContainer`, qui produit une image OCI sans Dockerfile et sans démon quand on sort un tarball ; un `Dockerfile` ne sera écrit que si un besoin précis du lot 9 l'exige, et il sera alors **connu** au lieu d'être supposé.
+
+**Motif :** ce n'est pas une préférence de confort, c'est une dépendance. `docs/08-workflow.md` § 6 fait du « test RLS vert pour chaque table » un **critère de sortie**, et `docs/03-donnees.md` § RLS explique pourquoi il compte double depuis D9 : le chemin nominal passant par l'API, **plus aucun test fonctionnel ne franchira RLS**. Ce test exige un vrai moteur, un rôle restreint et une seconde connexion — sans Docker, le lot 2 ne peut pas être déclaré terminé, et une défense en profondeur que rien n'éprouve est une défense qu'on croit avoir. À l'inverse, conteneuriser le backend en développement coûte des heures d'installation puis des secondes à chaque itération, pour un bénéfice de parité qui n'arrive qu'au lot 9 — et `docs/08-workflow.md` § 5 est explicite : « Si le build prend deux minutes, l'agent tourne en rond. »
+
+**Le coût en argent est nul, et c'est vérifié.** Le porteur du projet a demandé une solution gratuite. Docker Desktop l'est sous **deux** seuils cumulés — moins de 250 salariés **et** moins de 10 M$ de revenu annuel ; un indépendant, puis une SRL naissante, sont dedans sans ambiguïté. Le client 29.6.2 et Compose v5.3.1 sont déjà installés sur le poste (mesuré le 20/08/2026).
+
+**Ce qui a été écarté, et ce que cela laisse ouvert :** Podman Desktop et Rancher Desktop suppriment la question de licence **pour toujours**, au prix d'une configuration de Testcontainers (`DOCKER_HOST` vers la socket Podman, `TESTCONTAINERS_RYUK_DISABLED=true` en rootless). Le seuil contractuel de Docker Desktop reste donc une chose à surveiller, et le moment de le refuser est maintenant, pas dans deux ans.
+
+**Conséquence à ne pas édulcorer :** `scripts/verify.mjs` lance `dotnet test back/Palier.sln` sur la **solution entière**. Dès que `Palier.Database.Tests` y entre, `npm run verify` — donc `git push`, puisque `.husky/pre-push` n'appelle que lui — exige un moteur de conteneurs, **sans qu'aucune ligne de `verify.mjs` ait changé**. Le refuser demanderait un `--filter`, c'est-à-dire une seconde liste de contrôles, exactement ce que D25 existe pour empêcher. Le hook de **pré-commit**, lui, ne lance que lint-staged et gitleaks : Docker n'est nécessaire qu'au moment du push.
+
+**Arbitrage à confirmer par le porteur du projet — bloquant, et personne d'autre ne peut le rendre.** Mesuré le 20/08/2026 sur le poste : `Microsoft-Windows-Subsystem-Linux` et `Microsoft-Hyper-V` sont en `InstallState 2` (désactivés), seul `VirtualMachinePlatform` est actif, et `wsl --status` rend « n'est pas installé ». Activer l'un des deux demande des **droits administrateur et un redémarrage**. Ce que coûte de le faire : une soirée, une fois. Ce que coûte de ne pas le faire : **tout le lot 2 tombe**, puisque le test RLS sur un vrai moteur est son critère de sortie. Et rien ne le signale aujourd'hui — `docker --version` répond parfaitement pendant que le démon est injoignable, ce qui est précisément la classe de faux vert de D30.
+
+**Ce qui la rouvrirait :** l'arrivée d'un second développeur — l'argument « il n'installe rien d'autre que Docker » redevient réel et la conteneurisation du backend en développement reprend de la valeur ; ou un besoin de configuration au lot 9 que `dotnet publish /t:PublishContainer` n'expose pas (utilisateur non-root, paquets système, ordre des couches).
+
+## D34 — PostgreSQL 18.6, image Debian, un seul endroit où le tag est écrit
+
+**Tranché le :** 20/08/2026, en conception.
+
+**Tranche :** `image: postgres:18.6` dans `db/compose.yaml`. **Pas la variante `alpine`.** Le builder Testcontainers **lit ce tag dans le compose** au lieu de le redéclarer. La version majeure de production sera la 18, et le local copie la production, jamais l'inverse.
+
+**Motif :** mesuré le 20/08/2026 sur la page « Capabilities and Limitations » des Public Cloud Databases d'OVHcloud (dernière mise à jour du 28/05/2026) : les versions offertes sont **14, 15, 16, 17 et 18**. `gen_random_uuid()`, employé partout dans le schéma de `docs/03-donnees.md`, est en cœur depuis la 13, sans extension à installer.
+
+**Ce qui a été écarté :** `alpine`, pour une raison mesurable et non esthétique. musl n'implémente pas `LC_COLLATE` comme glibc, le tri y est octet par octet, et l'instance managée tourne sur glibc — un `ORDER BY` sur un nom d'exercice trierait différemment sur le poste et en production, c'est-à-dire exactement la divergence qu'une base locale existe pour supprimer. Écarté aussi : redéclarer le tag dans le builder Testcontainers. Deux déclarations du même tag divergent — c'est le défaut nommé par D25, et il se ferme par une **lecture** plutôt que par une discipline.
+
+**Ce qui n'est délibérément pas étendu :** D28 épingle les actions GitHub par empreinte parce qu'une étiquette mutable y exécute du code avec accès au dépôt et aux secrets. Le conteneur PostgreSQL n'exécute rien qui touche au dépôt et ne voit aucun secret ; la mutabilité du tag `18.6` y est un **bénéfice**, puisqu'elle apporte les correctifs. L'épinglage par empreinte reste possible et n'est refusé par rien.
+
+**Ce qui la rouvrirait :** OVHcloud retirant la 18 de son offre, ou le choix d'une version de production différente au lot 9 — auquel cas le compose et Testcontainers suivent, dans ce sens et jamais l'inverse.
+
+## D35 — La clé d'`AspNetUsers` est un `uuid`, et les tables d'identité naissent au lot 2
+
+**Tranché le :** 20/08/2026, en conception.
+
+**Tranche :** `Utilisateur : IdentityUser<Guid>` et `PalierDbContext : IdentityDbContext<Utilisateur, IdentityRole<Guid>, Guid>`. Les **14** clauses `references auth.users` de `docs/03-donnees.md` deviennent `references "AspNetUsers"("Id")`, en `uuid`, et tous les `owner_id` restent `uuid`. Les tables `AspNet*` sont **créées** par la migration `SocleInitial` du lot 2 ; aucune ligne de code d'authentification n'est écrite — cela reste le lot 4.
+
+**Motif :** ferme le point 2 de « Ce qui n'est pas tranché ici » de `docs/03-donnees.md`, qui l'exige « à arbitrer **avant la première migration** ». `uuid` plutôt que le `text` que produit la configuration par défaut d'Identity, pour trois raisons cumulées : le schéma entier de `docs/03-donnees.md` est en `uuid` avec `gen_random_uuid()` ; la spec d'architecture du 19/08 § 8 prévoit des identifiants UUID v7 générés côté client pour l'idempotence de la file de retry ; et un `owner_id` en `text` alourdit tous les index de jointure du produit, dont `workouts (owner_id, started_at desc)`.
+
+**Pourquoi au lot 2 et non au lot 4 :** créer les tables d'identité maintenant évite une reprise de schéma portant sur **quatorze** clés étrangères — et `CLAUDE.md` § 6 interdit de changer le schéma seul après la première mise en production. Le type de la clé est la seule chose qui doive être tranchée une fois pour toutes ; le reste du schéma peut s'étaler, et D39 l'étale.
+
+**Ce qui la rouvrirait :** rien. Après la première migration appliquée en production, un changement de type de clé primaire n'est plus une décision : c'est une migration de données, et elle se traite comme telle.
+
+## D36 — L'identité parvient au moteur par `set_config('app.utilisateur', $1, true)`, en portée transaction, doublée d'une garde applicative
+
+**Tranché le :** 20/08/2026, en conception, **après un jury de trois lentilles adversariales**. Les trois ont retenu le mécanisme ; les trois ont exigé des amendements bloquants avant adoption. Ils sont intégrés à la tranche ci-dessous, et le mode de défaillance qu'ils ont mis au jour est écrit plus bas, au même rang que la solution.
+
+**Tranche — six pièces, dont aucune n'est optionnelle.**
+
+1. Chaque cas d'usage — **commandes ET requêtes** — s'exécute dans une transaction ouverte par un comportement du pipeline `Palier.Application`, et l'identité est posée juste après le `BEGIN` par `select set_config('app.utilisateur', {identifiant}, true)`, l'identifiant en **paramètre lié** (`Guid.ToString()`, jamais un `uuid` — `set_config` attend un `text` en deuxième argument, et un `Guid` passé en paramètre EF part en `uuid` et ne trouve pas la fonction).
+2. Le comportement **refuse avant d'ouvrir la transaction** quand l'identité manque, avec le nom du cas d'usage dans le message. La fonction SQL est le filet, jamais le garde unique.
+3. Côté base, **deux** accesseurs, dans un schéma `app` : `app.utilisateur()` qui **lève** (`errcode 28000`, message sans aucune valeur) pour les tables strictement privées, et `app.utilisateur_ou_null()` qui rend `NULL`, réservé aux tables à branche publique.
+4. Les politiques appellent l'accesseur **enveloppé dans un sous-select** — `using (owner_id = (select app.utilisateur()))` — pour forcer une évaluation unique par instruction plutôt qu'une par ligne.
+5. Le pipeline passe par `Database.CreateExecutionStrategy().ExecuteAsync(...)`.
+6. `idle_in_transaction_session_timeout` est posé sur le rôle applicatif.
+
+**Motif :** c'est le seul des mécanismes comparés dont le nettoyage est garanti par le **moteur** et non par le pilote. Vérifié mot pour mot à la source (postgresql.org/docs/17, `functions-admin.html`) : « If `is_local` is `true`, the new value will only apply during the current transaction. » Aucune valeur ne peut survivre au `COMMIT` ni au `ROLLBACK`, quels que soient `No Reset On Close`, le multiplexing d'Npgsql, ou un pool PgBouncer en mode transaction — que la documentation OVHcloud propose et décrit par ses propres mots comme « the default transaction-based pooling », et où la matrice des fonctionnalités de PgBouncer marque `SET/RESET` comme « Never ». **La défaillance possible est donc l'identité absente, jamais l'identité d'un autre.** C'est le faux vert que le lot 1 a chassé vingt-trois fois, appliqué cette fois à des données de l'article 9.
+
+Le point 5 est une obligation, pas une précaution — Microsoft Learn, _Connection Resiliency_, vérifié : « if your code initiates a transaction using `BeginTransactionAsync()` … You will receive an exception … does not support user-initiated transactions. Use the execution strategy returned by `DbContext.Database.CreateExecutionStrategy()`. » Le jour où quelqu'un activera `EnableRetryOnFailure` sur une base managée qui clignote, **toutes** les requêtes lèveraient d'un coup. Le point 6 borne le scénario où un cas d'usage appelant un modèle laisserait une transaction ouverte pendant l'appel réseau.
+
+**Ce qui a été écarté, et pourquoi.**
+
+| Écarté                                                        | Pourquoi                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Un paramètre posé au bail de connexion, en **portée session** | Le nettoyage dépend du pilote. Npgsql l'assure par `DISCARD ALL` — mais sa propre documentation Performance précise que ces instructions « aren't actually sent when closing the connection — they're written into Npgsql's internal write buffer ». `No Reset On Close`, le multiplexing ou un PgBouncer en mode transaction l'annulent. La fuite est alors **l'identité d'autrui** : ni erreur, ni journal, ni test rouge                                                                 |
+| `SET ROLE` par utilisateur                                    | Même portée session, même dépendance au pilote, et un objet de catalogue par compte                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `SET LOCAL app.utilisateur TO '<guid>'`                       | Sa localité est **syntaxique** : elle ne peut pas être fausse, ce qui est un avantage réel sur `set_config(…, true)`. Mais `SET LOCAL` n'accepte pas de paramètre lié — il faudrait concaténer un identifiant dans du SQL, sur le chemin qui existe précisément pour se protéger de l'injection. L'arbitrage réel est **« argument lié » contre « localité syntaxique »** ; il est tranché en faveur du premier, et il n'est légitime **que si la localité est éprouvée** (voir ci-dessous) |
+
+**Le mode de défaillance, nommé au lieu d'être caché.** C'est la trouvaille du jury, et elle vise l'argument central.
+
+1. **Toute la sûreté du dispositif tient à un littéral booléen dans une ligne de C#, que rien ne regardait.** Avec `false` au lieu de `true`, la valeur persiste en **session** et l'on retombe exactement sur le mécanisme écarté ci-dessus : fuite silencieuse entre utilisateurs dès que le pool réutilise la connexion. Les sept épreuves initialement proposées **passent toutes au vert avec `false`** — y compris celle qui semblait décisive (« deux requêtes successives, deux identités, sur la même connexion physique »), parce que la seconde requête pose sa propre identité, écrase la précédente, et ne voit que ses lignes. Test vert, mécanisme cassé. **L'épreuve qui discrimine est obligatoire :** une seule connexion physique (`Pooling=false`) ; `BEGIN` / `set_config(<A>, true)` / `select` / `COMMIT` ; puis, sur la **même** connexion et sans rien poser, `select current_setting('app.utilisateur', true)` **doit** rendre `NULL` ou vide, et une lecture d'une table **non vide doit** lever `28000`. Cette épreuve rougit sur `false`. Aucune des sept ne le faisait.
+2. **« L'échec crie » est faux sur une table vide, et il faut cesser de l'écrire sans réserve.** `ddl-rowsecurity.html`, vérifié : l'expression d'une politique « will be evaluated **for each row** prior to any conditions or functions coming from the user's query ». Zéro ligne parcourue → zéro évaluation → **aucune exception**. Sur un compte neuf, une table fraîchement créée, les premiers jours de production, « identité absente » et « cet utilisateur n'a pas de données » redeviennent indiscernables. Pire, la loudness devient **dépendante du plan d'exécution** : sur un parcours d'index, le planificateur peut hisser la fonction `stable` en clé de parcours et l'évaluer une fois au démarrage — donc lever même sur table vide ; en parcours séquentiel sur table vide, non. **Une propriété de sécurité qui dépend du plan n'est pas une propriété.** D'où le point 2 de la tranche — la garde applicative en amont — et d'où l'obligation d'une épreuve **sur table vide** en plus de l'épreuve sur table peuplée.
+3. **L'épreuve « sans identité → erreur SQL » est vraie sur certaines tables et fausse sur d'autres.** Sur les tables à branche publique (`exercises`, `foods`, `nutrient_refs`), la politique est de la forme `is_custom = false or owner_id = (select app.utilisateur())`, et PostgreSQL court-circuite le `OR` de gauche à droite : sur une ligne publique, l'accesseur **n'est jamais appelé**, aucune exception, les lignes sortent. C'est le comportement voulu, mais il impose que **chaque épreuve nomme la table sur laquelle elle porte** — sinon la même épreuve prouve deux choses contradictoires selon ce qu'on lui donne.
+
+**Ce que cette décision n'achète pas.**
+
+- **Elle ne protège pas de l'injection SQL.** Un SQL injecté peut reposer `app.utilisateur`. La phrase de `docs/03-donnees.md` § RLS qui range « une injection SQL ou une requête brute » parmi ce que RLS protège est trop généreuse : RLS y protège du **filtre oublié**, pas de l'attaquant délibéré. C'est du contenu métier — la correction est **soumise au porteur du projet**, pas appliquée en silence.
+- **Elle n'empêche pas structurellement un chemin sans transaction.** Un `DbContext` utilisé hors pipeline — `IHostedService`, tâche de fond, contrôle de santé, file de rejeu, migration au démarrage — n'ouvre pas de transaction, donc ne pose pas d'identité : bruyant sur table peuplée, **silencieux sur table vide** (point 2 ci-dessus). Un test d'architecture interdisant l'usage de `DbContext` hors des handlers ferme la classe entière et coûte une heure ; il est au plan du lot 2. C'est la différence entre « le pipeline le fait » et « rien d'autre ne peut le faire ».
+
+**Ce que cette décision réécrit :** la ligne « **Transaction — les commandes seulement, jamais les requêtes** » de `docs/superpowers/specs/2026-08-19-architecture-backend-csharp-design.md` § 5, ligne 108. Elle est incompatible avec ce mécanisme, et la laisser produirait une politique qui mord sur les écritures et disparaît sur les lectures — le chemin le moins dangereux gardé, le plus dangereux ouvert.
+
+**Ce que cela coûte :** **trois** allers-retours par cas d'usage (`BEGIN`, `set_config`, `COMMIT`), pas un.
+
+**Ce qui la rouvrirait :** la mesure d'un surcoût inacceptable sur l'instance OVHcloud réelle — à mesurer contre le plafond de 100 ms de `docs/08-workflow.md` § 6, pas à supposer. Ou une version de PostgreSQL offrant nativement une identité de session à portée transaction.
+
+## D37 — Trois rôles PostgreSQL, trois chaînes de connexion, `FORCE ROW LEVEL SECURITY`, et une assertion contre la base réelle
+
+**Tranché le :** 20/08/2026, en conception — **sauf `FORCE`, qui reste un arbitrage à confirmer** (voir plus bas).
+
+**Tranche :** trois rôles, tous **non superutilisateurs**.
+
+| Rôle                | Ce qu'il est                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `palier_migrations` | propriétaire des tables, sans `BYPASSRLS`, utilisé par `dotnet ef database update` et le seed, **jamais** par l'API |
+| `palier_app`        | l'API — ne possède aucun objet, sans `BYPASSRLS`, `NOCREATEDB NOCREATEROLE`, privilèges accordés objet par objet    |
+| `palier_sauvegarde` | `pg_dump` / `pg_restore` — seul candidat à `BYPASSRLS`                                                              |
+
+`back/.env.example`, **qui n'existe pas encore dans le dépôt** (vérifié le 20/08/2026 : seul `front/.env.example` est présent ; `docs/16-projet.md` § 3 le _documente_, il n'est pas écrit), est créé et porte les trois : `ConnectionStrings__Palier`, `ConnectionStrings__PalierMigrations`, `ConnectionStrings__PalierSauvegarde`. `alter table … force row level security` sur toute table portant des données personnelles. Et l'API **refuse de démarrer** si l'une de trois requêtes de catalogue échoue : `rolsuper` ou `rolbypassrls` vrai sur `current_user` ; `current_user` propriétaire d'une table de `public` ; une table de `public` sans `relrowsecurity` **et** `relforcerowsecurity`.
+
+**Motif :** « Superusers and roles with the `BYPASSRLS` attribute always bypass the row security system when accessing a table. Table owners normally bypass row security as well » (`ddl-rowsecurity.html`, vérifié). Sans deux rôles distincts, les migrations créent les tables, le rôle qui les a créées en est propriétaire, et **toutes les politiques ne font rien** — silencieusement. C'est ce que `docs/03-donnees.md` § RLS désigne déjà comme « la première chose à éprouver, avant les politiques elles-mêmes ».
+
+**L'assertion au démarrage est le cœur de la décision, et elle vient de D30.** Sept épreuves vertes sur un Testcontainer ne démontrent rien sur l'instance OVHcloud, où deux inconnues décident si RLS mord **du tout** : le compte d'administration a-t-il `BYPASSRLS`, et les tables créées par les migrations appartiennent-elles au rôle de l'API ? La page « Capabilities » d'OVHcloud dit que la création d'utilisateurs par le Panneau de contrôle et l'API se fait « with default admin roles and privileges » et que « the only specific privilege you can set is `replication` » : le rôle applicatif restreint **ne peut donc pas** être créé par l'interface OVH, il l'est par SQL depuis le compte d'administration. Une assertion au démarrage est la seule preuve qui porte sur le **traitement** plutôt que sur le code — c'est ce qu'un auditeur peut lire, et c'est ce que D30 laisse explicitement « à traiter au lot 2 ».
+
+**Arbitrage à confirmer par le porteur du projet : `FORCE ROW LEVEL SECURITY`, oui ou non, avec le prix sur la table.**
+
+- **Sans lui**, un accès direct sous le rôle propriétaire n'est pas protégé — c'est la **première** des trois familles que `docs/03-donnees.md` nomme (outil d'administration, restauration, identifiants fuités, tâche lancée à la main sur le VPS).
+- **Avec lui**, le propriétaire cesse de contourner RLS, et la sauvegarde change de nature. `pg_dump` pose `row_security = off` et « If the user does not have sufficient privileges to bypass row security, then an error is thrown » (`app-pgdump.html`, vérifié) ; `--enable-row-security` impose un dump au format `INSERT`, puisque « the COPY FROM during restore does not support row security ». Il faut donc un rôle `BYPASSRLS`, dont la création exige un superutilisateur ou un rôle qui le porte déjà.
+- **Et ce point n'est pas mesurable avant d'avoir une instance.** L'offre OVHcloud repose sur Aiven, dont le compte d'administration n'est pas superutilisateur, et « Only superuser roles or roles with `BYPASSRLS` can specify `BYPASSRLS` » (`sql-createrole.html`). Le lot 2 mesure la branche « dump réussi » sur Testcontainers ; si elle n'est pas obtenue, l'arbitrage revient au porteur **avec le prix connu, pas en découverte**.
+
+**Ce que `FORCE` coûte, quel que soit l'arbitrage :** la sauvegarde et la restauration deviennent un **livrable éprouvé du lot 2**, et non une promesse trimestrielle qui rencontrerait ce mur au pire moment (`docs/14-contenu.md` § 7 : « Une sauvegarde jamais restaurée n'est pas une sauvegarde »). Le seed, lancé sous le rôle propriétaire, est concerné au même titre — et les deux corrections réflexes, accorder `BYPASSRLS` au rôle de migration ou retirer `FORCE` le temps du seed, sont **exactement les deux façons d'éteindre RLS sans que rien ne le signale**. Le chemin du seed se conçoit, avec son épreuve.
+
+**Ce qui la rouvrirait :** la constatation, sur l'instance OVHcloud réelle, qu'aucun rôle `BYPASSRLS` n'est créable. Dans ce cas `FORCE` s'échange contre la capacité de dumper la base, et l'arbitrage revient au porteur.
+
+## D38 — Les tables d'identité naissent en refus par défaut ; leur chemin d'accès est conçu au lot 4
+
+**Tranché le :** 20/08/2026, en conception.
+
+**Tranche :** `enable row level security` **et** `force row level security` sur les tables `AspNet*`, et **aucune politique**. Conséquence assumée et éprouvée : `palier_app` ne lit et n'écrit strictement rien dans ces tables.
+
+**Motif :** « If no policy exists for the table, a default-deny policy is used, meaning that no rows are visible or can be modified » (`ddl-rowsecurity.html`, vérifié).
+
+**Ce qui a été écarté :** ne pas mettre RLS sur les tables d'identité, ou y poser une politique `using (true)`. La parade est évidente et elle est mauvaise — elle ferait de la **seule table sans barrière de ligne** celle qui portera les empreintes de mots de passe, les secrets TOTP, les jetons de rafraîchissement et les sessions ; c'est-à-dire l'endroit où un filtre oublié ou un `FromSqlRaw` produirait la fuite la plus coûteuse du produit, et le seul où la défense en profondeur serait absente.
+
+**Ce que cela bloque, et qui est le but :** le chemin de connexion lit `AspNetUsers` par email **avant** que la moindre identité existe ; il ne peut donc pas passer par `app.utilisateur()`. Avec le refus par défaut, il **casse — fermé et bruyant**, donc jamais en fuite. Le lot 4 doit concevoir ce chemin explicitement : rôle dédié avec sa politique, ou fonction `SECURITY DEFINER` au périmètre minimal, jamais une pose de l'identité d'autrui. Poser le refus au lot 2 garantit qu'il sera **conçu** et non découvert au premier `dotnet ef database update`.
+
+**Contradiction signalée, pas résolue en silence :** `docs/08-workflow.md` § 6 exige « test RLS vert pour **chaque** table ». Les tables d'identité, les catalogues publics et les tables possédées par jointure n'entrent pas dans le modèle « A ne lit jamais une ligne de B ». La liste des tables hors de ce modèle doit être **nommée** dans `docs/03-donnees.md`, avec la forme de politique de chacune — sinon la même épreuve prouve deux choses contradictoires selon la table. C'est du contenu métier : soumis au porteur, pas tranché ici.
+
+**Ce qui la rouvrirait :** le lot 4, obligatoirement. Cette décision est une porte fermée avec son écriteau, pas une position définitive.
+
+## D39 — Le schéma arrive par tranches, avec le cas d'usage qui l'exige
+
+**Tranché le :** 20/08/2026, en conception. **Arbitrage à confirmer par le porteur du projet — sans sa validation explicite, cette décision n'est pas prise.**
+
+**Tranche :** la migration `SocleInitial` du lot 2 porte **six** tables, pas les dix-neuf : les tables d'identité, `nutrient_refs` (référence en lecture publique), `exercises` (catalogue public et personnalisé, `owner_id` nullable), `workouts` (possédée directe), `sets` (possédée par jointure), `body_weight` (possédée directe, avec `unique (owner_id, measured_on)`). Plus une vue (`weekly_volume`, écrite par `migrationBuilder.Sql(...)` avec son `Down`), une contrainte `CHECK` (`energy_1_5 between 1 and 5`, déjà au schéma) et deux index du schéma (`workouts (owner_id, started_at desc)` et `sets (workout_id)`). Les treize autres tables arrivent au lot qui les utilise.
+
+**Motif :** `docs/08-workflow.md` § 6 exige un test de politique par table. Dix-neuf tables migrées d'un bloc, ce sont dix-neuf tests RLS sur des tables qu'aucun cas d'usage n'exerce — **du garde-fou sans cible**, exactement ce que D31 refuse et ce que le lot 1 a passé sa journée à combattre. Une migration EF Core est additive : poser une table au moment du besoin ne coûte rien, à la condition que le **type de la clé** soit tranché une seule fois, ce que D35 fait.
+
+**Et la tranche n'est pas arbitraire :** elle contient une représentante de chacune des **cinq formes de table** du schéma — identité, référence publique, catalogue mixte, possédée directe, possédée par jointure. Chaque forme de politique est donc éprouvée dès le lot 2, et le lot suivant ajoute des tables sans inventer de mécanisme.
+
+**Ce que l'arbitrage coûte, dans les deux sens.** Trancher **pour** la tranche : un écart assumé à `docs/07-roadmap.md` étape 1, qui dit « schéma complet », et `CLAUDE.md` § 5 range la feuille de route **au-dessus** de `CLAUDE.md` — l'écart doit donc être écrit dans la feuille de route, pas seulement ici. Trancher **contre** : dix-neuf tables et dix-neuf tests de politiques au lot 2, dont treize sans aucun cas d'usage pour les exercer, sur un lot dont le critère de sortie est déjà « chaque épreuve vue rouge en provoquant sa violation ».
+
+**Ce qui la rouvrirait :** le porteur du projet, qui seul peut valider cet écart.
+
+## D40 — Aucune donnée de production sur un poste de développement
+
+**Tranché le :** 20/08/2026, en conception.
+
+**Tranche :** interdiction de restaurer un dump de la base de production, ou tout extrait de celle-ci, sur une machine de développement ou dans un volume Docker local. Le développement se fait sur `db/demonstration/`, entièrement synthétique. Toute enquête sur des données réelles se fait sur le serveur, sous journalisation.
+
+**Motif :** c'est le seul chemin par lequel des données de l'article 9 atterriraient dans un volume Docker sur un portable Windows que le projet ne chiffre pas et ne supervise pas. **Aucun document du dossier ne le dit** — cherché dans `01-conformite.md`, `12-confort.md`, `13-juridique.md`, `14-contenu.md` et `16-projet.md`. Or le seed est entièrement synthétique (EFSA, CIQUAL, contenus rédigés) : l'interdiction ne coûte **rien aujourd'hui**, où la base est vide, et se paierait très cher si elle arrivait après le premier incident. Elle entre à l'AIPD comme mesure **organisationnelle**, aux côtés des mesures techniques de D36 et D37.
+
+**Ce que cela ne protège pas :** rien ne l'empêche mécaniquement. C'est une règle, pas un verrou — comme pour D29, la différence entre une alarme et une barrière reste entière, et elle se comble par la discipline d'une seule paire de mains.
+
+**Ce qui la rouvrirait :** rien. Un besoin de reproduction sur données réelles se traite par un jeu anonymisé produit **sur le serveur**, jamais par un dump rapatrié.
+
+## D41 — L'écran d'état est un instrument, et sa fin de vie est datée
+
+**Tranché le :** 20/08/2026, en conception.
+
+**Tranche :** `front/src/features/etat/` livre un écran qui lit `GET /api/v1/sante` et porte ses quatre états : chargement, vide (schéma migré, référentiel non chargé), erreur (conteneur arrêté), contenu. Il n'affiche aucune donnée de santé et aucun compte. Il n'entre pas au périmètre V1 de `docs/00-produit.md`. Au lot 4 il passe derrière l'authentification et un rôle d'administration ; **au lot 6, la question « le garde-t-on ou le supprime-t-on » est reprise explicitement et tranchée**, pas laissée à l'inertie.
+
+**Motif :** D31 exige trois livrables « avec le premier écran du lot 2, pas après lui », et dit d'elle-même que les reconduire serait son échec. L'écran d'état est le plus petit écran qui ait honnêtement quatre états, et surtout le seul dont l'état d'erreur se **provoque** — `npm run db:down`, recharger — au lieu de se simuler. C'est la seule forme d'épreuve que ce projet accepte : provoquer l'absence, pas seulement constater la présence.
+
+**Ce qui a été écarté :** un écran produit (séance, nutrition). Il ne peut pas être livré au lot 2, puisqu'il suppose l'authentification et le domaine ; et le construire contre une donnée simulée produirait une épreuve qui garde un **simulacre** — une marche au-dessus du défaut que D31 voulait éviter.
+
+**Ce que cela coûte :** un écran hors périmètre V1 vit sur un domaine public jusqu'au lot 4. C'est le prix de l'échéance, et c'est pourquoi elle est datée.
+
+**Ce qui la rouvrirait :** le lot 6, obligatoirement. Sans cette échéance écrite, l'écran resterait par inertie.
+
+## D42 — Pas de Tailwind au lot 2 ; les jetons vivent dans `front/src/ui/jetons.ts` et en variables CSS
+
+**Tranché le :** 20/08/2026, en conception. **C'est un choix par défaut, valable jusqu'à réponse du porteur du projet — arbitrage à confirmer.**
+
+**Tranche :** `front/src/ui/jetons.ts` exporte les dix couleurs, l'échelle typographique 11/13/15/19/24/30/38, la base 4 px, le rayon 2 px, la zone tactile de 48 px de `docs/02-design.md` § 4, et les trois durées avec la courbe de D8 ; il génère les variables CSS que consomment les feuilles de style.
+
+**Motif :** `CLAUDE.md` § 3 annonce Tailwind dans la pile, mais `CLAUDE.md` § 6 classe l'ajout d'une **dépendance lourde** parmi ce qui ne se tranche pas seul. Et le coût technique n'est pas neutre : la règle `couleur-hors-jetons` de `scripts/regles-projet.mjs` cherche un motif `#RRGGBB` dans les `.ts`, `.tsx` et `.css` ; des classes utilitaires Tailwind n'en portent aucun, et la règle deviendrait **aveugle sans rien signaler** — la classe de défaut de D21.
+
+**Ce que l'arbitrage coûte, dans les deux sens.** Ne rien installer laisse les deux voies ouvertes et ne ferme rien ; le prix est d'écrire des feuilles de style à la main jusqu'au lot 6. Installer Tailwind au lot 2 ferme la voie inverse **au moment où l'on a le moins d'information** — un seul écran — et oblige à réécrire `couleur-hors-jetons` pour qu'elle voie encore quelque chose, sans quoi la règle passe au vert en ne contrôlant rien.
+
+**Ce que cette décision répare accessoirement :** `front/src/ui/jetons.ts` est exactement la cible que la règle attend déjà par son exclusion `/src[\\/]ui[\\/]jetons\./` (ligne 299, lue le 20/08/2026) — et ce fichier **n'existe pas**. Aujourd'hui, `couleur-hors-jetons` n'a aucune cible et ne protège rien.
+
+**Ce qui la rouvrirait :** la réponse du porteur, ou le lot 6, quand un jeu de composants complet arrive — c'est là que le choix se paie réellement, et là qu'il faut avoir mesuré ce que `couleur-hors-jetons` devient dans chaque cas.
+
+## D43 — La feuille de route porte les durées constatées, lot par lot
+
+**Tranché le :** 20/08/2026, en conception.
+
+**Tranche :** `docs/07-roadmap.md` gagne un tableau « étape ↔ lot ↔ date de début ↔ date de fin ↔ durée constatée », rempli à chaque fin de lot depuis le rapport de lot, dans **ce fichier** et non dans un second document.
+
+**Motif :** D9 se rouvre sur « un retard de livraison imputable au coût du backend, ou la constatation que l'authentification maison consomme plus de temps que le produit » ; D17 se rouvre sur « un retard imputable à cette réécriture ». **Rien dans ce dépôt ne mesure le temps écoulé par étape.** Deux décisions structurantes ont donc une condition de réouverture qu'aucun instrument ne peut déclencher — c'est la classe de défaut de D30 transposée au calendrier : la règle existe, rien ne l'observe.
+
+**Pourquoi dans `07-roadmap.md` et pas dans un `07b-lots.md` :** deux documents portant l'ordre de construction divergeraient, et **aucune épreuve de franchissement ne peut vérifier que deux textes en prose disent la même chose**. C'est le motif exact de D25.
+
+**Ce que cela ne fait pas :** un tableau ne se remplit pas tout seul. Comme le gardien de `main` de D29, c'est un instrument et non un verrou — il ne mesure que si le rapport de fin de lot l'alimente.
+
+**Ce qui la rouvrirait :** rien.
