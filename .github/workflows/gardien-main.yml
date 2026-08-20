@@ -1,0 +1,119 @@
+# Gardien de `main` — l'alternative à la protection de branche.
+#
+# GitHub Free n'autorise les règles de dépôt (protection de branche classique
+# ET rulesets) que sur les dépôts PUBLICS. Vérifié le 20/08/2026 : les deux API
+# rendent « Upgrade to GitHub Pro or make this repository public », en HTTP 403,
+# avec des droits d'administration pleins. `palier` est privé et le restera —
+# c'est un service commercial propriétaire.
+#
+# Il n'existe donc AUCUNE barrière côté serveur : rien ne peut empêcher un push
+# sur `main`, ni refuser une fusion dont la CI est rouge. Ce fichier ne prétend
+# pas en créer une. Il fait la seule chose qui reste possible : rendre l'échec
+# impossible à ignorer, et borner le temps pendant lequel `main` reste cassée
+# sans que personne ne le sache.
+#
+# Ce qu'il protège vraiment :
+#   - une CI rouge sur `main` ouvre une issue nominative, avec le job fautif et
+#     le lien du journal ;
+#   - l'issue se ferme d'elle-même au premier passage vert, donc sa présence
+#     signifie toujours « `main` est cassée MAINTENANT » ;
+#   - il couvre le cas que le hook local ne peut pas voir — trois défauts propres
+#     à Linux ont été trouvés le 20/08/2026, tous invisibles sous Windows.
+#
+# Ce qu'il ne protège PAS, et qu'il ne faut pas croire :
+#   - il n'empêche rien. Le code cassé est déjà sur `main` quand il s'exécute.
+#   - `git push --no-verify` contourne le hook local, et ce gardien ne le voit
+#     pas davantage.
+#   - il ne bloque aucune fusion, puisque rien ne le peut sur ce plan.
+#
+# La seule protection réelle demande GitHub Pro, ou un hébergeur dont les
+# branches protégées sont gratuites sur les dépôts privés. Décision D29.
+name: Gardien de main
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+concurrency:
+  group: gardien-main
+  cancel-in-progress: false
+
+jobs:
+  garder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ouvrir ou fermer l'alerte selon l'état de main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPOT: ${{ github.repository }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          ID_RUN: ${{ github.event.workflow_run.id }}
+          LIEN: ${{ github.event.workflow_run.html_url }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          # L'issue ouverte, s'il y en a une. Le libellé garantit qu'on ne
+          # touche jamais une issue écrite à la main.
+          existante="$(gh issue list --repo "$DEPOT" \
+            --label 'main-rouge' --state open --limit 1 --json number \
+            --jq '.[0].number // empty')"
+
+          if [ "$CONCLUSION" = "success" ]; then
+            if [ -n "$existante" ]; then
+              gh issue comment "$existante" --repo "$DEPOT" \
+                --body "\`main\` est repassée au vert avec \`${SHA:0:7}\`. Journal : $LIEN"
+              gh issue close "$existante" --repo "$DEPOT" --reason completed
+              echo "Alerte #$existante fermée : main est verte."
+            else
+              echo "main est verte, aucune alerte à fermer."
+            fi
+            exit 0
+          fi
+
+          # Les jobs réellement en échec, pour que l'alerte dise QUOI est cassé
+          # et pas seulement QUE quelque chose l'est. Un job « skipped » est
+          # exclu : il n'a pas échoué, il n'a pas eu lieu.
+          fautifs="$(gh run view "$ID_RUN" --repo "$DEPOT" --json jobs \
+            --jq '.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | "- **\(.name)** : \(.conclusion)"' \
+            || echo '- (liste des jobs indisponible)')"
+
+          corps="$(printf '%s\n' \
+            "La CI a échoué sur \`main\`." \
+            "" \
+            "| | |" \
+            "|---|---|" \
+            "| Commit | \`${SHA:0:7}\` |" \
+            "| Journal | $LIEN |" \
+            "" \
+            "**Jobs en échec :**" \
+            "" \
+            "$fautifs" \
+            "" \
+            "---" \
+            "" \
+            "Cette alerte est ouverte automatiquement et **se ferme d'elle-même**" \
+            "au premier passage vert de \`main\`. Tant qu'elle est ouverte, la" \
+            "branche par défaut est cassée." \
+            "" \
+            "Ce dépôt est privé sur un compte GitHub Free : les règles de branche" \
+            "n'y sont pas disponibles, donc rien n'a pu empêcher ce commit" \
+            "d'atterrir. Voir la décision D29 de \`docs/decisions.md\`.")"
+
+          if [ -n "$existante" ]; then
+            gh issue comment "$existante" --repo "$DEPOT" --body "$corps"
+            echo "Alerte #$existante mise à jour."
+          else
+            gh issue create --repo "$DEPOT" \
+              --title "main est rouge" \
+              --label 'main-rouge' \
+              --body "$corps"
+            echo "Alerte ouverte."
+          fi
