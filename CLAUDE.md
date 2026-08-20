@@ -170,6 +170,21 @@ Documents de référence, à lire avant de commencer :
 
 La ressemblance du code n'est pas le critère. **Le critère est le destin commun.**
 
+### Ne jamais faire confiance à l'utilisateur — la règle de base
+
+**Toute donnée qui vient de l'extérieur est hostile jusqu'à preuve du contraire.** Cela vaut pour un formulaire, une URL, un en-tête HTTP, un fichier importé, une réponse d'API tierce, un jeton, et la sortie d'un modèle de langage. Aucune exception, y compris pour l'utilisateur authentifié : un compte volé est un utilisateur authentifié.
+
+Ce que cela impose, partout et sans discussion :
+
+- **La validation se fait au serveur.** Celle du navigateur est un confort d'affichage, jamais une protection : elle se contourne avec les outils de développement, un client HTTP, ou un navigateur modifié. Une règle qui n'existe qu'au front n'existe pas.
+- **Valider à la frontière, une seule fois, puis faire confiance au type.** L'entrée devient un type du domaine — `Charge`, `Repetitions`, `AdresseEmail` — qui ne peut pas être construit invalide. Le reste du code n'a plus à se défendre.
+- **Autoriser explicitement, jamais interdire.** Une liste blanche de ce qui est permis, pas une liste noire de ce qui est refusé : on n'énumère jamais complètement ce qu'un attaquant peut inventer.
+- **Aucune requête construite par concaténation.** Paramètres liés systématiquement, y compris pour un identifiant qui « vient forcément de chez nous ».
+- **L'identité ne se lit jamais dans la requête.** Ni dans le corps, ni dans un paramètre, ni dans un en-tête que le client contrôle. Elle vient du jeton vérifié côté serveur — c'est le fondement de D36, où l'identité posée au moteur PostgreSQL vient du contexte authentifié et de nulle part ailleurs.
+- **L'autorisation se vérifie à chaque accès**, pas seulement à l'affichage du bouton. Cacher une action dans l'interface ne la rend pas indisponible.
+- **La sortie d'un modèle de langage est une entrée utilisateur.** Elle est filtrée avant d'atteindre l'écran (`docs/01-conformite.md`), et elle ne décide jamais d'un calcul.
+- **Ne jamais renvoyer à l'utilisateur ce qui l'aiderait à attaquer** : trace d'exception, requête SQL, chemin de fichier, version d'un composant. Le journal détaillé côté serveur, le message générique côté client — et **aucune donnée de santé dans les journaux**.
+
 ### Sécurité — c'est une priorité, pas une étape
 
 La sécurité se traite à chaque ligne, pas à la fin. Elle prime sur la vitesse de livraison, et le porteur du projet accepte explicitement le coût : `npm run verify` prend cinq minutes et c'est assumé.
@@ -188,6 +203,25 @@ La sécurité se traite à chaque ligne, pas à la fin. Elle prime sur la vitess
 6. **Toute nouvelle dépendance directe demande une décision datée** dans `docs/decisions.md`, avec son motif, ce qu'elle remplace, et ce qui la rouvrirait.
 
 Ce qu'on ne réécrit pas, parce que le coût dépasserait le risque : Vite, TypeScript, Oxlint, Prettier, Vitest, Playwright, EF Core, Npgsql.
+
+### Code mort — aucune tolérance, et la détection est mécanique
+
+Le code mort n'est pas une question de propreté. C'est un mensonge sur ce que le programme fait : il fait croire qu'un chemin existe, il se fait lire en revue, il se fait maintenir, et il masque le code vivant.
+
+**La règle : on ne supprime pas le code mort, on rend impossible de l'écrire.** Trois détecteurs, chacun sur son domaine, tous bloquants :
+
+| Domaine                  | Détecteur                                         | Ce qu'il attrape                                                                       |
+| ------------------------ | ------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| TypeScript, JavaScript   | `knip`                                            | fichiers orphelins, exports jamais importés, dépendances déclarées et jamais utilisées |
+| C# — membres privés      | Roslyn : `IDE0051`, `IDE0052`, `CA1823`, `CS0169` | champ, méthode ou propriété privée jamais lus                                          |
+| C# — `using`             | `IDE0005`                                         | import inutile                                                                         |
+| C# — membres **publics** | **la couverture à 100 %**                         | un membre public que rien n'appelle n'est pas couvert, donc le seuil échoue            |
+
+Ce dernier point mérite d'être compris : Roslyn **ne peut pas** signaler un membre public non utilisé — par construction, il pourrait l'être depuis l'extérieur de l'assemblage. C'est le seuil de couverture qui fait ce travail, et c'est une des raisons d'être des 100 % exigés sur `Palier.Domain`.
+
+**Conséquence directe, à connaître :** tout projet backend sans seuil de couverture n'a **aucune détection de code mort public**. Aujourd'hui, seul `Palier.Domain` en a un. Chaque projet qui acquiert des tests acquiert son seuil dans le même geste — sans quoi le trou reste ouvert et personne ne le voit.
+
+**Aucune exception sans échéance.** Une exception à `knip` — ou à n'importe quel détecteur — s'accompagne d'une décision datée qui dit ce qui la ferme, et d'une épreuve **inversée** qui rougira le jour où elle deviendra inutile. Sans cela, une exception posée « le temps de » devient permanente : c'est le mécanisme de D24, et il vaut pour tous les détecteurs.
 
 ### Ce qu'un garde-fou doit être
 
