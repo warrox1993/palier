@@ -62,7 +62,9 @@ export function lancerOutil(
   // installés par npm (.cmd) ; voir echapperArgumentWindows pour la raison
   // du passage en chaîne unique plutôt qu'en tableau d'arguments.
   const surWindows = process.platform === 'win32'
-  const binaireSpawn = surWindows ? [binaire, ...args.map(echapperArgumentWindows)].join(' ') : binaire
+  const binaireSpawn = surWindows
+    ? [binaire, ...args.map(echapperArgumentWindows)].join(' ')
+    : binaire
   const argsSpawn = surWindows ? [] : args
 
   const r = spawnSync(binaireSpawn, argsSpawn, {

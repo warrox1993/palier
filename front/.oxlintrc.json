@@ -28,9 +28,22 @@
           "error",
           {
             "patterns": [
-              { "group": ["react", "react-dom", "react/*"], "message": "core/ est pur : aucune dépendance UI." },
+              {
+                "group": ["react", "react-dom", "react/*"],
+                "message": "core/ est pur : aucune dépendance UI."
+              },
               { "group": ["dexie"], "message": "core/ est pur : aucun accès stockage." },
-              { "group": ["@/lib/*", "@/ui/*", "@/features/*", "../lib/*", "../ui/*", "../features/*"], "message": "core/ est pur : aucune dépendance applicative." }
+              {
+                "group": [
+                  "@/lib/*",
+                  "@/ui/*",
+                  "@/features/*",
+                  "../lib/*",
+                  "../ui/*",
+                  "../features/*"
+                ],
+                "message": "core/ est pur : aucune dépendance applicative."
+              }
             ]
           }
         ]
