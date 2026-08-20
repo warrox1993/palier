@@ -340,7 +340,7 @@ npm --prefix front add -D oxlint
   "plugins": ["typescript", "unicorn", "import", "jsx-a11y", "react"],
   "env": { "browser": true, "es2024": true },
   "categories": { "correctness": "error" },
-  "ignorePatterns": ["dist/**", "coverage/**", "tests/harness/fixtures/**"],
+  "ignorePatterns": ["dist/**", "coverage/**"],
   "rules": {
     "typescript/no-explicit-any": "error",
     "eslint/no-unused-vars": "error",
@@ -357,7 +357,11 @@ npm --prefix front add -D oxlint
 }
 ```
 
-Les fixtures figurent dans `ignorePatterns` : le lint courant ne doit pas les voir. Les épreuves les atteignent en nommant leur chemin explicitement, ce qui contourne l'ignore.
+**Les fixtures ne figurent pas dans `ignorePatterns`, et c'est délibéré.** Un fichier ignoré par la configuration reste ignoré même lorsqu'on le nomme explicitement en ligne de commande — vérifié empiriquement, et `--no-ignore` ne le contourne pas davantage. Placées là, les fixtures deviendraient invisibles **pour leurs propres épreuves**, qui passeraient au vert sans rien contrôler.
+
+L'exclusion est donc portée par le script `lint`, au moyen de `--ignore-pattern`. Le lint courant ne voit pas les fixtures ; les épreuves, qui appellent `oxlint` sans ce drapeau, les voient.
+
+**Guillemets doubles obligatoires** autour du motif : sous `cmd.exe`, les guillemets simples ne sont pas interprétés comme des délimiteurs et le motif échoue silencieusement — l'exclusion ne s'applique alors pas, et `npm run lint` devient rouge en permanence sur les violations délibérées.
 
 - [ ] **Étape 5 : créer les fixtures**
 
@@ -382,7 +386,7 @@ export const valeur = 1
 Dans `front/package.json` :
 
 ```json
-{ "scripts": { "lint": "oxlint src tests" } }
+{ "scripts": { "lint": "oxlint --ignore-pattern \"tests/harness/fixtures/**\" src tests" } }
 ```
 
 Lancer l'épreuve : attendu, 4 tests passent.
