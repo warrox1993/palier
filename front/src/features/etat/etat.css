@@ -1,0 +1,120 @@
+/*
+ * L'écran d'état — feuille de style ÉCRITE À LA MAIN, D42.
+ *
+ * Aucune valeur n'est écrite ici : tout vient des variables que
+ * `src/ui/jetons.ts` pose sur l'élément racine. La règle `couleur-hors-jetons`
+ * de `scripts/regles-projet.mjs` cherche un motif `#RRGGBB` dans les `.css` —
+ * elle a donc une cible réelle sur ce fichier, et elle mordrait sur la première
+ * couleur écrite à la main.
+ *
+ * La direction est celle de `docs/design/references-visuelles.md` § 2 :
+ * instrumentation, monospace, grille. Pas d'ombre, pas de dégradé, pas de
+ * flou — `npm run regles` les refuse. Rayon 2 px partout.
+ */
+
+.etat {
+  display: grid;
+  gap: calc(var(--espacement) * 4);
+  max-width: 60ch;
+  padding: calc(var(--espacement) * 6);
+  border: 1px solid var(--couleur-line);
+  border-radius: var(--rayon);
+  background: var(--couleur-surface-1);
+  color: var(--couleur-ink);
+  font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+  font-size: var(--taille-2);
+}
+
+.etat__titre {
+  margin: 0;
+  font-size: var(--taille-3);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Les quatre états partagent un cadre : ce qui les distingue est la couleur de
+   la bordure gauche, qui ENCODE l'information — `02-design.md` § 3 : une
+   couleur dit quelque chose, elle ne décore pas. */
+.etat__bloc {
+  display: block;
+  padding: calc(var(--espacement) * 3);
+  border-left: 2px solid var(--couleur-line);
+  background: var(--couleur-surface-2);
+}
+
+.etat__bloc[data-etat='chargement'] {
+  border-left-color: var(--couleur-signal-under);
+}
+
+.etat__bloc[data-etat='vide'] {
+  border-left-color: var(--couleur-signal-over);
+}
+
+.etat__bloc[data-etat='erreur'] {
+  border-left-color: var(--couleur-signal-alert);
+}
+
+.etat__bloc[data-etat='contenu'] {
+  border-left-color: var(--couleur-signal-ok);
+}
+
+.etat__aide {
+  margin: calc(var(--espacement) * 2) 0 0;
+  color: var(--couleur-ink-muted);
+  font-size: var(--taille-1);
+}
+
+.etat__releve {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: calc(var(--espacement) * 2) calc(var(--espacement) * 4);
+  margin: 0;
+}
+
+.etat__libelle {
+  color: var(--couleur-ink-muted);
+  font-size: var(--taille-0);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Monospace sur TOUTES les valeurs, sans exception — `02-design.md` § 4. La
+   police du bloc l'est déjà ; `tabular-nums` aligne les chiffres en colonne. */
+.etat__valeur {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.etat__action {
+  justify-self: start;
+  min-height: var(--tactile-minimum);
+  padding: 0 calc(var(--espacement) * 4);
+  border: 1px solid var(--couleur-line);
+  border-radius: var(--rayon);
+  background: var(--couleur-surface-2);
+  color: var(--couleur-ink);
+  font: inherit;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color var(--duree-retour) var(--courbe);
+}
+
+.etat__action:hover {
+  border-color: var(--couleur-ink-muted);
+}
+
+/* Le repère de focus est VISIBLE et ne dépend pas du survol : c'est le seul
+   retour dont dispose une navigation au clavier seul. */
+.etat__action:focus-visible {
+  outline: 2px solid var(--couleur-signal-under);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .etat__action {
+    transition: none;
+  }
+}

@@ -1,5 +1,6 @@
 {
-  // ÉCHÉANCE — reprise au lot 2, tâche 3, le 20/08/2026. NON LEVÉE, et mesurée.
+  // ÉCHÉANCE — reprise au lot 2, tâche 3, puis tâche 11. UNE SEULE exception
+  // reste, et elle est mesurée.
   //
   // `src/core/index.ts` est un espace réservé : son contenu entier est
   // `export {}`. Il n'existe que pour donner une cible à la barrière de pureté
@@ -13,23 +14,23 @@
   //     entièrement invisible. C'est donc le tonneau — le motif autour duquel
   //     `core/` est conçu — qui échappe, pas le dossier entier.
   //
-  // Pourquoi la ligne reste : la tâche 3 du lot 2 livre `src/ui/jetons.ts` et
-  // `src/lib/i18n.ts`, aucun module de `core/`. Retirer cette ligne aujourd'hui
-  // rend `npm run knip` ROUGE — `src/core/index.ts` en fichier inutilisé. La
-  // condition de sortie est inchangée : le premier module de `core/` réellement
+  // Condition de sortie inchangée : le premier module de `core/` réellement
   // importé par l'application.
   //
-  // Même chose pour `ignoreDependencies` : les deux `@testing-library/*`
-  // deviennent des dépendances inutilisées dès qu'on les retire, faute d'un
-  // test de rendu — daté de la tâche 11.
+  // `ignoreDependencies` A ÉTÉ RETIRÉE À LA TÂCHE 11, et c'est l'échéance qui
+  // s'est tenue. Les deux `@testing-library/*` étaient exemptées faute d'un test
+  // de rendu ; `src/features/etat/EcranEtat.test.tsx` et
+  // `tests/harness/etats-ecran.test.ts` les emploient réellement, et knip reste
+  // vert sans l'exception — vérifié le 20/08/2026.
   //
-  // Ces trois lignes ne se laissent PLUS oublier : l'épreuve inversée
+  // L'exception restante ne se laisse PAS oublier : l'épreuve inversée
   // « les exceptions de knip sont encore nécessaires », dans
-  // `tests/harness/code-mort.test.ts`, relance knip sans elles et ROUGIT le
-  // jour où elles cessent d'être nécessaires.
+  // `tests/harness/code-mort.test.ts`, relance knip sans elle et ROUGIT le jour
+  // où elle cesse d'être nécessaire.
   "entry": [
     "src/main.tsx",
     "src/core/index.ts",
+    "src/**/*.test.{ts,tsx}",
     "vite.config.ts",
     "vitest.config.ts",
     "playwright.config.ts",
@@ -37,6 +38,5 @@
     "tests/**/*.spec.ts"
   ],
   "project": ["src/**/*.{ts,tsx}"],
-  "ignore": ["tests/harness/fixtures/**"],
-  "ignoreDependencies": ["@testing-library/jest-dom", "@testing-library/react"]
+  "ignore": ["tests/harness/fixtures/**"]
 }

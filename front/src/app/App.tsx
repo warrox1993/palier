@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import '../lib/i18n'
+import { EcranEtat } from '../features/etat/EcranEtat'
 import { appliquerJetons } from '../ui/jetons'
 
 // Le nom de la marque n'est pas de la copie traduisible : aucune clé i18next ne
@@ -18,7 +19,10 @@ export function App() {
   return (
     <>
       <a href="#contenu">{t('navigation.allerAuContenu')}</a>
-      <main id="contenu">{NOM_APPLICATION}</main>
+      <main id="contenu">
+        <p>{NOM_APPLICATION}</p>
+        <EcranEtat />
+      </main>
     </>
   )
 }

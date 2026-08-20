@@ -60,18 +60,20 @@ describe('garde-fou : code mort, configuration réelle', () => {
 
 // ⚠️ ÉPREUVE INVERSÉE — ne pas la « corriger ».
 //
-// Elle vérifie que les trois exceptions de `knip.json` sont ENCORE NÉCESSAIRES.
-// Le jour où elles ne le seront plus, cette épreuve rougit et force à les
+// Elle vérifie que l'exception restante de `knip.json` est ENCORE NÉCESSAIRE.
+// Le jour où elle ne le sera plus, cette épreuve rougit et force à la
 // retirer. C'est ce qui transforme une liste d'exceptions qu'on n'ose plus
 // toucher en une exception qui annonce sa propre fin — D24 demandait une
 // condition de sortie, pas une date qu'on repousse.
 //
-// Mesuré le 20/08/2026, `verify` vert par ailleurs : sans les trois lignes,
-// `npm run knip` signale `src/core/index.ts` en fichier inutilisé et les deux
-// `@testing-library/*` en dépendances inutilisées. Les deux conditions de
-// sortie inscrites par D24 sont donc INATTEINTES à ce jour :
+// Mesuré le 20/08/2026, `verify` vert par ailleurs : sans cette ligne,
+// `npm run knip` signale `src/core/index.ts` en fichier inutilisé. UNE SEULE des
+// deux conditions de sortie inscrites par D24 reste inatteinte :
 //   - `src/core/` ne porte toujours aucun module importé par l'application ;
-//   - aucun test de rendu n'existe encore (il est daté de la tâche 11).
+//   - l'exception `ignoreDependencies` sur les deux `@testing-library/*` A ÉTÉ
+//     LEVÉE à la tâche 11 du lot 2 : `EcranEtat.test.tsx` et
+//     `etats-ecran.test.ts` les emploient réellement, et knip reste vert sans
+//     elle. L'échéance datée s'est tenue, elle n'a pas été reconduite.
 describe('garde-fou : les exceptions de knip sont encore nécessaires', () => {
   const CONFIG_REEL = 'knip.json'
   const CONFIG_SANS = 'knip.sans-exceptions.json'
@@ -84,7 +86,7 @@ describe('garde-fou : les exceptions de knip sont encore nécessaires', () => {
     expect(existsSync(CONFIG_REEL), `Cible manquante : ${CONFIG_REEL}`).toBe(true)
   })
 
-  it('retirer les trois lignes fait ENCORE rougir knip, pour ces deux raisons', () => {
+  it('retirer la ligne restante fait ENCORE rougir knip, et pour la bonne raison', () => {
     // La configuration d'épreuve est DÉRIVÉE de la vraie, jamais recopiée :
     // deux déclarations divergent, et celle-ci deviendrait une épreuve qui
     // garde une configuration que personne n'utilise — le défaut exact que la
@@ -98,21 +100,29 @@ describe('garde-fou : les exceptions de knip sont encore nécessaires', () => {
     const avant = conf.entry.length
     conf.entry = conf.entry.filter((e) => e !== 'src/core/index.ts')
     expect(avant - conf.entry.length, "src/core/index.ts n'est plus dans entry").toBe(1)
-    expect(conf.ignoreDependencies, 'ignoreDependencies a disparu de knip.json').toBeDefined()
-    delete conf.ignoreDependencies
+
+    // L'exception `ignoreDependencies` A ÉTÉ RETIRÉE de la configuration réelle
+    // à la tâche 11. Cette assertion garde le sens INVERSE de celle qu'elle
+    // remplace : si quelqu'un la remettait, il faudrait le savoir, parce que
+    // knip est vert sans elle — mesuré le 20/08/2026.
+    expect(
+      conf.ignoreDependencies,
+      'knip.json porte de nouveau `ignoreDependencies`. Elle a été levée à la tâche 11 du ' +
+        'lot 2 parce que knip restait vert sans elle : la remettre rendrait aveugle la ' +
+        'détection de dépendances mortes, sans que rien ne le signale.',
+    ).toBeUndefined()
 
     writeFileSync(CONFIG_SANS, JSON.stringify(conf, null, 2), 'utf8')
     const r = lancerOutil(['npx', 'knip', '--config', CONFIG_SANS])
 
     expect(
       r.code,
-      'knip est VERT sans ses trois exceptions : elles ne servent plus, il faut ' +
-        `les RETIRER de ${CONFIG_REEL} et supprimer cette épreuve.\n${r.sortie}`,
+      'knip est VERT sans son exception : elle ne sert plus, il faut la RETIRER de ' +
+        `${CONFIG_REEL} et supprimer cette épreuve.\n${r.sortie}`,
     ).not.toBe(0)
-    // Et pour les bonnes raisons. Sans ces deux motifs, l'épreuve resterait
-    // verte sur un tout autre échec de knip — ruling P10.
+    // Et pour la bonne raison. Sans ce motif, l'épreuve resterait verte sur un
+    // tout autre échec de knip — ruling P10.
     expect(r.sortie).toMatch(/src[\\/]core[\\/]index\.ts/)
-    expect(r.sortie).toMatch(/@testing-library/)
   })
 
   it("nomme précisément ce que l'exception laisse passer, et ce qu'elle attrape", () => {

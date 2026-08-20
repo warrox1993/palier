@@ -9,5 +9,19 @@
       "titre": "Une erreur est survenue",
       "reessayer": "Réessayer"
     }
+  },
+  "etat": {
+    "titre": "État du socle",
+    "schema": "Version du schéma",
+    "referentiel": "Références nutritionnelles",
+    "actualiser": "Actualiser",
+    "vide": {
+      "titre": "Schéma en place, référentiel non chargé",
+      "aide": "Le socle de données est migré, mais aucune référence nutritionnelle n'y figure encore. Rien à corriger : elles arrivent avec le lot suivant."
+    },
+    "erreur": {
+      "titre": "Le socle de données ne répond pas",
+      "aide": "La base est arrêtée ou injoignable. En développement, la relancer avec la commande db:up, puis actualiser."
+    }
   }
 }
