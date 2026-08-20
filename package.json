@@ -9,6 +9,7 @@
   "scripts": {
     "verify": "node scripts/verify.mjs",
     "regles": "node scripts/regles-projet.mjs",
+    "audit:back": "dotnet list back/Palier.sln package --vulnerable --include-transitive",
     "front": "npm --prefix front run",
     "front:dev": "npm --prefix front run dev"
   }
