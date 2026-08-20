@@ -20,20 +20,20 @@ Le fondateur est établi en Belgique. Trois régimes s'appliquent, quel que soit
 
 C'est la règle centrale du produit. Elle s'applique à chaque écran, chaque libellé et chaque phrase générée.
 
-| Autorisé — comparaison à une référence | Interdit — prescription |
-|---|---|
-| « Apport en protéines : 150 g. Référence pour 73 kg : 117-160 g. » | « Mange 200 g de poulet ce soir. » |
-| « Zinc total : 42 mg. Limite haute EFSA : 25 mg. » | « Arrête ton complément de zinc. » |
-| « Vitamine D : couverte par l'alimentation sur 30 jours. » | « Prends 2000 UI par jour en hiver. » |
-| « Trois séances cette semaine, 9 séries sur les pectoraux. » | « Tu dois faire plus de pectoraux. » |
+| Autorisé — comparaison à une référence                             | Interdit — prescription               |
+| ------------------------------------------------------------------ | ------------------------------------- |
+| « Apport en protéines : 150 g. Référence pour 73 kg : 117-160 g. » | « Mange 200 g de poulet ce soir. »    |
+| « Zinc total : 42 mg. Limite haute EFSA : 25 mg. »                 | « Arrête ton complément de zinc. »    |
+| « Vitamine D : couverte par l'alimentation sur 30 jours. »         | « Prends 2000 UI par jour en hiver. » |
+| « Trois séances cette semaine, 9 séries sur les pectoraux. »       | « Tu dois faire plus de pectoraux. »  |
 
 **Formule canonique : un chiffre, une référence, un écart. Jamais une action.**
 
 ### Vocabulaire
 
-Interdit dans toute interface et toute sortie du modèle : *tu devrais*, *je te conseille*, *prends*, *arrête*, *il faut que*, *carence*, *déficit*, *prescription*, *traitement*, *diagnostic*.
+Interdit dans toute interface et toute sortie du modèle : _tu devrais_, _je te conseille_, _prends_, _arrête_, _il faut que_, _carence_, _déficit_, _prescription_, _traitement_, _diagnostic_.
 
-À utiliser : *écart à la référence*, *en dessous de la fourchette*, *au-dessus de la limite haute*, *valeur observée*, *référence publiée*.
+À utiliser : _écart à la référence_, _en dessous de la fourchette_, _au-dessus de la limite haute_, _valeur observée_, _référence publiée_.
 
 Implémenter un **filtre de sortie** qui rejette et régénère toute réponse du modèle contenant le vocabulaire interdit dans un contexte prescriptif. Ce filtre est testé unitairement.
 
@@ -41,9 +41,14 @@ Implémenter un **filtre de sortie** qui rejette et régénère toute réponse d
 
 ## 3. Architecture à deux couches
 
+> **Complété le 20/08/2026.** Rien n'a été retiré. La décision **D11** de `docs/decisions.md`
+> nomme cette section : la séparation décrite ci-dessous n'est plus seulement une consigne, elle
+> est vérifiée par le compilateur. Le paragraphe de fin de section le dit.
+
 Le LLM n'est jamais seul aux commandes.
 
 **Couche déterministe — code, hors de portée du modèle**
+
 - Références et limites hautes EFSA en base de données
 - Fourchettes de macronutriments validées par un diététicien agréé
 - Contre-indications par contrainte déclarée
@@ -51,6 +56,7 @@ Le LLM n'est jamais seul aux commandes.
 - Tous les calculs : besoins, agrégations, écarts, progression
 
 **Couche LLM — explication et dialogue**
+
 - Reçoit des valeurs déjà calculées, ne calcule rien
 - Ne peut pas écrire en base sur les objectifs ni sur les compléments
 - Sorties structurées quand la réponse alimente une interface
@@ -58,19 +64,31 @@ Le LLM n'est jamais seul aux commandes.
 
 Cette séparation est ce qui rend la validation par un professionnel gérable à l'échelle : le diététicien valide les règles une fois, pas chaque message.
 
+**Ce qui rend la couche déterministe étanche.** Le projet `Palier.Domain`, qui porte les références, les fourchettes, les contre-indications et tous les calculs, ne référence aucun autre projet de la solution — **D11**. Un calcul nutritionnel ne _peut donc pas_ atteindre la base, le réseau ou le modèle : l'impossibilité est vérifiée à la compilation, pas par une règle de style qu'un oubli suffirait à contourner.
+
 ---
 
 ## 4. Obligations à implémenter
 
-| Obligation | Implémentation |
-|---|---|
-| Validation professionnelle | Un diététicien agréé valide règles et modèles. Sans lui, la partie nutrition ne sort pas |
-| Transparence IA | Mention « assisté par IA » visible en début de session et dans l'assistant |
-| Hébergement | Supabase région Francfort ou Paris. Aucune donnée de santé hors UE |
-| Consentement | Explicite, séparé, pour les données de santé. Refus possible sans perte d'accès au reste |
-| Portabilité | Export complet en un clic, sans condition, dès la V1 |
-| Suppression | Effacement réel du compte et des données, pas un drapeau en base |
-| Journalisation | Aucune donnée de santé dans les logs applicatifs |
+> **Ligne « Hébergement » réécrite le 20/08/2026.** Elle donnait « Supabase région Francfort ou
+> Paris ». C'était faux : la décision **D15** du 19/08 a retenu **OVHcloud**, et les décisions
+> **D9**, **D14** et **D17** ont retiré Supabase de la pile entière — voir `docs/decisions.md`.
+> Le motif de conformité en sort renforcé, pas affaibli : l'exigence n'est plus seulement « une
+> région dans l'UE », c'est **un fournisseur de droit européen**.
+
+| Obligation                 | Implémentation                                                                                                                                 |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Validation professionnelle | Un diététicien agréé valide règles et modèles. Sans lui, la partie nutrition ne sort pas                                                       |
+| Transparence IA            | Mention « assisté par IA » visible en début de session et dans l'assistant                                                                     |
+| Hébergement                | **OVHcloud**, fournisseur de droit européen : base PostgreSQL managée et backend conteneurisé, dans l'UE. Aucune donnée de santé hors UE — D15 |
+| Consentement               | Explicite, séparé, pour les données de santé. Refus possible sans perte d'accès au reste                                                       |
+| Portabilité                | Export complet en un clic, sans condition, dès la V1                                                                                           |
+| Suppression                | Effacement réel du compte et des données, pas un drapeau en base                                                                               |
+| Journalisation             | Aucune donnée de santé dans les logs applicatifs                                                                                               |
+
+**Pourquoi le fournisseur compte autant que la région.** Un hébergeur soumis au droit des États-Unis reste atteignable par le _CLOUD Act_, qui permet à une autorité américaine de réclamer des données détenues par une entreprise américaine **quel que soit le pays où elles sont stockées**. Une région européenne opérée par un fournisseur américain ne referme donc pas la question ; c'est le droit dont relève l'opérateur qui la referme. Pour des données de santé au sens de l'article 9 et une clientèle belge, c'est l'argument de conformité le plus solide dont dispose ce projet — **D15**.
+
+**Ce que ce choix coûte, et qu'il faut assumer.** OVHcloud ne propose aucune plateforme .NET clé en main : le backend est conteneurisé sur un VPS ou une instance Public Cloud, donc administré — certificats, mises à jour, supervision, sauvegardes. Ces tâches sont désormais des obligations de sécurité au sens de l'article 32, pas de la simple exploitation. De même, depuis **D17**, la sécurité de l'authentification est un traitement opéré par le responsable de traitement et non un service délégué : `docs/13-juridique.md` doit en tenir compte dans l'AIPD et le registre.
 
 ---
 

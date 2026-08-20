@@ -1,8 +1,17 @@
 # 03 — Modèle de données
 
-PostgreSQL via Supabase. **Région Francfort ou Paris, choisie à la création du projet — ce choix est irréversible.**
+> **En-tête, section RLS et section Migrations réécrits le 20/08/2026.** La version précédente
+> annonçait « PostgreSQL via Supabase », fondait la sécurité du produit sur les seules politiques
+> RLS et rangeait les migrations dans `supabase/migrations/`. Les décisions **D9, D14, D15 et
+> D17** du 19/08 ont remplacé cette pile — voir `docs/decisions.md`. **Le schéma SQL lui-même
+> n'a pas été touché** : table par table, il reste valable. Deux points ne sont pas tranchables
+> depuis les décisions existantes ; ils sont signalés en fin de document plutôt que devinés ici.
 
-**RLS activé sur chaque table dès sa création.** L'erreur classique consiste à développer sans RLS et à l'ajouter avant la mise en production ; le jour de l'ouverture, la base entière est exposée.
+PostgreSQL **managé chez OVHcloud** — **D15**. Fournisseur de droit européen, donc hors de portée du _CLOUD Act_ américain : pour des données de santé au sens de l'article 9, c'est l'argument de conformité le plus solide. `docs/01-conformite.md` § 4 fait foi sur ce point et prime sur ce document.
+
+**L'API est le seul chemin vers les données — D9.** Le client ne parle plus à PostgreSQL : il parle au backend ASP.NET Core, qui seul détient la chaîne de connexion. L'autorisation — _cet utilisateur a-t-il le droit de lire cette ligne ?_ — se décide désormais dans `Palier.Application`, cas d'usage par cas d'usage.
+
+**RLS reste activée sur chaque table dès sa création, en défense en profondeur.** Le motif d'origine n'a pas bougé : développer sans RLS et l'ajouter avant la mise en production expose la base entière le jour de l'ouverture. Ce que le changement d'architecture déplace — et ce qu'il ne déplace pas — est traité à la section RLS.
 
 ---
 
@@ -16,6 +25,13 @@ PostgreSQL via Supabase. **Région Francfort ou Paris, choisie à la création d
 ---
 
 ## Schéma
+
+> **`auth.users` est un reste de Supabase, et il n'est pas réécrit ici.** Le schéma `auth` était
+> créé par Supabase Auth. La décision **D17** le remplace par ASP.NET Identity, dont la table
+> d'utilisateurs est `AspNetUsers`. Les **14** clauses `references auth.users` ci-dessous sont
+> conservées telles quelles : le nom de la table est décidé, le **type de sa clé** ne l'est pas
+> — voir « Ce qui n'est pas tranché ici », en fin de document. Une substitution faite avant cet
+> arbitrage devrait être refaite.
 
 ```sql
 -- ============ PROFIL ============
@@ -232,7 +248,31 @@ create table user_targets (
 
 ---
 
-## RLS
+## RLS — défense en profondeur, non plus ligne unique
+
+> **Réécrit le 20/08/2026.** Cette section fondait la sécurité du produit sur les seules
+> politiques du moteur. C'était juste tant que le client parlait directement à PostgreSQL : RLS
+> était alors la seule barrière, et elle vivait là où un oubli ne peut pas la contourner. La
+> décision **D9** interpose un backend. **RLS ne disparaît pas : elle change de rôle.** Les
+> politiques écrites plus bas sont inchangées.
+
+**Ce que RLS protège encore.** Elle est la dernière barrière quand la première a cédé, dans trois familles de cas :
+
+- **un accès direct à la base**, qui ne passe pas par l'API — outil d'administration, restauration de sauvegarde, identifiants fuités, tâche d'exploitation lancée à la main sur le VPS ;
+- **une erreur de l'API** — un filtre sur le propriétaire oublié dans une requête EF Core, un cas d'usage nouveau écrit sans ce filtre, une jointure qui élargit le résultat sans que personne le voie ;
+- **une injection SQL ou une requête brute** (`FromSqlRaw`, Dapper) qui échapperait au filtrage de la couche applicative.
+
+Ces trois familles ont ceci de commun qu'**aucun test d'API ne les voit**. C'est la raison pour laquelle la ligne est conservée alors qu'elle n'est plus le chemin nominal.
+
+**À une condition, sans laquelle elle ne mord pas :** l'API se connecte avec un **rôle applicatif restreint**, jamais avec le propriétaire de la base ni un rôle `BYPASSRLS` — un propriétaire de table ignore les politiques de sa propre table. C'est la première chose à éprouver, avant les politiques elles-mêmes (`docs/superpowers/specs/2026-08-19-architecture-backend-csharp-design.md` § 6).
+
+**Ce qu'elle ne protège plus à elle seule.** Tout le reste, c'est-à-dire l'essentiel de l'autorisation réelle du produit : les rôles, l'accès d'un administrateur au support, la lecture du catalogue public, un partage éventuel, et les règles de `docs/01-conformite.md` — planchers non contournables, filtre de sortie, escalade. Une politique « `owner_id` égale l'utilisateur courant » ne sait rien dire de ces cas. **Tenir RLS pour suffisante serait désormais une faute de conception**, alors que c'était la bonne réponse avant D9. L'autorisation applicative est une responsabilité du backend, portée par le comportement d'autorisation du pipeline, et elle se teste là.
+
+**Les tests de politiques restent exigés, et pèsent plus qu'avant.** `docs/08-workflow.md` § 6 demande que la politique naisse dans la même migration que la table, et qu'un test vérifie qu'un utilisateur A ne lit jamais une ligne de B. Cette exigence ne s'allège pas, pour une raison mécanique : le chemin nominal passant par l'API, **plus aucun test fonctionnel ne franchira RLS**. Sans test dédié — lancé contre la base, avec une identité, hors du backend — une politique cassée resterait verte jusqu'au jour où elle devait servir. Une défense en profondeur que rien n'éprouve est une défense qu'on croit avoir.
+
+`docs/decisions.md` **D9** conserve l'avis donné avant la décision : l'accès direct concentrait la sécurité dans le moteur, où elle ne peut pas être contournée par oubli. Cet avis a été exposé et la décision inverse prise en connaissance de cause. Il n'est pas rouvert ici — il explique pourquoi ces tests comptent double.
+
+### Les politiques
 
 Modèle à appliquer à chaque table possédant `owner_id` :
 
@@ -256,6 +296,14 @@ create policy "sets_own" on sets for all
 
 `exercises` et `foods` sont lisibles par tous quand `is_custom = false`, et restreints au propriétaire sinon. `nutrient_refs` est en lecture publique, écriture interdite via l'API.
 
+> **`auth.uid()` n'existe plus, et rien ne la remplace encore.** Cette fonction était fournie par
+> Supabase Auth : elle lisait la revendication du jeton présenté **au moteur**. Avec un backend
+> qui se connecte par une chaîne de connexion ordinaire (**D14**), PostgreSQL ne voit plus un
+> utilisateur mais un rôle applicatif. **Aucune décision ne dit comment l'identité lui parvient**,
+> et ce document ne le tranche pas. Les trois occurrences ci-dessus sont laissées en l'état pour
+> que la substitution soit faite une fois, en connaissance de cause — voir « Ce qui n'est pas
+> tranché ici ».
+
 ---
 
 ## Index
@@ -277,8 +325,35 @@ create index on foods (source, source_ref);
 - `daily_intake` — agrégation par nutriment et par jour, **aliments et compléments confondus**. C'est la vue centrale du produit
 - `exercise_progression` — meilleure série par exercice et par séance, avec force estimée
 
+**Ces trois vues ne sont pas générées par EF Core — D14.** Elles sont écrites en SQL dans la migration qui les introduit, par `migrationBuilder.Sql(...)`, avec le `Down` qui les supprime. `daily_intake`, « la vue centrale du produit », est le premier objet concerné.
+
 ---
 
 ## Migrations
 
-Toute évolution de schéma passe par un fichier de migration versionné dans `supabase/migrations/`. Aucune modification manuelle via l'interface Supabase après la première mise en production.
+> **Réécrit le 20/08/2026.** Le mécanisme change, l'intention ne change pas : le schéma vit dans
+> le dépôt, versionné, et ne se modifie jamais à la main sur un serveur.
+
+Toute évolution de schéma passe par une migration EF Core versionnée dans le dépôt — **D14** : `dotnet ef migrations add <Nom>`, qui produit un fichier dans `back/Palier.Infrastructure/Migrations/`. **Aucune modification manuelle du schéma en production**, par quelque interface ou console que ce soit. C'est la règle d'origine mot pour mot ; seul l'outil a changé, et `supabase/migrations/` n'existe plus.
+
+**Ce qu'EF Core ne pilote pas, et qui doit donc être écrit à la main dans la migration — D14 :**
+
+| Objet                                             | Comment                                                   |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| Les trois vues de la section précédente           | `migrationBuilder.Sql(...)`, avec le `Down` correspondant |
+| `enable row level security` et les politiques RLS | idem                                                      |
+| Les contraintes `CHECK` du schéma ci-dessus       | idem                                                      |
+
+Le SQL de ce document ne disparaît pas : **il migre dans les migrations**. Le mode de défaillance à surveiller est précis — une migration générée sans ces trois blocs produit un schéma qui compile, qui démarre, et qui n'applique **ni les vues, ni RLS, ni les bornes**. Rien ne le signale au démarrage.
+
+---
+
+## Ce qui n'est pas tranché ici
+
+Deux points restent ouverts au 20/08/2026. Aucune décision de `docs/decisions.md` ne permet de les fermer, et `CLAUDE.md` § 6 interdit de le faire en silence.
+
+**1. Comment le moteur connaît l'utilisateur, maintenant qu'`auth.uid()` n'existe plus.** Sans réponse, les politiques écrites plus haut ne sont pas applicables telles quelles. Deux mécanismes existent, ils ne sont pas équivalents et **ni l'un ni l'autre n'est retenu ici** : un paramètre de session posé par le backend à chaque requête, lu par la politique ; ou un rôle PostgreSQL par utilisateur. Le premier est simple mais ne vaut que si le backend ne peut pas oublier de le poser ; le second ne passe pas à l'échelle d'un service grand public. À arbitrer avant le lot 4.
+
+**2. La table d'utilisateurs et le type de sa clé.** **D17** décide ASP.NET Identity, donc `AspNetUsers`. Elle ne dit pas si l'identifiant reste un `uuid` — ce qu'exige `IdentityUser<Guid>` — ou devient le `text` que la configuration par défaut d'Identity produit. Les 14 clauses `references auth.users` du schéma en dépendent, ainsi que tous les `owner_id`. À arbitrer avant la première migration.
+
+**Signalé sans y avoir touché — trois tables manquent à ce document**, exigées ailleurs dans le dossier et repérées par la spec d'architecture du 19/08 : le journal versionné des libellés (`09-comptes.md` § 6), le journal des appels au modèle (`06-ia.md` § 2 et `13-juridique.md` § 2) et les tables d'identité ASP.NET (conséquence de **D17**). Les écrire est un travail de schéma, hors du périmètre de cette reprise.
