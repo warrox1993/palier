@@ -235,7 +235,35 @@ Dans les quatre cas, l'épreuve du harnais serait passée **au vert sans rien co
 **État :** `npm run verify` prend **119 s** sur la machine de développement (Windows 11, quinze étapes, toutes vertes), pour un seuil d'avertissement fixé à 90 s. L'avertissement se déclenche donc à chaque exécution.
 **Motif de ne pas relever le seuil :** `08-workflow.md` § 5 fait de la lenteur de la boucle un **défaut à traiter**, pas un fait à enregistrer. Relever le seuil à 120 s ferait taire le signal sans rien changer au temps d'attente. Le détail par étape est affiché à chaque exécution, ce qui rend le prochain arbitrage mesurable plutôt qu'argumentaire.
 **Le détail, au 20/08/2026 :** `front:test` 39 s · `back:format` 18 s · `back:build` 11 s (`--no-incremental`) · `back:audit` 12 s (réseau) · `back:test` 11 s · `licences` 5 s (réseau) · `front:knip` 5 s · le reste sous 3 s chacun.
-**Ce qui la rouvrirait :** le porteur du projet, à l'arbitrage. Trois leviers sont chiffrés et aucun n'a été appliqué d'office : sortir les épreuves du harnais de `front:test` (−39 s, mais `src/` ne contient aucun test aujourd'hui, donc l'étape deviendrait vide et verte sans rien contrôler) ; retirer `--no-incremental` de `back:build` ; mettre en cache les réponses des registres npm et NuGet du contrôle de licences.
+**REMESURÉ à la clôture du lot 2 — 20/08/2026, seize étapes, toutes vertes, Docker levé.** Le chiffre a **plus que doublé**, et l'écart doit être lu avant d'être commenté : cinq exécutions successives ont rendu **278,1 s**, **276,8 s**, **338,0 s**, **340,2 s** et **281,7 s**. La dispersion de 60 s n'est pas du bruit — les deux exécutions à 338 et 340 s ont tourné pendant qu'un second agent compilait dans le même worktree, et la cinquième, seule sur la machine, est revenue à 282 s. **La mesure de référence est donc 280 s ± 3 s**, et les 340 s sont un artefact de contention, pas une propriété de la suite.
+
+| Étape              | Lot 1 | Lot 2, dernière mesure | Écart                 |
+| ------------------ | ----- | ---------------------- | --------------------- |
+| `front:format`     | < 3 s | 3,7 s                  |                       |
+| `front:lint`       | < 3 s | 3,0 s                  |                       |
+| `front:lint:types` | < 3 s | 3,7 s                  |                       |
+| `front:typecheck`  | < 3 s | 4,4 s                  |                       |
+| `front:test`       | 39 s  | **58,4 s**             | **+19 s**             |
+| `front:knip`       | 5 s   | 5,4 s                  |                       |
+| `scripts:lint`     | < 3 s | 2,6 s                  |                       |
+| `scripts:format`   | < 3 s | 3,3 s                  |                       |
+| `regles`           | < 3 s | 0,4 s                  |                       |
+| `back:format`      | 18 s  | 28,3 s                 | +10 s                 |
+| `back:build`       | 11 s  | 19,2 s                 | +8 s                  |
+| `back:test`        | 11 s  | **27,9 s**             | **+17 s**             |
+| `licences`         | 5 s   | 20,9 s (réseau)        | +16 s                 |
+| `back:audit`       | 12 s  | 20,5 s (réseau)        | +9 s                  |
+| `harnais:back`     | —     | **135,0 s**            | **étape nouvelle**    |
+| `front:build`      | < 3 s | 3,4 s                  |                       |
+| **TOTAL**          | 119 s | **340,2 s**            | 282 s hors contention |
+
+**Ce que la mesure dit, et qu'aucun des trois leviers de cette entrée n'adresse.** `harnais:back` — 135 s, **40 % du total** — n'existait pas au lot 1 : c'est l'étape ajoutée en fin de lot 1 pour que les épreuves du harnais backend soient enfin lancées par autre chose que la CI. Elle relance des outils entiers (`knip`, `oxlint`, `prettier`, `gitleaks`) en sous-processus, exprès, pour les voir refuser. **Le coût est le prix du garde-fou**, et il ne se paie qu'ici.
+
+`front:test` passe de 39 s à 58 s : les épreuves de rendu du lot 2 s'y ajoutent, et elles relancent elles aussi des outils. `back:test` passe de 11 s à 28 s : un conteneur PostgreSQL démarre, la migration s'applique, et **39 épreuves** tournent sur un moteur réel là où il n'y en avait que 8.
+
+**Aucun levier n'a été appliqué, et le troisième a changé de nature.** Le troisième levier — sortir les épreuves du harnais de `front:test` — était refusé au lot 1 parce que « l'étape deviendrait vide et verte sans rien contrôler ». **`front/src/` porte enfin des tests** : l'argument tombe. Mais **D5 et D25 interdisent de retirer une épreuve de `verify`** — elles peuvent changer d'étape, jamais quitter la suite. Le levier consiste donc à **déplacer**, pas à retrancher, et le gain net serait nul sur le total.
+
+**Ce qui la rouvrirait :** le porteur du projet, à l'arbitrage. Trois leviers sont chiffrés et aucun n'a été appliqué d'office : sortir les épreuves du harnais de `front:test` ; retirer `--no-incremental` de `back:build` (−14 s au lot 1, +8 s de marge aujourd'hui) ; mettre en cache les réponses des registres npm et NuGet du contrôle de licences (`licences` + `back:audit` = **41 s**, dont l'essentiel est du réseau). **Un quatrième levier apparaît avec la mesure et n'appartient à personne d'autre : accepter, ou non, que `git push` exige désormais un moteur de conteneurs.** C'est un changement du contrat de la boucle. Le hook de pré-**commit** n'est pas touché.
 
 ## D27 — Lighthouse CI installé de façon éphémère, hors des dépendances déclarées
 
@@ -337,7 +365,19 @@ GET  /repos/warrox1993/palier/automated-security-fixes → {"enabled": false}
 
 **Pourquoi l'écrire plutôt que de le faire.** Écrire un garde-fou sans cible, c'est écrire une branche jamais franchie — le défaut que ce lot a combattu vingt-trois fois. Un contrôle qui n'a rien à contrôler passe au vert et ment. Mieux vaut une dette datée qu'un faux vert.
 
-**Ce qui la rouvrirait :** le premier écran. Si le lot 2 se termine sans ces trois livrables, cette décision a échoué et il faut le dire au lieu de la reconduire.
+**LE VERDICT, écrit en toutes lettres le 20/08/2026, à la clôture du lot 2 : les TROIS livrables sont là. D31 n'a pas été reconduite.** Un « partiellement » n'existe pas, et il n'y en a pas eu :
+
+| #   | Livrable                                                                    | Où                                        | La preuve du franchissement                                                                                                                                 |
+| --- | --------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | une épreuve qui **refuse** un écran dépourvu d'état vide ou d'état d'erreur | `front/tests/harness/etats-ecran.test.ts` | les **deux branches franchies SÉPARÉMENT** : état vide retiré → « L'écran « etat » n'a pas d'ÉTAT VIDE » ; état d'erreur retiré → « … pas d'ÉTAT D'ERREUR » |
+| 2   | un parcours Playwright **au clavier seul** sur ce même écran                | `front/tests/e2e/etat-clavier.spec.ts`    | `tabIndex={-1}` sur le bouton → le parcours refuse ; bouton privé de nom accessible → axe-core refuse en `critical`                                         |
+| 3   | `i18next` câblé, `chaine-en-dur` étendue aux constantes exportées           | tâche 3 du lot 2                          | acquis avant celui-ci                                                                                                                                       |
+
+L'épreuve 1 ne lit **aucun fichier source** : elle monte chaque écran de `src/features/` dans les conditions qui produisent chaque état et regarde ce qui est rendu. Un contrôle textuel aurait été vert sur un composant qui contient le mot « erreur » dans un commentaire.
+
+**Ce qui reste à surveiller :** l'épreuve 1 impose un contrat — tout écran marque ses états par `data-etat`. C'est le seul point commun exigible d'écrans qui n'ont ni les mêmes données ni les mêmes libellés ; c'est aussi une convention que rien n'enseigne à celui qui écrira le deuxième écran, sinon le message de refus lui-même.
+
+**Ce qui la rouvrirait :** le premier écran. Si le lot 2 se termine sans ces trois livrables, cette décision a échoué et il faut le dire au lieu de la reconduire. — **Il ne s'est pas terminé sans eux.**
 
 ---
 
@@ -398,6 +438,8 @@ Sur un projet dont la leçon centrale du lot 1 est « un fichier de configuratio
 
 **Ce qui n'est délibérément pas étendu :** D28 épingle les actions GitHub par empreinte parce qu'une étiquette mutable y exécute du code avec accès au dépôt et aux secrets. Le conteneur PostgreSQL n'exécute rien qui touche au dépôt et ne voit aucun secret ; la mutabilité du tag `18.6` y est un **bénéfice**, puisqu'elle apporte les correctifs. L'épinglage par empreinte reste possible et n'est refusé par rien.
 
+**Ce que le lot 2 a MESURÉ, et qui corrige une affirmation de cette entrée.** « Le builder Testcontainers lit ce tag dans le compose » : c'est fait, et la fixture lit aussi `POSTGRES_INITDB_ARGS` (D44), le nom de la base et le compte d'administration. Mais **la lecture ne suffisait pas** : `tests-harness/db.test.mjs` parcourt le dépôt pour refuser toute seconde déclaration, et le 20/08/2026 il a mordu sur une **ligne de commentaire** de `back/Palier.Database.Tests/CollationTests.cs` — « 2.41 sur `postgres:18.6` ». `npm run verify` était **rouge à HEAD** avant la tâche 9, et personne ne l'avait vu. La divergence ne se glisse pas seulement dans du code : elle se glisse dans une phrase qui explique le code.
+
 **Ce qui la rouvrirait :** OVHcloud retirant la 18 de son offre, ou le choix d'une version de production différente au lot 9 — auquel cas le compose et Testcontainers suivent, dans ce sens et jamais l'inverse.
 
 ## D35 — La clé d'`AspNetUsers` est un `uuid`, et les tables d'identité naissent au lot 2
@@ -452,6 +494,12 @@ Le point 5 est une obligation, pas une précaution — Microsoft Learn, _Connect
 
 **Ce que cela coûte :** **trois** allers-retours par cas d'usage (`BEGIN`, `set_config`, `COMMIT`), pas un.
 
+**Ce que le lot 2 a MESURÉ — les trois réserves ci-dessus sont traitées, et une l'est mieux qu'annoncé.**
+
+- **Le coût des trois allers-retours** est éprouvé par `Le_cout_des_trois_allers_retours_est_mesure_et_non_suppose` : un cas d'usage complet (`BEGIN` · `set_config` · `select count(*) from sets` avec sa politique par jointure · `COMMIT`), sur 20 tours, une connexion `Pooling=false` et 50 séries, reste **sous le plafond de 100 ms** de `docs/08-workflow.md` § 6. **Ce chiffre ne prouve pas le plafond en production** : conteneur local, boucle locale, quelques dizaines de lignes. Il établit seulement que le mécanisme lui-même ne le consomme pas.
+- **Le trou de la table vide** est **fermé du bon côté** : la garde applicative refuse AVANT d'ouvrir la transaction, et son épreuve n'assertionne rien sur le comportement du moteur. Mesuré en chemin, et **délibérément non revendiqué** : avec l'enveloppe `(select app.utilisateur())`, PostgreSQL 18.6 lève `28000` **même sur table vide**, pour les trois formes de requête essayées. C'est mieux qu'annoncé — et rien ne promet que le planificateur l'évaluera toujours. Une propriété de sécurité qui dépend du plan d'exécution n'est pas une propriété.
+- **Le test d'architecture « il est au plan du lot 2 » est ÉCRIT**, et il couvre **quatre** voies et non trois : constructeur, propriété, champ, **et paramètre de méthode** — `void Poser(PalierDbContext)` passait intégralement, franchi le 20/08/2026. Il porte une liste d'**exemptions nommées**, une seule à ce jour (`Palier.Api.Socle.LecteurDeSocle`, la route de santé et l'assertion de démarrage), gardée par une épreuve qui refuse une exemption dont la cible n'existe plus.
+
 **Ce qui la rouvrirait :** la mesure d'un surcoût inacceptable sur l'instance OVHcloud réelle — à mesurer contre le plafond de 100 ms de `docs/08-workflow.md` § 6, pas à supposer. Ou une version de PostgreSQL offrant nativement une identité de session à portée transaction.
 
 ## D37 — Trois rôles PostgreSQL, trois chaînes de connexion, `FORCE ROW LEVEL SECURITY`, et une assertion contre la base réelle
@@ -480,7 +528,26 @@ Le point 5 est une obligation, pas une précaution — Microsoft Learn, _Connect
 
 **Ce que `FORCE` coûte, quel que soit l'arbitrage :** la sauvegarde et la restauration deviennent un **livrable éprouvé du lot 2**, et non une promesse trimestrielle qui rencontrerait ce mur au pire moment (`docs/14-contenu.md` § 7 : « Une sauvegarde jamais restaurée n'est pas une sauvegarde »). Le seed, lancé sous le rôle propriétaire, est concerné au même titre — et les deux corrections réflexes, accorder `BYPASSRLS` au rôle de migration ou retirer `FORCE` le temps du seed, sont **exactement les deux façons d'éteindre RLS sans que rien ne le signale**. Le chemin du seed se conçoit, avec son épreuve.
 
-**Ce qui la rouvrirait :** la constatation, sur l'instance OVHcloud réelle, qu'aucun rôle `BYPASSRLS` n'est créable. Dans ce cas `FORCE` s'échange contre la capacité de dumper la base, et l'arbitrage revient au porteur.
+**LA MESURE EST FAITE, dans les deux sens — 20/08/2026, PostgreSQL 18.6, Testcontainers et base locale.** La tâche 10 a provoqué les quatre configurations :
+
+| Configuration du rôle de sauvegarde                 | `pg_dump`                                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `BYPASSRLS` **et** `SELECT` sur tables et séquences | **code 0**, 41 287 octets                                                          |
+| `BYPASSRLS`, **sans** `SELECT`                      | code 1 — `permission denied for table __EFMigrationsHistory`                       |
+| `BYPASSRLS` et `SELECT` sur les tables seules       | code 1 — `failed to get data for sequence "AspNetRoleClaims_Id_seq"`               |
+| **`NOBYPASSRLS`** avec `SELECT` complet             | code 1 — `query would be affected by row-level security policy`, **40 829 octets** |
+
+Et sous `palier_migrations`, le rôle **propriétaire** : code 1, `query would be affected by row-level security policy for table "AspNetRoleClaims"` — la contrainte documentée est donc **réelle sur cette version du moteur**, provoquée et non citée.
+
+**Trois choses que cette entrée ne disait pas, et que la mesure a apprises :**
+
+1. **`BYPASSRLS` contourne les POLITIQUES, jamais les PRIVILÈGES.** Le lot n'accordait **aucun** `select` à `palier_sauvegarde` : le rôle existait, portait l'attribut, et ne pouvait rien sauvegarder. Deux barrières distinctes, et l'entrée n'en nommait qu'une.
+2. **Les séquences aussi.** `grant select on all tables` ne suffit pas ; `AspNetRoleClaims_Id_seq` bloque le dump.
+3. **UN DUMP RATÉ RESSEMBLE À UN DUMP.** Privé de `BYPASSRLS`, `pg_dump` écrit tout le schéma, bute sur le premier `COPY` refusé, et laisse **40 829 octets** là où le dump complet en fait **41 287**. `ls -l` ne distingue pas les deux. **Seul le code de sortie le fait**, et c'est écrit dans `db/README.md`.
+
+**Le verdict :** `BYPASSRLS` sur `palier_sauvegarde` est **nécessaire**, pas prudentiel. La branche « dump réussi » **est obtenue**, et la restauration l'est aussi — dans une base neuve, sous `palier_migrations`, avec le **même nombre de lignes**, le même nombre de tables, le même nombre de politiques, et **zéro table sans `FORCE`**. `FORCE` ne s'échange donc contre rien sur Testcontainers.
+
+**Ce qui la rouvrirait :** la constatation, sur l'instance OVHcloud réelle, qu'aucun rôle `BYPASSRLS` n'est créable. C'est la seule inconnue qui reste, et elle n'est pas mesurable avant d'avoir une instance. Dans ce cas `FORCE` s'échange contre la capacité de dumper la base, et l'arbitrage revient au porteur — **avec le prix chiffré ci-dessus, pas en découverte**.
 
 ## D38 — Les tables d'identité naissent en refus par défaut ; leur chemin d'accès est conçu au lot 4
 
@@ -535,6 +602,22 @@ Le point 5 est une obligation, pas une précaution — Microsoft Learn, _Connect
 **Ce qui a été écarté :** un écran produit (séance, nutrition). Il ne peut pas être livré au lot 2, puisqu'il suppose l'authentification et le domaine ; et le construire contre une donnée simulée produirait une épreuve qui garde un **simulacre** — une marche au-dessus du défaut que D31 voulait éviter.
 
 **Ce que cela coûte :** un écran hors périmètre V1 vit sur un domaine public jusqu'au lot 4. C'est le prix de l'échéance, et c'est pourquoi elle est datée.
+
+**LIVRÉ ET PROVOQUÉ — 20/08/2026.** L'écran existe (`front/src/features/etat/`), avec ses quatre états. Le pari de cette décision — « le seul dont l'état d'erreur se **provoque** » — a été tenu, et voici la mesure, pas sa relecture :
+
+```
+1. base levée, écran chargé       -> contenu
+2. npm run db:down ...
+3. conteneur arrêté, après action -> erreur
+   texte affiché                  -> Le socle de données ne répond pas
+                                     La base est arrêtée ou injoignable. …
+4. npm run db:up ...
+5. base relevée, après action     -> contenu
+```
+
+L'action a été déclenchée **au clavier** — `Tab`, `Tab`, `Entrée` — sur un vrai navigateur, un vrai serveur de développement et une vraie API : aucun rechargement truqué, aucun bouchon. Côté API, `GET /api/v1/sante` rend **503** conteneur arrêté, et la ligne de journal ne porte que le **type** d'échec, jamais l'instruction ni ses paramètres.
+
+**Ce que le franchissement a appris, et qui n'était pas prévu :** `vite preview` rend `index.html` avec un code **200** sur toute route inconnue. Sans contrôle du type de contenu, l'écran aurait cru recevoir un état. Le module d'accès refuse donc aussi un corps qui n'est pas du JSON — et c'est ce piège qui donne aux épreuves Playwright un état d'erreur **déterministe**, sans qu'aucune donnée soit simulée.
 
 **Ce qui la rouvrirait :** le lot 6, obligatoirement. Sans cette échéance écrite, l'écran resterait par inertie.
 

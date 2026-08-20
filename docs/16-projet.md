@@ -76,15 +76,35 @@ Claude Code n'invente pas les conventions : elles doivent être écrites. Ce doc
     ├── Palier.Infrastructure/       # EF Core, migrations, modèles, identité
     ├── Palier.Api/                  # exposition HTTP
     ├── Palier.Domain.Tests/         # xUnit, couverture 100 %
+    ├── Palier.Database.Tests/       # Testcontainers, politiques RLS, sauvegarde
+    ├── .env.example                 # les trois chaînes de D37 — AUCUNE valeur
     └── tests-harness/               # épreuves de franchissement du backend
 ```
+
+**Une TROISIÈME racine est née au lot 2 — D32 :**
+
+```
+db/                                  # AUCUN .csproj : du SQL, du YAML, du Markdown
+├── compose.yaml                     # la base locale. Le tag de l'image est écrit ICI et nulle part ailleurs
+├── amorcage/                        # rôles et privilèges, exécutés AVANT les migrations
+│   └── 01-roles.sql                 # les trois rôles de D37, aucun superutilisateur
+├── referentiel/                     # données de PRODUCTION — voir § 4
+├── demonstration/                   # jeu de développement synthétique — voir § 4
+├── SOURCES.md                       # attribution de chaque fichier de referentiel/
+└── README.md                        # lever, appliquer, sauvegarder, restaurer, réinitialiser
+```
+
+> **Pourquoi `db/` ne porte aucun projet .NET.** `scripts/verifier-licences.mjs` parcourt
+> littéralement `back` : un `.csproj` posé sous `db/` échapperait au contrôle de licences de D13
+> **sans un message**. Et `.gitignore` n'ignore que `back/**/bin/` et `back/**/obj/`. Les
+> migrations EF Core, le `DbContext` et les tests de politiques restent donc sous `back/`.
 
 **La règle structurante a changé de lieu, pas de nature.**
 
 Les calculs de conformité — énergie, macronutriments, micronutriments, hydratation,
 volume, progression, planchers de sécurité — vivent **exclusivement dans
 `Palier.Domain`**. Ce projet ne référence aucun autre projet de la solution : un
-calcul nutritionnel ne *peut pas* atteindre la base ou le réseau, et l'impossibilité
+calcul nutritionnel ne _peut pas_ atteindre la base ou le réseau, et l'impossibilité
 est vérifiée par le compilateur, non par une règle de style. `01-conformite.md` § 3
 en dépend directement, et c'est ce qui rend ces calculs testables à 100 % et
 auditables par le diététicien.
@@ -98,19 +118,19 @@ recommandation.
 
 ## 2. Conventions de code
 
-| Sujet | Règle |
-|---|---|
-| Fichiers | `kebab-case.ts` |
-| Composants | `PascalCase.tsx` |
-| Fonctions et variables | `camelCase` |
-| Constantes | `SCREAMING_SNAKE_CASE` |
-| Tables et colonnes SQL | `snake_case` |
-| Types | `PascalCase`, préfixe interdit (`IUser` non) |
-| Booléens | `is`, `has`, `can` |
-| Fonctions asynchrones | Nom au verbe : `fetchWorkouts`, pas `workoutsData` |
-| Tests | `<fichier>.test.ts` à côté du source |
-| Commits | Français, impératif : `ajoute le calcul du TDEE adaptatif` |
-| Branches | `feat/`, `fix/`, `chore/`, `docs/` |
+| Sujet                  | Règle                                                      |
+| ---------------------- | ---------------------------------------------------------- |
+| Fichiers               | `kebab-case.ts`                                            |
+| Composants             | `PascalCase.tsx`                                           |
+| Fonctions et variables | `camelCase`                                                |
+| Constantes             | `SCREAMING_SNAKE_CASE`                                     |
+| Tables et colonnes SQL | `snake_case`                                               |
+| Types                  | `PascalCase`, préfixe interdit (`IUser` non)               |
+| Booléens               | `is`, `has`, `can`                                         |
+| Fonctions asynchrones  | Nom au verbe : `fetchWorkouts`, pas `workoutsData`         |
+| Tests                  | `<fichier>.test.ts` à côté du source                       |
+| Commits                | Français, impératif : `ajoute le calcul du TDEE adaptatif` |
+| Branches               | `feat/`, `fix/`, `chore/`, `docs/`                         |
 
 **Unités : tout est stocké en SI.** Kilogrammes, centimètres, millilitres, grammes, secondes. La conversion en unités impériales se fait à l'affichage uniquement, jamais en base.
 
@@ -176,18 +196,44 @@ le client court-circuiterait le calcul autant que la clé.
 
 ---
 
-## 4. Données de départ (seed)
+## 4. Données de départ — RÉFÉRENTIEL et DÉMONSTRATION, jamais « seed »
 
-Sans seed, l'application est inutilisable en développement et Claude Code ne peut rien vérifier.
+> **Repris le 20/08/2026, au lot 2.** Le mot « seed » confondait deux choses qui n'ont ni le même
+> destin, ni le même risque, ni le même dossier. Elles sont séparées — physiquement, dans `db/`.
 
-| Fichier | Contenu | Source |
-|---|---|---|
-| `01-nutrient-refs.sql` | Références et limites hautes, ~40 nutriments | EFSA DRV |
-| `02-exercises.sql` | 60 exercices prioritaires puis extension | Rédigé, relu par le kiné |
-| `03-foods.sql` | 300 aliments courants | CIQUAL |
-| `04-programs.sql` | 9 programmes modèles | Rédigés, relus |
+|                 | `db/referentiel/`                                                                                        | `db/demonstration/`                              |
+| --------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Ce que c'est    | **données de production** : valeurs EFSA, catalogue d'exercices, programmes modèles                      | jeu de développement **entièrement synthétique** |
+| Où cela arrive  | **en production**, chargé sous `palier_migrations`                                                       | **jamais en production**                         |
+| Attribution     | **obligatoire** : une ligne dans `db/SOURCES.md` — nom, source, licence, millésime, date de relevé, URL  | aucune : rien n'en vient                         |
+| Ce qui le garde | `npm run regles` refuse le dépôt si un `*.sql` de `referentiel/` n'a pas sa ligne, en nommant le fichier | D40                                              |
 
-Un compte de démonstration avec 4 semaines de données réalistes est indispensable pour tester les courbes, le radar et le TDEE adaptatif. **Sans historique, la moitié des écrans ne peut pas être vérifiée.**
+**Aucune donnée réelle n'entre jamais dans `demonstration/` — D40.** Restaurer un dump de
+production, ou tout extrait de celui-ci, sur une machine de développement est interdit : c'est le
+seul chemin par lequel des données de l'article 9 atterriraient sur un portable que le projet ne
+chiffre pas et ne supervise pas.
+
+### Le référentiel
+
+| Fichier                | Contenu                                      | Source                   |
+| ---------------------- | -------------------------------------------- | ------------------------ |
+| `01-nutrient-refs.sql` | Références et limites hautes, ~40 nutriments | EFSA DRV                 |
+| `02-exercises.sql`     | 60 exercices prioritaires puis extension     | Rédigé, relu par le kiné |
+| `03-foods.sql`         | 300 aliments courants                        | CIQUAL                   |
+| `04-programs.sql`      | 9 programmes modèles                         | Rédigés, relus           |
+
+**Deux de ces quatre lignes ne sont PAS tranchées, et le lot 2 n'a pas le droit de les trancher
+seul** — signalées ici plutôt que devinées :
+
+- `03-foods.sql` est-il du **référentiel de production** ou un jeu de développement ? La réponse
+  change le dossier qui le porte et le moment où il s'applique.
+- `04-programs.sql` livre **9 programmes modèles**, mais `programs.owner_id` est
+  `not null references auth.users` : le schéma n'a **aucune place pour un programme sans
+  propriétaire**.
+
+### La démonstration
+
+Un compte de démonstration avec 4 semaines de données réalistes est indispensable pour tester les courbes, le radar et le TDEE adaptatif. **Sans historique, la moitié des écrans ne peut pas être vérifiée.** Il est **entièrement synthétique**, et il vit dans `db/demonstration/`.
 
 ---
 
@@ -195,26 +241,26 @@ Un compte de démonstration avec 4 semaines de données réalistes est indispens
 
 Vocabulaire partagé entre le code, l'interface et les documents. Les termes anglais restent en anglais dans le code, français dans l'interface.
 
-| Terme | Définition |
-|---|---|
-| **RIR** | *Reps In Reserve*. Répétitions restantes à la fin d'une série |
-| **Série dure** | Série de travail hors échauffement, comptée dans le volume |
-| **Volume** | Nombre de séries dures par muscle et par semaine. Primaire = 1, secondaire = 0,5 |
-| **Tonnage** | Charge × répétitions cumulées sur une séance |
-| **1RM estimé** | Charge maximale théorique, calculée par Epley corrigé du RIR. Jamais testée |
-| **Bloc** | Cycle de 4 à 6 semaines suivi d'un allègement |
-| **Allègement** | Semaine à volume et charge réduits |
-| **Mouvement socle** | Exercice fixe sur un bloc, support de la mesure de progression |
-| **UL** | *Tolerable Upper Intake Level*. Limite haute de sécurité EFSA |
-| **AI** | *Adequate Intake*. Apport adéquat de référence |
-| **TDEE** | Dépense énergétique totale quotidienne |
-| **TDEE adaptatif** | Dépense calculée sur les données réelles, remplace la formule dès la semaine 3 |
-| **Contrainte** | Limitation physique déclarée par l'utilisateur |
-| **Écart** | Différence entre valeur observée et référence. **Jamais appelé « déficit » ou « carence »** |
-| **Règle graduée** | Composant signature : valeur, fourchette, position |
-| **Axe** | Une des sept dimensions du radar de progression |
-| **Filtre de sortie** | Contrôle rejetant toute formulation prescriptive du modèle |
-| **Plancher** | Seuil de sécurité non contournable |
+| Terme                | Définition                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| **RIR**              | _Reps In Reserve_. Répétitions restantes à la fin d'une série                               |
+| **Série dure**       | Série de travail hors échauffement, comptée dans le volume                                  |
+| **Volume**           | Nombre de séries dures par muscle et par semaine. Primaire = 1, secondaire = 0,5            |
+| **Tonnage**          | Charge × répétitions cumulées sur une séance                                                |
+| **1RM estimé**       | Charge maximale théorique, calculée par Epley corrigé du RIR. Jamais testée                 |
+| **Bloc**             | Cycle de 4 à 6 semaines suivi d'un allègement                                               |
+| **Allègement**       | Semaine à volume et charge réduits                                                          |
+| **Mouvement socle**  | Exercice fixe sur un bloc, support de la mesure de progression                              |
+| **UL**               | _Tolerable Upper Intake Level_. Limite haute de sécurité EFSA                               |
+| **AI**               | _Adequate Intake_. Apport adéquat de référence                                              |
+| **TDEE**             | Dépense énergétique totale quotidienne                                                      |
+| **TDEE adaptatif**   | Dépense calculée sur les données réelles, remplace la formule dès la semaine 3              |
+| **Contrainte**       | Limitation physique déclarée par l'utilisateur                                              |
+| **Écart**            | Différence entre valeur observée et référence. **Jamais appelé « déficit » ou « carence »** |
+| **Règle graduée**    | Composant signature : valeur, fourchette, position                                          |
+| **Axe**              | Une des sept dimensions du radar de progression                                             |
+| **Filtre de sortie** | Contrôle rejetant toute formulation prescriptive du modèle                                  |
+| **Plancher**         | Seuil de sécurité non contournable                                                          |
 
 ---
 

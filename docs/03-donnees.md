@@ -4,8 +4,15 @@
 > annonçait « PostgreSQL via Supabase », fondait la sécurité du produit sur les seules politiques
 > RLS et rangeait les migrations dans `supabase/migrations/`. Les décisions **D9, D14, D15 et
 > D17** du 19/08 ont remplacé cette pile — voir `docs/decisions.md`. **Le schéma SQL lui-même
-> n'a pas été touché** : table par table, il reste valable. Deux points ne sont pas tranchables
-> depuis les décisions existantes ; ils sont signalés en fin de document plutôt que devinés ici.
+> n'a pas été touché** : table par table, il reste valable.
+>
+> **Repris une seconde fois le 20/08/2026, à la fin du lot 2.** Les deux points qui restaient
+> ouverts sont **fermés** — par **D35** (la clé d'`AspNetUsers` est un `uuid`) et **D36**
+> (l'identité parvient au moteur par `set_config('app.utilisateur', $1, true)`, en portée
+> transaction). Les trois `auth.uid()` sont substitués, une fois et en connaissance de cause, et
+> la liste des tables hors du modèle `owner_id` est nommée. Ce ne sont pas des arbitrages pris
+> ici : ce sont des décisions écrites ailleurs, exécutées et éprouvées sur un moteur réel au
+> lot 2.
 
 PostgreSQL **managé chez OVHcloud** — **D15**. Fournisseur de droit européen, donc hors de portée du _CLOUD Act_ américain : pour des données de santé au sens de l'article 9, c'est l'argument de conformité le plus solide. `docs/01-conformite.md` § 4 fait foi sur ce point et prime sur ce document.
 
@@ -278,31 +285,65 @@ Modèle à appliquer à chaque table possédant `owner_id` :
 
 ```sql
 alter table <table> enable row level security;
+alter table <table> force row level security;
 
-create policy "<table>_own" on <table>
-  for all using (auth.uid() = owner_id)
-  with check (auth.uid() = owner_id);
+create policy proprietaire on <table>
+  for all to palier_app
+  using (owner_id = (select app.utilisateur()))
+  with check (owner_id = (select app.utilisateur()));
 ```
 
 Pour `sets` et `exercise_feedback`, qui n'ont pas de `owner_id` direct :
 
 ```sql
-create policy "sets_own" on sets for all
+create policy proprietaire on sets for all to palier_app
   using (exists (
     select 1 from workouts w
-    where w.id = sets.workout_id and w.owner_id = auth.uid()
+    where w.id = sets.workout_id and w.owner_id = (select app.utilisateur())
   ));
 ```
 
-`exercises` et `foods` sont lisibles par tous quand `is_custom = false`, et restreints au propriétaire sinon. `nutrient_refs` est en lecture publique, écriture interdite via l'API.
+> **`auth.uid()` a été SUBSTITUÉE, une fois et en connaissance de cause — D36.** Cette fonction
+> était fournie par Supabase Auth : elle lisait la revendication du jeton présenté **au moteur**.
+> Avec un backend qui se connecte par une chaîne de connexion ordinaire (**D14**), PostgreSQL ne
+> voit plus un utilisateur mais un rôle applicatif. L'identité lui parvient désormais par
+> `select set_config('app.utilisateur', $1, true)` — **le troisième argument est `true`**, donc
+> la valeur ne survit ni au `COMMIT` ni au `ROLLBACK` : la défaillance possible est l'identité
+> **absente**, jamais l'identité **d'un autre**.
+>
+> Trois choses ont changé avec la substitution, et aucune n'est cosmétique :
+>
+> - **`force row level security` s'ajoute à `enable`** — sans lui, le propriétaire des tables
+>   contourne ses propres politiques, et la migration en fait le propriétaire ;
+> - **`to palier_app`** — une politique permissive ne s'applique qu'aux rôles qu'elle nomme, donc
+>   un rôle futur qu'on aurait oublié tombe sur le refus par défaut ;
+> - **l'accesseur est enveloppé dans un sous-select** — `(select app.utilisateur())` force un
+>   InitPlan évalué une fois par instruction, là où l'expression d'une politique est évaluée
+>   **pour chaque ligne**.
+>
+> Deux accesseurs existent, et non un : `app.utilisateur()` **lève** `28000` sans porter aucune
+> valeur ; `app.utilisateur_ou_null()` rend `NULL`. Mesuré le 20/08/2026 : en fusionnant les deux
+> politiques d'`exercises` en un seul `OR`, la lecture d'une ligne **publique** rend `28000`.
 
-> **`auth.uid()` n'existe plus, et rien ne la remplace encore.** Cette fonction était fournie par
-> Supabase Auth : elle lisait la revendication du jeton présenté **au moteur**. Avec un backend
-> qui se connecte par une chaîne de connexion ordinaire (**D14**), PostgreSQL ne voit plus un
-> utilisateur mais un rôle applicatif. **Aucune décision ne dit comment l'identité lui parvient**,
-> et ce document ne le tranche pas. Les trois occurrences ci-dessus sont laissées en l'état pour
-> que la substitution soit faite une fois, en connaissance de cause — voir « Ce qui n'est pas
-> tranché ici ».
+### Les tables hors du modèle `owner_id`, nommément — et la forme de politique de chacune
+
+Sans cette liste, **la même épreuve prouve deux choses contradictoires selon la table qu'on lui
+donne**, et l'exigence de `docs/08-workflow.md` § 6 — « test RLS vert pour **chaque** table » —
+reste une contradiction ouverte. La voici, fermée.
+
+| Table                                                                                                                           | Forme                           | Politique                                                                                                                                                  | Ce qu'un test doit prouver                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `workouts`, `body_weight`, `intake_entries`                                                                                     | possédée directe                | `using` et `with check` sur `owner_id = (select app.utilisateur())`                                                                                        | A ne lit aucune ligne de B, et ne peut pas insérer au nom de B                       |
+| `sets`, `exercise_feedback`                                                                                                     | possédée **par jointure**       | `exists` remontant à la table porteuse d'`owner_id`                                                                                                        | A ne voit aucune ligne rattachée à une ligne de B                                    |
+| `exercises`, `foods`                                                                                                            | catalogue **mixte**             | **deux politiques séparées** : `catalogue_public` en `select` sur `is_custom = false`, et `proprietaire` sur `owner_id` avec l'accesseur **qui rend NULL** | la ligne publique sort SANS identité ; la ligne personnalisée d'un autre ne sort pas |
+| `nutrient_refs`                                                                                                                 | référence publique              | `lecture_publique` en `select`, `using (true)`. **Aucune politique d'écriture**, et `select` seul en privilège                                             | tout le monde lit ; personne n'écrit par l'API                                       |
+| `__EFMigrationsHistory`                                                                                                         | métadonnée                      | `migrations_referentiel` pour le propriétaire, `lecture_version` en `select` pour l'API                                                                    | la route de santé lit la version ; rien d'autre n'y touche                           |
+| `AspNetUsers`, `AspNetRoles`, `AspNetUserClaims`, `AspNetRoleClaims`, `AspNetUserLogins`, `AspNetUserRoles`, `AspNetUserTokens` | identité — **refus par défaut** | RLS activée **et forcée**, **AUCUNE politique** — D38                                                                                                      | ni l'API ni le propriétaire ne lisent ou n'écrivent quoi que ce soit                 |
+
+**Les sept tables d'identité ne sont pas un oubli.** « If no policy exists for the table, a
+default-deny policy is used » : elles naissent fermées pour tout le monde, propriétaire compris.
+Le chemin de connexion qui lit `AspNetUsers` **par email**, avant que la moindre identité existe,
+casse donc fermé et bruyant — **le lot 4 doit le concevoir**, et non le découvrir.
 
 ---
 
@@ -350,10 +391,16 @@ Le SQL de ce document ne disparaît pas : **il migre dans les migrations**. Le m
 
 ## Ce qui n'est pas tranché ici
 
-Deux points restent ouverts au 20/08/2026. Aucune décision de `docs/decisions.md` ne permet de les fermer, et `CLAUDE.md` § 6 interdit de le faire en silence.
+### Les deux points ouverts sont FERMÉS — et voici par quoi
 
-**1. Comment le moteur connaît l'utilisateur, maintenant qu'`auth.uid()` n'existe plus.** Sans réponse, les politiques écrites plus haut ne sont pas applicables telles quelles. Deux mécanismes existent, ils ne sont pas équivalents et **ni l'un ni l'autre n'est retenu ici** : un paramètre de session posé par le backend à chaque requête, lu par la politique ; ou un rôle PostgreSQL par utilisateur. Le premier est simple mais ne vaut que si le backend ne peut pas oublier de le poser ; le second ne passe pas à l'échelle d'un service grand public. À arbitrer avant le lot 4.
+**1. Comment le moteur connaît l'utilisateur, maintenant qu'`auth.uid()` n'existe plus. → FERMÉ par D36, exécuté et éprouvé au lot 2.** Des deux mécanismes envisagés, c'est le **paramètre de session** qui est retenu — mais en **portée transaction**, et doublé d'une **garde applicative**, ce qui n'était ni l'un ni l'autre des deux termes du choix initial. La réserve écrite ici — « le premier est simple mais ne vaut que si le backend ne peut pas oublier de le poser » — était juste, et c'est elle qui a été traitée : un test de réflexion refuse que tout type autre que le pipeline tienne `PalierDbContext`, par constructeur, propriété, champ **ou paramètre de méthode**. Le rôle PostgreSQL par utilisateur est écarté, pour le motif déjà écrit ici.
 
-**2. La table d'utilisateurs et le type de sa clé.** **D17** décide ASP.NET Identity, donc `AspNetUsers`. Elle ne dit pas si l'identifiant reste un `uuid` — ce qu'exige `IdentityUser<Guid>` — ou devient le `text` que la configuration par défaut d'Identity produit. Les 14 clauses `references auth.users` du schéma en dépendent, ainsi que tous les `owner_id`. À arbitrer avant la première migration.
+**2. La table d'utilisateurs et le type de sa clé. → FERMÉ par D35 :** `uuid`, donc `IdentityUser<Guid>`. Les tables `AspNet*` existent depuis la migration `SocleInitial`.
+
+### Ce qui reste ouvert, et qui appartient au porteur du projet
+
+**La phrase de la section RLS sur l'injection SQL est TROP GÉNÉREUSE, et elle n'est pas corrigée ici.** Elle range « une injection SQL ou une requête brute (`FromSqlRaw`, Dapper) qui échapperait au filtrage de la couche applicative » parmi ce que RLS protège. Avec le mécanisme de D36, **c'est faux dans le cas qui compte** : un SQL injecté peut **reposer** `app.utilisateur` sur n'importe quelle valeur, et la politique le suivra sans rien signaler. RLS protège ici du **filtre oublié**, pas de l'attaquant délibéré. Deux issues, et **les deux se disent, aucune ne se suppose** : soit la ligne est corrigée, soit elle est assumée comme décrivant une intention et non une garantie. C'est du contenu métier — `CLAUDE.md` § 6 — donc soumis, pas tranché.
+
+**Signalé sans y avoir touché — `docs/08-workflow.md` § 6 et les tables hors du modèle `owner_id`.** L'exigence « test RLS vert pour **chaque** table » est désormais applicable, puisque la liste ci-dessus nomme la forme de politique de chacune ; mais la formulation du § 6 reste écrite comme si toutes les tables suivaient le modèle `owner_id`. Elle gagnerait à renvoyer à cette liste.
 
 **Signalé sans y avoir touché — trois tables manquent à ce document**, exigées ailleurs dans le dossier et repérées par la spec d'architecture du 19/08 : le journal versionné des libellés (`09-comptes.md` § 6), le journal des appels au modèle (`06-ia.md` § 2 et `13-juridique.md` § 2) et les tables d'identité ASP.NET (conséquence de **D17**). Les écrire est un travail de schéma, hors du périmètre de cette reprise.
