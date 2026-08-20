@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint": "oxlint --ignore-pattern \"tests/harness/fixtures/**\" .",
+    "lint:fix": "oxlint --fix --ignore-pattern \"tests/harness/fixtures/**\"",
     "lint:types": "oxlint --type-aware --ignore-pattern \"tests/harness/fixtures/**\" src tests",
     "format": "prettier --write . \"!tests/harness/fixtures/**\"",
     "format:check": "prettier --check . \"!tests/harness/fixtures/**\"",

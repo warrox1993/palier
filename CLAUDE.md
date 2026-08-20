@@ -223,6 +223,23 @@ Ce dernier point mérite d'être compris : Roslyn **ne peut pas** signaler un me
 
 **Aucune exception sans échéance.** Une exception à `knip` — ou à n'importe quel détecteur — s'accompagne d'une décision datée qui dit ce qui la ferme, et d'une épreuve **inversée** qui rougira le jour où elle deviendra inutile. Sans cela, une exception posée « le temps de » devient permanente : c'est le mécanisme de D24, et il vaut pour tous les détecteurs.
 
+### Automatiser la correction — mais seulement ce qui est mécanique
+
+Détecter ne suffit pas : un défaut qu'on doit corriger à la main revient. **Tout ce qui peut être corrigé automatiquement doit l'être**, au commit, sans intervention.
+
+**La ligne de partage est nette, et elle n'est pas négociable :**
+
+|                                                                                           | Auto-corrigeable  | Pourquoi                                                                                             |
+| ----------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------- |
+| **Mécanique** — formatage, `using` inutiles, guillemets, ordre des imports, fins de ligne | **Oui, toujours** | Il n'existe qu'une seule bonne réponse, et aucune information n'est perdue                           |
+| **Sémantique** — code mort, chaîne en dur, complexité, duplication                        | **Jamais**        | Corriger exige de _comprendre l'intention_. Une machine qui tranche à notre place détruit du travail |
+
+L'exemple qui tranche le débat : `knip --fix` supprime les exports qu'il juge morts. Sur un export écrit ce matin, dont le consommateur arrive demain, il supprime du travail — **et le commit passe au vert**. La détection est utile, la correction est destructrice.
+
+**Un garde-fou qu'on peut corriger automatiquement doit quand même refuser.** L'auto-correction s'exécute au commit, pas à la place du contrôle : si le formatage est corrigé au commit mais que `format:check` disparaît de `verify`, plus rien ne protège le jour où le hook est contourné par `--no-verify`.
+
+**Et l'auto-correction doit réindexer ce qu'elle modifie.** Une correction appliquée après l'indexation ne part pas dans le commit : le dépôt et ce qu'on a vérifié divergent en silence.
+
 ### Ce qu'un garde-fou doit être
 
 Ces règles viennent du lot 1, où chacune a été payée au moins une fois. Le détail et les mesures sont dans `.superpowers/sdd/2026-08-20-lot-1-harnais-complet/progress.md` (rulings P1 à P23).
