@@ -34,8 +34,10 @@
   },
   "homepage": "https://github.com/warrox1993/palier#readme",
   "dependencies": {
+    "i18next": "^26.4.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.12"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

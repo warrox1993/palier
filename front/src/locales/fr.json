@@ -1,0 +1,13 @@
+{
+  "navigation": {
+    "allerAuContenu": "Aller au contenu principal"
+  },
+  "commun": {
+    "chargement": "Chargement…",
+    "vide": "Rien à afficher pour le moment",
+    "erreur": {
+      "titre": "Une erreur est survenue",
+      "reessayer": "Réessayer"
+    }
+  }
+}

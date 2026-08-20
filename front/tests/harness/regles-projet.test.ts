@@ -21,6 +21,7 @@ const FIXTURES = [
   'litteral-jsx.tsx',
   'comparaison-numerique.tsx',
   'chaine-en-commentaire.tsx',
+  'chaine-en-constante.ts',
   'ombre-portee.css',
   'fleche-unicode.tsx',
   'booleen-mal-nomme.ts',
@@ -128,6 +129,27 @@ describe('garde-fou : chaînes de texte en dur', () => {
   it("accepte de la copie qui vit dans un commentaire, puisqu'elle n'atteint pas l'écran", () => {
     const r = surFixture('chaine-en-commentaire.tsx')
     expect(r.code, `Un commentaire a été refusé :\n${r.sortie}`).toBe(0)
+    expect(r.sortie).toMatch(/aucune violation des règles de projet/)
+  })
+
+  // Le trou mesuré au lot 1, D31 livrable 3 : la règle ne regardait que le JSX.
+  // Une chaîne d'interface déplacée dans une constante exportée d'un `.ts` lui
+  // échappait entièrement — et c'est le déplacement le plus naturel du monde
+  // quand on veut réutiliser un libellé à deux endroits.
+  it('refuse une chaîne de copie dans une constante exportée', () => {
+    const r = surFixture('chaine-en-constante.ts')
+    expect(r.code, `La constante exportée a été acceptée :\n${r.sortie}`).not.toBe(0)
+    expect(r.sortie).toMatch(/i18n/i)
+    expect(r.sortie).toMatch(/MESSAGE_VIDE/)
+  })
+
+  // Faux positif à borner explicitement. `jetons.ts` porte des noms de jetons
+  // et des valeurs techniques — `cubic-bezier(…)` en particulier —, pas de la
+  // copie destinée à l'écran. L'exclusion est portée par la RÈGLE, dans le
+  // script, jamais par une clé ajoutée à un fichier de configuration (D21).
+  it('accepte les valeurs techniques de src/ui/jetons.ts', () => {
+    const r = lancerOutil(['node', SCRIPT, '--fichier', 'front/src/ui/jetons.ts'])
+    expect(r.code, `Les jetons ont été refusés :\n${r.sortie}`).toBe(0)
     expect(r.sortie).toMatch(/aucune violation des règles de projet/)
   })
 })

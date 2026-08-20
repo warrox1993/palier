@@ -246,6 +246,22 @@ const ATTRIBUT_DE_COPIE = /(?<![-.\w$])(title|alt|placeholder|aria-label)\s*=\s*
 /** Chaîne littérale glissée dans une accolade JSX : `<span>{'Texte'}</span>`. */
 const LITTERAL_DANS_JSX = />\s*\{\s*(['"])([^'"\n]*)\1\s*\}\s*<\//g
 
+/**
+ * Constante exportée dont la valeur est un littéral de texte :
+ * `export const MESSAGE_VIDE = 'Aucune séance enregistrée'`.
+ *
+ * C'est le trou mesuré au lot 1 — D31 livrable 3. La règle ne regardait que le
+ * JSX ; déplacer un libellé dans une constante exportée, ce qu'on fait dès
+ * qu'on veut le réutiliser à deux endroits, le faisait disparaître du contrôle.
+ * Le `d` donne la position du littéral, d'où se calcule le numéro de ligne.
+ *
+ * Seules les constantes EXPORTÉES sont vues : une constante privée peut porter
+ * un identifiant technique — `const NOM_APPLICATION = 'palier'` dans App.tsx —
+ * et le nom de la marque n'a aucune clé de traduction.
+ */
+const CONSTANTE_EXPORTEE =
+  /export\s+const\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(['"`])((?:[^\\]|\\.)*?)\2/dg
+
 function resume(texte) {
   const plat = texte.replace(/\s+/g, ' ').trim()
   return plat.length > 60 ? `${plat.slice(0, 57)}…` : plat
@@ -273,6 +289,15 @@ function chainesEnDur(contenu) {
   for (const m of contenu.matchAll(LITTERAL_DANS_JSX)) {
     if (!MOT_DE_COPIE.test(m[2])) continue
     trouvees.push({ index: m.index, detail: `littéral dans une accolade JSX « ${resume(m[2])} »` })
+  }
+
+  for (const m of contenu.matchAll(CONSTANTE_EXPORTEE)) {
+    const texte = m[3]
+    if (texte === '' || CODE_DANS_LE_TEXTE.test(texte) || !MOT_DE_COPIE.test(texte)) continue
+    trouvees.push({
+      index: m.indices[3][0],
+      detail: `constante exportée ${m[1]} = « ${resume(texte)} »`,
+    })
   }
 
   return trouvees.sort((a, b) => a.index - b.index)
@@ -319,7 +344,18 @@ const REGLES = [
     // à chaque ligne prise isolément ne voit plus rien du tout.
     portee: 'fichier',
     chercher: chainesEnDur,
-    extensions: ['.tsx'],
+    // `.ts` autant que `.tsx` depuis le lot 2 : le détecteur des constantes
+    // exportées vise précisément les fichiers sans JSX, où le libellé se range
+    // quand on le sort d'un composant.
+    extensions: ['.ts', '.tsx'],
+    // Faux positif MESURÉ le 20/08/2026, et un seul : `export const courbe =
+    // 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'`. C'est une valeur technique, pas
+    // de la copie, et aucune clé i18next ne lui correspondra jamais. La borne
+    // est posée ICI — dans le script, comme celle de `couleur-hors-jetons` —
+    // et jamais par une clé ajoutée à un fichier de configuration d'outil
+    // (D21). Le fichier ne porte aucun JSX : l'exclusion ne coûte rien aux
+    // trois autres détecteurs.
+    exclure: [/src[\\/]ui[\\/]jetons\./],
     message:
       'Aucune chaîne de texte en dur : tout passe par i18next, y compris les erreurs et les états vides — CLAUDE.md § 4.',
   },

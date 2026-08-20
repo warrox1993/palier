@@ -1,12 +1,32 @@
 {
-  // ÉCHÉANCE — lot 2, inscrite le 20/08/2026.
+  // ÉCHÉANCE — reprise au lot 2, tâche 3, le 20/08/2026. NON LEVÉE, et mesurée.
+  //
   // `src/core/index.ts` est un espace réservé : son contenu entier est
   // `export {}`. Il n'existe que pour donner une cible à la barrière de pureté
   // d'Oxlint (`.oxlintrc.json`, override `src/core/**/*.ts`). Le déclarer point
-  // d'entrée applicatif l'exempte définitivement de la détection de code mort —
-  // lui, et tout ce qu'il réexportera. Au lot 2, quand `src/core/` portera des
-  // modules réellement importés par l'application, cette ligne SORT de `entry`.
-  // Tant qu'elle y est, aucun module de `core/` n'est surveillé.
+  // d'entrée applicatif l'exempte de la détection de code mort.
+  //
+  // Ce que l'exemption laisse passer, MESURÉ et non supposé — D24 écrivait
+  // « aucun module de core/ n'est surveillé », c'est plus étroit :
+  //   - un FICHIER orphelin déposé dans `src/core/` EST signalé ;
+  //   - un module RÉEXPORTÉ par `index.ts` que personne n'importe est
+  //     entièrement invisible. C'est donc le tonneau — le motif autour duquel
+  //     `core/` est conçu — qui échappe, pas le dossier entier.
+  //
+  // Pourquoi la ligne reste : la tâche 3 du lot 2 livre `src/ui/jetons.ts` et
+  // `src/lib/i18n.ts`, aucun module de `core/`. Retirer cette ligne aujourd'hui
+  // rend `npm run knip` ROUGE — `src/core/index.ts` en fichier inutilisé. La
+  // condition de sortie est inchangée : le premier module de `core/` réellement
+  // importé par l'application.
+  //
+  // Même chose pour `ignoreDependencies` : les deux `@testing-library/*`
+  // deviennent des dépendances inutilisées dès qu'on les retire, faute d'un
+  // test de rendu — daté de la tâche 11.
+  //
+  // Ces trois lignes ne se laissent PLUS oublier : l'épreuve inversée
+  // « les exceptions de knip sont encore nécessaires », dans
+  // `tests/harness/code-mort.test.ts`, relance knip sans elles et ROUGIT le
+  // jour où elles cessent d'être nécessaires.
   "entry": [
     "src/main.tsx",
     "src/core/index.ts",
