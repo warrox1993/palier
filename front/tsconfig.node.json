@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true
+  },
+  // `vitest.config.ts` pilote toute la suite, et Vitest ignore en SILENCE une
+  // clé inconnue : `threshold` au lieu de `thresholds` sort en 0 sans un mot.
+  // Le typecheck est le seul outil capable de voir la faute — il doit donc
+  // regarder ce fichier. Tout nouveau fichier de configuration à la racine de
+  // `front/` s'ajoute ici.
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "playwright.fixtures.config.ts"
+  ]
+}

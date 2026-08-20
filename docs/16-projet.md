@@ -6,61 +6,93 @@ Claude Code n'invente pas les conventions : elles doivent être écrites. Ce doc
 
 ## 1. Arborescence
 
+> **Réécrite le 20/08/2026.** La version précédente plaçait `src/`, `tests/` et `.env.example`
+> à la racine et décrivait un dossier `supabase/`. La tâche 3 du lot 1 a scindé le dépôt en
+> `front/` et `back/`, et les décisions D9, D10 et D14 ont remplacé Supabase par un backend
+> .NET avec EF Core. Cette section était fausse en entier.
+
 ```
 /
 ├── CLAUDE.md
 ├── README.md
+├── DEMARRAGE.md
+├── package.json                     # orchestration seule : verify, front, back
+├── global.json                      # version du SDK .NET
+├── .nvmrc                           # 24
 ├── docs/
-├── .env.example                 # jamais .env
-├── .github/workflows/
-│   ├── ci.yml                   # lint, types, tests, build, a11y
-│   └── deploy.yml
-├── supabase/
-│   ├── migrations/              # horodatées, versionnées
-│   ├── seed/
-│   │   ├── 01-nutrient-refs.sql # références EFSA
-│   │   ├── 02-exercises.sql     # catalogue
-│   │   ├── 03-foods.sql         # échantillon CIQUAL
-│   │   └── 04-programs.sql      # programmes modèles
-│   └── tests/                   # tests de politiques RLS
-├── src/
-│   ├── app/                     # routes
-│   ├── features/                # par domaine métier
-│   │   ├── workout/
-│   │   ├── nutrition/
-│   │   ├── supplements/
-│   │   ├── hydration/
-│   │   ├── progression/
-│   │   ├── assistant/
-│   │   └── account/
-│   ├── core/                    # modules purs, testés, sans dépendance UI
-│   │   ├── energy.ts            # TDEE, Mifflin, Katch, adaptatif
-│   │   ├── macros.ts
-│   │   ├── micros.ts            # agrégation, comparaison aux UL
-│   │   ├── hydration.ts
-│   │   ├── volume.ts            # séries par muscle
-│   │   ├── progression.ts       # 1RM, suggestion, plateau
-│   │   ├── xp.ts
-│   │   └── guards.ts            # planchers de sécurité
-│   ├── llm/
-│   │   ├── provider.ts          # interface
-│   │   ├── anthropic.ts
-│   │   ├── google.ts
-│   │   ├── router.ts            # routage par tâche
-│   │   └── output-filter.ts     # filtre prescriptif
-│   ├── ui/                      # composants du système de design
-│   ├── lib/                     # supabase, dexie, i18n, sync
-│   └── locales/
-│       ├── fr.json
-│       └── en.json
-└── tests/
-    ├── unit/
-    ├── integration/
-    ├── e2e/
-    └── compliance/              # suite bloquante
+│   ├── decisions.md                 # journal des décisions, lu au démarrage
+│   └── superpowers/                 # specs et plans d'exécution
+├── .github/
+│   ├── workflows/ci.yml             # front, backend, sécurité, e2e, performance, franchissement
+│   └── dependabot.yml
+├── scripts/                         # outillage transverse, sans dépendance
+│   ├── verify.mjs                   # LE point d'entrée unique du harnais
+│   ├── regles-projet.mjs            # ce qu'aucun linter ne connaît
+│   └── verifier-licences.mjs        # npm et NuGet, liste blanche
+├── front/
+│   ├── package.json
+│   ├── .env.example                 # jamais .env
+│   ├── vite.config.ts
+│   ├── vitest.config.ts
+│   ├── playwright.config.ts
+│   ├── .oxlintrc.json
+│   ├── src/
+│   │   ├── app/                     # routes
+│   │   ├── features/                # par domaine métier
+│   │   │   ├── workout/
+│   │   │   ├── nutrition/
+│   │   │   ├── supplements/
+│   │   │   ├── hydration/
+│   │   │   ├── progression/
+│   │   │   ├── assistant/
+│   │   │   └── account/
+│   │   ├── core/                    # modules purs d'AFFICHAGE, sans dépendance UI
+│   │   │   ├── unites.ts            # conversions SI ↔ affichage
+│   │   │   ├── formatage.ts
+│   │   │   └── agregations.ts       # regroupements pour les graphiques
+│   │   ├── ui/                      # composants du système de design
+│   │   ├── lib/                     # client API, dexie, i18n, sync
+│   │   └── locales/
+│   │       ├── fr.json
+│   │       └── en.json
+│   └── tests/
+│       ├── harness/                 # les épreuves de franchissement du harnais
+│       │   ├── run-outil.ts         # la primitive partagée
+│       │   └── fixtures/            # les violations délibérées
+│       ├── e2e/
+│       └── a11y/
+└── back/
+    ├── Palier.sln
+    ├── Directory.Build.props        # rigueur globale, TreatWarningsAsErrors
+    ├── coverage.runsettings         # seuil 100 % sur Palier.Domain
+    ├── Palier.Domain/               # AUCUNE référence de projet — vérifié par le compilateur
+    │   ├── Energie/                 # TDEE, Mifflin, Katch, adaptatif
+    │   ├── Macros/
+    │   ├── Micros/                  # agrégation, comparaison aux limites hautes
+    │   ├── Hydratation/
+    │   ├── Entrainement/            # volume, 1RM, progression, plateau
+    │   └── Garde-fous/              # planchers de sécurité
+    ├── Palier.Application/          # cas d'usage, CQRS via Mediator.SourceGenerator
+    ├── Palier.Infrastructure/       # EF Core, migrations, modèles, identité
+    ├── Palier.Api/                  # exposition HTTP
+    ├── Palier.Domain.Tests/         # xUnit, couverture 100 %
+    └── tests-harness/               # épreuves de franchissement du backend
 ```
 
-**Règle structurante :** `core/` ne contient que des fonctions pures, sans accès réseau ni base ni React. C'est ce qui rend les calculs testables à 100 % et auditables par le diététicien.
+**La règle structurante a changé de lieu, pas de nature.**
+
+Les calculs de conformité — énergie, macronutriments, micronutriments, hydratation,
+volume, progression, planchers de sécurité — vivent **exclusivement dans
+`Palier.Domain`**. Ce projet ne référence aucun autre projet de la solution : un
+calcul nutritionnel ne *peut pas* atteindre la base ou le réseau, et l'impossibilité
+est vérifiée par le compilateur, non par une règle de style. `01-conformite.md` § 3
+en dépend directement, et c'est ce qui rend ces calculs testables à 100 % et
+auditables par le diététicien.
+
+`front/src/core/` reste légitime pour ce qui ne décide de rien : conversions
+d'unités, formatage, agrégations d'affichage. **Aucun calcul de conformité n'y est
+recopié** — c'est une règle bloquante de `scripts/regles-projet.mjs`, pas une
+recommandation.
 
 ---
 
@@ -92,11 +124,32 @@ Claude Code n'invente pas les conventions : elles doivent être écrites. Ce doc
 
 `.env.example` versionné, `.env` jamais. Chaque variable documentée.
 
+Deux fichiers distincts : `front/.env.example` pour ce que le navigateur reçoit,
+`back/.env.example` pour ce qu'il ne doit jamais voir. La séparation physique vaut
+mieux qu'une convention de préfixe — **une clé préfixée `VITE_` est publique par
+construction**, et rien n'empêche d'en préfixer une par erreur.
+
+`front/.env.example` :
+
 ```bash
-# Supabase
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=        # serveur uniquement, jamais exposée au client
+# API — même domaine que le front (D16), donc chemin relatif en production
+VITE_API_URL=/api
+VITE_APP_URL=
+VITE_DEFAULT_LOCALE=fr
+VITE_ANALYTICS_URL=
+VITE_STRIPE_PUBLISHABLE_KEY=
+```
+
+`back/.env.example` — **rien de tout cela n'atteint le navigateur** :
+
+```bash
+# Base de données PostgreSQL, hébergée chez OVHcloud (D15)
+ConnectionStrings__Palier=
+
+# Authentification (D17) — ASP.NET Identity
+JWT_SIGNING_KEY=
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
 
 # Modèles — serveur uniquement
 ANTHROPIC_API_KEY=
@@ -104,24 +157,22 @@ GOOGLE_API_KEY=
 LLM_DEFAULT_PROVIDER=google
 LLM_MONTHLY_BUDGET_EUR=
 
-# Stripe
+# Stripe — V2 seulement
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-VITE_STRIPE_PUBLISHABLE_KEY=
 
 # Sources de données
 OPENFOODFACTS_USER_AGENT=
 
 # Observabilité
 SENTRY_DSN=
-VITE_ANALYTICS_URL=
-
-# Application
-VITE_APP_URL=
-VITE_DEFAULT_LOCALE=fr
 ```
 
-**Aucune clé de modèle ni de service ne doit être accessible côté client.** Tout appel aux modèles passe par une fonction serveur. Une clé préfixée `VITE_` est publique par construction.
+**Aucune clé de modèle ni de service ne doit être accessible côté client.** Tout
+appel aux modèles passe par le backend, jamais par le navigateur. Ce n'est pas
+seulement une règle de sécurité : `01-conformite.md` § 3 exige que le modèle
+reçoive des valeurs **déjà calculées** par `Palier.Domain`. Un appel direct depuis
+le client court-circuiterait le calcul autant que la clé.
 
 ---
 

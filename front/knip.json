@@ -1,0 +1,22 @@
+{
+  // ÉCHÉANCE — lot 2, inscrite le 20/08/2026.
+  // `src/core/index.ts` est un espace réservé : son contenu entier est
+  // `export {}`. Il n'existe que pour donner une cible à la barrière de pureté
+  // d'Oxlint (`.oxlintrc.json`, override `src/core/**/*.ts`). Le déclarer point
+  // d'entrée applicatif l'exempte définitivement de la détection de code mort —
+  // lui, et tout ce qu'il réexportera. Au lot 2, quand `src/core/` portera des
+  // modules réellement importés par l'application, cette ligne SORT de `entry`.
+  // Tant qu'elle y est, aucun module de `core/` n'est surveillé.
+  "entry": [
+    "src/main.tsx",
+    "src/core/index.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "tests/**/*.test.ts",
+    "tests/**/*.spec.ts"
+  ],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["tests/harness/fixtures/**"],
+  "ignoreDependencies": ["@testing-library/jest-dom", "@testing-library/react"]
+}

@@ -1,0 +1,48 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_size = 4
+csharp_new_line_before_open_brace = all
+csharp_style_namespace_declarations = file_scoped:error
+dotnet_style_require_accessibility_modifiers = always:error
+dotnet_diagnostic.IDE0005.severity = error
+
+# Nommage — conventions .NET
+dotnet_naming_rule.types_pascal.symbols = types
+dotnet_naming_rule.types_pascal.style = pascal
+dotnet_naming_rule.types_pascal.severity = error
+dotnet_naming_symbols.types.applicable_kinds = class,struct,enum,property,method
+dotnet_naming_style.pascal.capitalization = pascal_case
+
+dotnet_naming_rule.champs_prives.symbols = champs_prives
+dotnet_naming_rule.champs_prives.style = underscore_camel
+dotnet_naming_rule.champs_prives.severity = error
+dotnet_naming_symbols.champs_prives.applicable_kinds = field
+dotnet_naming_symbols.champs_prives.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# Un nom de méthode de test porte le scénario, séparé par des traits de
+# soulignement : c'est la convention xUnit, et la seule forme lisible dans un
+# rapport d'échec. CA1707 vise le nommage d'une API publique publiée ; un projet
+# de tests n'en publie aucune (`IsPackable` est faux). L'exception est étroite —
+# limitée aux projets `*.Tests` et à cette seule règle — jamais globale.
+#
+# Le motif est `**.cs` et non `**/*.cs` : mesuré le 20/08/2026, la seconde forme
+# ne couvre PAS la racine du projet de tests. `Palier.Domain.Tests/XTests.cs`
+# sortait en `error CA1707` pendant que `Palier.Domain.Tests/Energie/XTests.cs`
+# passait — le seul fichier de tests existant étant dans un sous-dossier, le
+# trou était invisible, et le prochain fichier créé à l'endroit le plus naturel
+# aurait cassé le build. Éprouvé aux deux profondeurs par `rigueur.test.mjs`.
+[**/*.Tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none
+
+[*.{ts,tsx,js,jsx,json,md,yml,yaml}]
+indent_size = 2

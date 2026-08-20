@@ -1,0 +1,7 @@
+# Le journal de bord et les briefs sont versionnés : ils portent les arbitrages
+# (rulings P1 à P6) et les rapports d'implémentation, cités comme faisant
+# autorité par les relectures. Ce répertoire vit dans un worktree, qui se
+# supprime en fin de session — sans versionnement, tout serait perdu.
+# Seuls les diffs de relecture restent hors dépôt : ils se reconstruisent
+# avec `git diff <plage>`.
+*.diff

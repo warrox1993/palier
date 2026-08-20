@@ -114,7 +114,7 @@ Les skills apportent la connaissance, MCP apporte l'action. Serveurs à configur
 
 | Serveur | Usage | Permissions |
 |---|---|---|
-| **Supabase MCP** | Schéma, requêtes, migrations, RLS | Lecture seule en production |
+| **PostgreSQL MCP** | Schéma, requêtes, inspection | **Lecture seule, jamais la production.** Les migrations passent par EF Core (D14), pas par MCP |
 | **GitHub MCP** | Issues, PR, Actions | Dépôt du projet uniquement |
 | **Playwright MCP** ou **Chrome DevTools MCP** | Tests de bout en bout, captures, audit visuel | Local |
 | **Context7 MCP** | Documentation à jour des bibliothèques | Lecture |
@@ -133,7 +133,7 @@ Un agent est fiable dans la mesure où son environnement l'est. **Ces éléments
 | Élément | Rôle |
 |---|---|
 | TypeScript strict | Erreurs avant exécution |
-| ESLint + Prettier, pre-commit | Style non négociable |
+| Oxlint + Prettier, pre-commit | Style non négociable. **Oxlint et non ESLint** : `typescript-eslint` déclare `typescript <6.1.0` et est incompatible avec TypeScript 7. `oxlint-tsgolint` couvre les règles type-aware |
 | Vitest | Tests unitaires rapides |
 | Playwright | Bout en bout sur les parcours critiques |
 | axe-core | Accessibilité, échec du build sur violation critique |
@@ -143,6 +143,10 @@ Un agent est fiable dans la mesure où son environnement l'est. **Ces éléments
 | Migrations versionnées | Aucune modification manuelle du schéma |
 | Lighthouse CI | Seuil de performance |
 | `npm audit` / Dependabot | Vulnérabilités |
+| **`dotnet format` + analyseurs** | Style et rigueur du backend, `TreatWarningsAsErrors` |
+| **Couverture 100 % sur `Palier.Domain`** | Le domaine porte les calculs de conformité : aucune ligne non testée |
+| **Contrôle des licences** | npm et NuGet, liste blanche. Motivé par la découverte de MediatR sous RPL-1.5 — D13 |
+| **Épreuves de franchissement** | Chaque garde-fou ci-dessus a une épreuve qui provoque la violation qu'il doit refuser, et qui reste dans la suite — D5 |
 
 **Des boucles de rétroaction rapides conditionnent tout.** Compilation rapide, tests rapides, outils qui ne pendent pas. Si le build prend deux minutes, l'agent tourne en rond. Investir dans la vitesse du harnais est prioritaire sur toute fonctionnalité.
 
@@ -154,7 +158,7 @@ Chaque domaine a sa séquence, ses vérifications et son critère de sortie. **A
 
 ### Base de données
 
-1. Écrire la migration dans `supabase/migrations/`, horodatée
+1. Écrire la migration avec EF Core (`dotnet ef migrations add`), dans `back/Palier.Infrastructure/Migrations/`
 2. **RLS activée dans la même migration que la création de table** — jamais après
 3. Écrire un test de politique : un utilisateur A ne doit jamais lire une ligne de B
 4. Appliquer en local, puis en recette

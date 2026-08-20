@@ -1,0 +1,16 @@
+npx lint-staged
+
+# gitleaks est un binaire Go, pas un paquet npm. Le paquet `gitleaks` du
+# registre npm est un squat vide — vérifié le 20/08/2026 : version 1.0.0,
+# aucun exécutable, un README pour tout contenu. Il s'installe donc par le
+# gestionnaire du système, et son absence REFUSE le commit : un contrôle de
+# secrets qui se laisse sauter ne protège personne.
+#
+# `command -v gitleaks` ne suffit pas : mesuré le 20/08/2026, winget installe
+# le binaire sous %LOCALAPPDATA%\Microsoft\WinGet\Packages et **ne crée aucun
+# lien dans le PATH**. Le hook aurait refusé tous les commits sur une machine
+# où l'outil est pourtant bien installé. Le résolveur cherche aux emplacements
+# connus et sort en 1 avec les commandes d'installation s'il ne trouve rien.
+GITLEAKS="$(node scripts/outil-gitleaks.mjs)" || exit 1
+
+"$GITLEAKS" git --staged --redact --no-banner -v --config .gitleaks.toml

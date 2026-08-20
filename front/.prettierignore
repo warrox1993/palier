@@ -1,0 +1,14 @@
+dist/
+coverage/
+playwright-report/
+test-results/
+package-lock.json
+
+# NE PAS ajouter tests/harness/fixtures/ ici. Mesuré le 20/08/2026 :
+# `prettier --check tests/harness/fixtures/format-casse.ts` rend alors le code 0
+# avec « All matched files use Prettier code style! » — l'épreuve du harnais
+# passerait au vert sans que Prettier ait rien vérifié. Prettier applique ce
+# fichier même à une cible nommée explicitement en ligne de commande.
+# L'exclusion appartient aux commandes qui n'en veulent pas : les scripts
+# `format` et `format:check` portent le motif nié "!tests/harness/fixtures/**".
+# Même raisonnement que le ruling P6 pour Oxlint.

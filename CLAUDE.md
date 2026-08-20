@@ -69,7 +69,11 @@ En février 2026, Karpathy a renommé le « vibe coding » en **agentic engineer
 
 ### Harnais avant produit
 
-Aucune fonctionnalité n'est écrite avant que TypeScript strict, ESLint, Prettier, Vitest, Playwright, les hooks pre-commit et pre-push, la CI et axe-core ne soient en place. Des boucles de rétroaction rapides conditionnent tout le reste : si le build est lent, l'agent tourne en rond.
+Aucune fonctionnalité n'est écrite avant que TypeScript strict, **Oxlint**, Prettier, Vitest, Playwright, les hooks pre-commit et pre-push, la CI et axe-core ne soient en place.
+
+> **Oxlint, et non ESLint.** `typescript-eslint` déclare `typescript >=4.8.4 <6.1.0` en dépendance de pair : il est incompatible avec TypeScript 7, que ce projet utilise. Oxlint couvre les mêmes règles via `oxlint-tsgolint`, construit sur TypeScript 7. Ce document disait ESLint jusqu'au 20/08/2026.
+
+Des boucles de rétroaction rapides conditionnent tout le reste : si le build est lent, l'agent tourne en rond.
 
 ### Contexte
 
@@ -115,23 +119,28 @@ Documents de référence, à lire avant de commencer :
 
 ## 3. Stack
 
+> Cette section a été réécrite le 20/08/2026 pour appliquer les décisions **D9, D10, D11, D14, D15, D16 et D17** de `docs/decisions.md`, tranchées le 19/08. Elle décrivait encore une pile Supabase + Vercel abandonnée. Le journal des décisions fait foi ; en cas d'écart, c'est lui qu'il faut lire.
+
 | Couche | Choix | Contrainte |
 |---|---|---|
 | Front | React + Vite + TypeScript + Tailwind | PWA installable |
-| Backend | Supabase | **Région Francfort ou Paris — irréversible** |
-| Base de données | PostgreSQL | **RLS activé dès la création de chaque table** |
-| Auth | Supabase Auth : **Google OAuth + email/mot de passe** | Pas de lien magique. Voir `docs/09-comptes.md` |
+| Backend | **ASP.NET Core (.NET 10), Clean Architecture en quatre projets** | `Palier.Domain` ne référence aucun autre projet — D11 |
+| Base de données | PostgreSQL, via **EF Core** | Hébergée en Europe. Les vues et contraintes passent par `migrationBuilder.Sql` — D14 |
+| Auth | **ASP.NET Identity** : Google OAuth + email/mot de passe | Pas de lien magique. Les sept exigences de `docs/09-comptes.md` § 1 sont à implémenter — D17 |
+| Répartition | `Mediator.SourceGenerator` (MIT) | **MediatR est interdit** : RPL-1.5, incompatible avec un service commercial — D12 |
 | État serveur | TanStack Query | Mutations optimistes |
-| Cache local | IndexedDB (Dexie) | Écriture immédiate, réseau en arrière-plan |
-| Hébergement | Vercel | Spend limit activé dès le jour 1 |
+| Cache local | IndexedDB (Dexie) | Écriture immédiate, réseau en arrière-plan, file de retry persistée — `docs/11-qualite.md` |
+| Hébergement | **OVHcloud** | Fournisseur européen, hors portée du Cloud Act. Backend conteneurisé sur VPS ou Public Cloud — D15 |
+| Domaine | **Front et API sous le même domaine** | Le cookie de rafraîchissement reste de même site — D16 |
 | Paiement | Stripe | À partir de la V2 seulement |
 | LLM | API Claude + Gemini | Abstraction multi-fournisseur obligatoire, voir `docs/06-ia.md` |
-| Cache local | Dexie / IndexedDB | File de retry persistée, voir `docs/11-qualite.md` |
 | i18n | i18next | Français et anglais dès la première ligne |
-| Tests | Vitest + Playwright + axe-core | En place avant la première fonctionnalité |
+| Tests | Vitest + Playwright + axe-core, xUnit côté backend | En place avant la première fonctionnalité |
 | Mesure | Plausible ou Umami auto-hébergé | UE, sans donnée de santé |
 
-**Portabilité :** aucune dépendance aux services propriétaires Vercel (KV, Blob, Edge Config). L'état vit dans Supabase. Une migration vers Cloudflare doit rester possible en une journée.
+**Ce que le changement d'architecture a déplacé.** La sécurité ne repose plus sur les politiques RLS du moteur PostgreSQL mais sur un point de contrôle applicatif : l'API est le seul chemin vers les données. RLS reste activé en défense en profondeur, il n'est plus la ligne unique. L'authentification devient un traitement que vous opérez, non un service délégué — `docs/13-juridique.md` doit en tenir compte dans l'AIPD et le registre.
+
+**Portabilité :** le backend est conteneurisé, l'état vit dans PostgreSQL. Aucune dépendance à un service propriétaire d'hébergeur. Un changement de fournisseur doit rester possible en une journée.
 
 ---
 

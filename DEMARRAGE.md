@@ -6,14 +6,31 @@
 
 ## Étape 0 — Prérequis
 
+> **Ce document a été mis à jour le 20/08/2026** pour appliquer les décisions D3, D9, D10, D15 et D17 de `docs/decisions.md`. Il décrivait une pile Supabase + Vercel abandonnée le 19/08.
+
 ```bash
-node --version    # 20 ou plus
+node --version     # 24 — voir .nvmrc, et D3
+dotnet --version   # 10 ou plus
 git --version
+gitleaks version   # 8 ou plus — voir ci-dessous
 ```
 
-Comptes à créer, tous gratuits :
-- **Supabase** — projet créé **en région Francfort ou Paris**. Choix irréversible
-- **Vercel** — connecté à GitHub
+**gitleaks s'installe hors de npm.** C'est un binaire Go ; le paquet `gitleaks`
+du registre npm est un squat vide, sans exécutable (vérifié le 20/08/2026).
+
+```bash
+winget install Gitleaks.Gitleaks   # Windows
+brew install gitleaks              # macOS
+# Linux : https://github.com/gitleaks/gitleaks/releases
+```
+
+Le hook de pré-commit **refuse le commit** si gitleaks est absent, avec ce
+message. Ce n'est pas une gêne à contourner : un contrôle de secrets qui se
+laisse sauter ne protège personne.
+
+Comptes à créer :
+
+- **OVHcloud** — PostgreSQL managé et une instance pour le backend conteneurisé. **Région européenne** : c'est l'argument de conformité principal pour des données de santé (D15)
 - **GitHub** — dépôt privé
 
 **Clés API Anthropic et Google : à créer maintenant.** L'étape 1 de la roadmap livre l'abstraction `LLMProvider` avec un appel de test sur chaque fournisseur — sans clés, ce livrable est inatteignable.
@@ -34,6 +51,19 @@ git add . && git commit -m "ajoute le dossier de spécification"
 ```
 
 **Critère :** `cat CLAUDE.md | head -5` affiche le fichier.
+
+### Sur un dépôt déjà constitué, après un clone
+
+```bash
+npm install               # À LA RACINE : c'est ce qui ARME les hooks Git
+npm --prefix front ci
+git config --get core.hooksPath   # doit rendre .husky/_
+```
+
+**L'installation à la racine n'est pas optionnelle.** C'est son script `prepare`
+qui pose `core.hooksPath` ; sans elle, `.husky/pre-commit` existe sur le disque
+et **git ne l'appelle jamais**. Le contrôle de secrets serait alors absent sans
+qu'aucun message ne le dise — d'où la troisième commande, qui le vérifie.
 
 ---
 
@@ -61,7 +91,7 @@ Puis les plugins officiels, depuis la marketplace `claude-plugins-official` déj
 /plugin install commit-commands
 ```
 
-**Critère :** `/help` liste trois commandes correspondant à *clarifier*, *planifier* et *exécuter*. **Leur nom exact dépend de la version installée** — la version courante les expose sous `brainstorming`, `writing-plans` et `executing-plans`, une version antérieure utilisait `/superpowers:brainstorm`, `write-plan`, `execute-plan`.
+**Critère :** `/help` liste trois commandes correspondant à _clarifier_, _planifier_ et _exécuter_. **Leur nom exact dépend de la version installée** — la version courante les expose sous `brainstorming`, `writing-plans` et `executing-plans`, une version antérieure utilisait `/superpowers:brainstorm`, `write-plan`, `execute-plan`.
 
 Ce qui compte est la présence des trois fonctions, pas le libellé. Si rien n'apparaît, redémarrer la session avant d'aller plus loin.
 
@@ -75,11 +105,7 @@ Créer `.claude/settings.json` :
 {
   "permissions": {
     "deny": ["EnterPlanMode"],
-    "allow": [
-      "Bash(npm run *)",
-      "Bash(git *)",
-      "Bash(npx supabase *)"
-    ]
+    "allow": ["Bash(npm run *)", "Bash(git *)", "Bash(dotnet *)"]
   }
 }
 ```
@@ -95,11 +121,11 @@ Créer `.claude/settings.json` :
 À ajouter au fur et à mesure, pas tous d'un coup. Pour démarrer, deux suffisent :
 
 ```
-/mcp add supabase
 /mcp add github
+/mcp add context7
 ```
 
-Playwright, Context7 et Sentry viendront quand le besoin apparaîtra. Un serveur MCP inutilisé consomme du contexte à chaque session.
+Context7 est utile dès le premier jour : sur une bibliothèque, il donne la documentation de la version installée là où le web donne celle d'il y a deux ans. Playwright et Sentry viendront quand le besoin apparaîtra. Un serveur MCP inutilisé consomme du contexte à chaque session.
 
 **Règle absolue : jamais d'accès en écriture sur la base de production.**
 
@@ -116,6 +142,7 @@ Copier tel quel :
 > **N'écris aucune ligne de code pour l'instant.**
 >
 > Quand tu as tout lu, réponds-moi avec :
+>
 > 1. Ta compréhension du produit en cinq lignes maximum
 > 2. Les trois contraintes que tu considères comme non négociables
 > 3. Les points du dossier qui te paraissent ambigus ou contradictoires
@@ -133,7 +160,7 @@ Une fois ses questions traitées :
 
 > Lance la commande de clarification de Superpowers (`brainstorming` ou son équivalent selon ta version) sur l'étape 1 de `docs/07-roadmap.md` — le harnais et le socle.
 >
-> Rappel : le harnais avant le produit. Rien ne s'écrit avant que TypeScript strict, ESLint, Prettier, Vitest, Playwright, les hooks pre-commit et pre-push, la CI et axe-core ne soient en place et vérifiés.
+> Rappel : le harnais avant le produit. Rien ne s'écrit avant que TypeScript strict, **Oxlint**, Prettier, Vitest, Playwright, les hooks pre-commit et pre-push, la CI et axe-core ne soient en place et vérifiés. Oxlint et non ESLint : `typescript-eslint` est incompatible avec TypeScript 7.
 
 Puis, après le brainstorm :
 
@@ -145,14 +172,14 @@ Puis, après le brainstorm :
 
 C'est la partie que la plupart des gens ratent. L'agent est bon dans la mesure où tu tiens ton bout.
 
-| Fais | Ne fais pas |
-|---|---|
-| Lire chaque plan avant de valider | Répondre « ok continue » sans lire |
-| Exiger le contrôle exécutable de chaque tâche | Accepter « ça devrait marcher » |
-| Redémarrer une session qui patine | La prolonger en espérant que ça passe |
+| Fais                                          | Ne fais pas                            |
+| --------------------------------------------- | -------------------------------------- |
+| Lire chaque plan avant de valider             | Répondre « ok continue » sans lire     |
+| Exiger le contrôle exécutable de chaque tâche | Accepter « ça devrait marcher »        |
+| Redémarrer une session qui patine             | La prolonger en espérant que ça passe  |
 | Faire tourner l'app toi-même après chaque lot | Croire les captures d'écran sur parole |
-| Commiter à chaque tâche terminée | Accumuler dix tâches non commitées |
-| Renvoyer vers le document quand il dérive | Réexpliquer la règle de mémoire |
+| Commiter à chaque tâche terminée              | Accumuler dix tâches non commitées     |
+| Renvoyer vers le document quand il dérive     | Réexpliquer la règle de mémoire        |
 
 **La phrase à utiliser quand il dérive :** « Relis `docs/XX` et reprends. »
 
@@ -173,11 +200,11 @@ C'est la partie que la plupart des gens ratent. L'agent est bon dans la mesure o
 
 ## Les trois premières semaines
 
-| Semaine | Objectif |
-|---|---|
-| 1 | Harnais complet, CI verte, projet Supabase, auth fonctionnelle |
-| 2 | Schéma complet avec RLS, tests de politiques verts, seed chargé |
-| 3 | Premier écran de séance utilisable, avec ses quatre états |
+| Semaine | Objectif                                                              |
+| ------- | --------------------------------------------------------------------- |
+| 1       | Harnais complet front et backend, CI verte, solution .NET qui compile |
+| 2       | Schéma complet avec RLS, tests de politiques verts, seed chargé       |
+| 3       | Premier écran de séance utilisable, avec ses quatre états             |
 
 Si à la fin de la semaine 1 la CI n'est pas verte, ne passe pas à la semaine 2. Le harnais est ce qui rend tout le reste possible.
 

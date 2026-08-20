@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Seuil de couverture : 100 % sur Palier.Domain, docs/08-workflow.md § 6.
+       Il vit ici, et non dans back/coverage.runsettings, parce que le
+       collecteur VSTest de coverlet n'applique AUCUN seuil : sa documentation
+       (VSTestIntegration.md) exclut Threshold, ThresholdType et ThresholdStat
+       de la liste des éléments reconnus, et les ignore en silence. Mesuré : une
+       fonction non couverte passait au vert avec le seuil dans le runsettings.
+       Seule l'intégration MSBuild de coverlet applique le seuil.
+       Le placer dans le projet plutôt que dans une ligne de commande le rend
+       aussi impossible à contourner en oubliant un drapeau. -->
+  <PropertyGroup>
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <Include>[Palier.Domain]*</Include>
+    <Threshold>100</Threshold>
+    <ThresholdType>line,branch,method</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.msbuild" Version="10.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Palier.Domain\Palier.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

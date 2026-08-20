@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rapport de couverture du backend.
+
+  Ce fichier ne porte PAS le seuil, contrairement à ce que prévoyait le plan.
+  Le collecteur VSTest de coverlet ne reconnaît ni Threshold, ni ThresholdType,
+  ni ThresholdStat : sa documentation (VSTestIntegration.md) les exclut
+  explicitement de la liste des éléments acceptés, et les ignore en silence.
+  Mesuré le 20/08/2026 : avec le seuil ici, une fonction non couverte de
+  Palier.Domain sortait en code 0. Le garde-fou aurait existé sans rien refuser.
+
+  Le seuil de 100 % vit donc dans back/Palier.Domain.Tests/Palier.Domain.Tests.csproj,
+  appliqué par coverlet.msbuild — la seule intégration qui le fasse respecter.
+  Ce fichier ne fait plus que décrire le rapport produit.
+
+  Le filtre ne porte que sur Palier.Domain : docs/08-workflow.md § 6 exige 100 %
+  sur les modules de calcul, et aucun seuil global — un chiffre global pousse à
+  tester ce qui est facile.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>[Palier.Domain]*</Include>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

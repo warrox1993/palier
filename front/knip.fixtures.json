@@ -1,0 +1,6 @@
+{
+  "entry": ["tests/harness/fixtures/point-entree.ts"],
+  "project": ["tests/harness/fixtures/export-orphelin.ts"],
+  "ignore": [],
+  "include": ["files"]
+}

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["tests/harness/fixtures/any-interdit.ts"],
+  "exclude": []
+}

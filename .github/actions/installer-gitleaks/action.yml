@@ -1,0 +1,40 @@
+# gitleaks n'a pas de paquet npm officiel : celui du registre est un squat vide
+# (version 1.0.0, aucun exécutable — vérifié le 20/08/2026, décision D23). On
+# télécharge donc la publication officielle et on VÉRIFIE son empreinte avant de
+# l'exécuter : sans ce contrôle, une publication remplacée exécuterait du code
+# arbitraire dans un job qui lit tout le dépôt.
+#
+# Version et empreinte sont ici, en un seul endroit, pour les trois jobs qui en
+# ont besoin. YAML porte nativement les commentaires : l'interdit du ruling P14
+# ne s'applique pas ici, et il a été vérifié qu'Actions les ignore.
+name: Installer gitleaks
+description: Télécharge le binaire gitleaks officiel, empreinte vérifiée, et le place sur le PATH.
+
+inputs:
+  version:
+    description: Version de gitleaks à installer.
+    required: false
+    default: 8.30.1
+  sha256:
+    description: Empreinte SHA-256 de l'archive linux_x64 de cette version.
+    required: false
+    default: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        SHA256: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+        archive="gitleaks_${VERSION}_linux_x64.tar.gz"
+        curl --silent --show-error --fail --location \
+          "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${archive}" \
+          --output "$archive"
+        echo "${SHA256}  ${archive}" | sha256sum --check --strict -
+        tar --extract --gzip --file "$archive" gitleaks
+        install -m 0755 gitleaks /usr/local/bin/gitleaks
+        rm -f "$archive" gitleaks
+        gitleaks version

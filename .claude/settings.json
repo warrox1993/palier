@@ -23,7 +23,7 @@
     "allow": [
       "Bash(npm run *)",
       "Bash(git *)",
-      "Bash(npx supabase *)"
+      "Bash(dotnet *)"
     ]
   }
 }

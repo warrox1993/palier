@@ -1,0 +1,15 @@
+front/node_modules/
+front/dist/
+front/coverage/
+front/playwright-report/
+front/test-results/
+back/**/bin/
+back/**/obj/
+back/**/TestResults/
+back/**/coverage.cobertura.xml
+node_modules/
+*.tmp.txt
+.env
+.env.local
+*.local
+.DS_Store
