@@ -92,6 +92,26 @@ describe('garde-fou : intégration continue', () => {
     }
   })
 
+  it('chaque écosystème porte un délai de refroidissement', () => {
+    // Sans `cooldown`, une version compromise publiée sur npm est proposée à la
+    // fusion dans l'heure — le vecteur des attaques de chaîne
+    // d'approvisionnement. Trouvé par semgrep à sa première exécution en
+    // intégration continue le 20/08/2026 ; le plan ne le prévoyait pas.
+    //
+    // Cette épreuve existe parce que le correctif est supprimable en silence :
+    // retirer quatre blocs `cooldown` ne fait échouer aucun autre contrôle, et
+    // semgrep ne tourne que dans un job dont l'échec peut être toléré un jour.
+    const conf = parse(readFileSync(DEPENDABOT, 'utf8'))
+    for (const u of conf.updates) {
+      const quoi = `${u['package-ecosystem']}:${u.directory}`
+      expect(u.cooldown, `Aucun délai de refroidissement sur ${quoi}`).toBeDefined()
+      expect(
+        u.cooldown['default-days'],
+        `Délai de refroidissement nul ou absent sur ${quoi}`,
+      ).toBeGreaterThan(0)
+    }
+  })
+
   it('le seuil Lighthouse est déclaré et bloquant', () => {
     const chemin = 'front/.lighthouserc.json'
     expect(existsSync(chemin), `Cible manquante : ${chemin}`).toBe(true)

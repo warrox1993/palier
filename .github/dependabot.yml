@@ -1,9 +1,33 @@
 version: 2
+
+# Le délai de refroidissement (`cooldown`) est ce qui sépare une mise à jour
+# d'une adoption aveugle. Sans lui, une version compromise publiée sur npm est
+# proposée à la fusion dans l'heure : c'est le vecteur des attaques de chaîne
+# d'approvisionnement, où le paquet légitime est remplacé par une version
+# malveillante pendant quelques heures avant d'être retiré.
+#
+# Trouvé par semgrep (`dependabot-missing-cooldown`, quatre occurrences) à sa
+# PREMIÈRE exécution en intégration continue, le 20/08/2026. Le plan du lot 1
+# ne le prévoyait pas.
+#
+# Les durées sont graduées par le risque, pas uniformes : une majeure change des
+# interfaces et mérite qu'on laisse le temps aux autres de rencontrer ses
+# problèmes ; un correctif est ce qu'on veut recevoir vite.
+#
+# ⚠️ À vérifier avant de rallonger ces délais : `cooldown` s'applique aux mises
+# à jour de VERSION. Les mises à jour de SÉCURITÉ déclenchées par une alerte
+# Dependabot suivent un autre chemin — mais cela n'a pas été éprouvé ici, et un
+# délai trop long retarderait un correctif de sécurité s'il l'était.
 updates:
   - package-ecosystem: npm
     directory: /front
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       mineures:
         update-types: [minor, patch]
@@ -15,6 +39,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       mineures:
         update-types: [minor, patch]
@@ -23,6 +52,11 @@ updates:
     directory: /back
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       mineures:
         update-types: [minor, patch]
@@ -31,7 +65,13 @@ updates:
   # Les actions sont épinglées par empreinte dans ci.yml : sans Dependabot,
   # elles resteraient figées sur une version vulnérable, l'épinglage protégeant
   # de la substitution mais pas de l'obsolescence.
+  #
+  # `github-actions` ne supporte que `default-days` — vérifié dans la référence
+  # des options Dependabot, les clés SemVer sont réservées aux écosystèmes qui
+  # versionnent en SemVer.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
