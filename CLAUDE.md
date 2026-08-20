@@ -163,6 +163,13 @@ Documents de référence, à lire avant de commencer :
 
 **Quand les deux se contredisent, KISS gagne.** Une abstraction qui évite trois lignes de répétition mais oblige à comprendre deux fichiers pour lire un traitement est un mauvais échange.
 
+**Le critère, une seule question à se poser :** _si cette règle change, les deux endroits doivent-ils changer ensemble ?_
+
+- **Oui → factoriser, sans hésiter et sans limite.** Un calcul de conformité, un seuil de sécurité, une formule nutritionnelle, un format de date : une seule implémentation, testée une fois. Deux copies d'une même connaissance, c'est la garantie qu'une des deux sera corrigée sans l'autre — et sur des valeurs de santé, c'est un défaut qui se voit chez l'utilisateur.
+- **Non → laisser séparé, même si le code se ressemble.** Deux validations qui vérifient toutes deux « une valeur positive » — l'une pour un poids corporel, l'autre pour une charge soulevée — ne portent pas la même connaissance. Les factoriser crée un couplage entre deux règles indépendantes : le jour où l'une accepte les décimales et pas l'autre, l'abstraction se paie en contorsions.
+
+La ressemblance du code n'est pas le critère. **Le critère est le destin commun.**
+
 ### Sécurité — c'est une priorité, pas une étape
 
 La sécurité se traite à chaque ligne, pas à la fin. Elle prime sur la vitesse de livraison, et le porteur du projet accepte explicitement le coût : `npm run verify` prend cinq minutes et c'est assumé.
