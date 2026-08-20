@@ -1,6 +1,7 @@
 dist/
 coverage/
 playwright-report/
+test-results/
 package-lock.json
 
 # NE PAS ajouter tests/harness/fixtures/ ici. Mesuré le 20/08/2026 :

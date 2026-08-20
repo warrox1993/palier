@@ -14,6 +14,7 @@
     "format:check": "prettier --check . \"!tests/harness/fixtures/**\"",
     "knip": "knip",
     "jscpd": "jscpd src",
+    "e2e": "playwright test tests/e2e/accessibilite.spec.ts",
     "test": "vitest run --exclude \"tests/harness/accessibilite.test.ts\"",
     "test:harness": "vitest run tests/harness",
     "test:watch": "vitest"
@@ -36,6 +37,8 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.13.3",
