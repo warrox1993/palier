@@ -1,5 +1,8 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
+using Palier.Infrastructure;
 using Testcontainers.PostgreSql;
 
 namespace Palier.Database.Tests;
@@ -134,9 +137,38 @@ public sealed class BaseFixture : IAsyncLifetime
             + $"Database={Base};Username={role};Password={motDePasse}{pool}";
     }
 
-    public Task InitializeAsync() => _conteneur.StartAsync();
+    public async Task InitializeAsync()
+    {
+        await _conteneur.StartAsync();
+
+        // La migration est appliquée SOUS `palier_migrations`, jamais sous le
+        // compte d'administration : c'est ce qui fait de ce rôle le
+        // propriétaire des tables, et donc ce qui rend `force row level
+        // security` observable. Une suite qui migrerait sous l'administrateur
+        // éprouverait un schéma dont personne n'est propriétaire au sens du
+        // produit.
+        await using var contexte = Contexte(ChaineMigrations);
+        await contexte.Database.MigrateAsync();
+    }
 
     public Task DisposeAsync() => _conteneur.DisposeAsync().AsTask();
+
+    /// <summary>
+    /// Un contexte EF sur une chaîne donnée. Sert aux épreuves de schéma et à
+    /// la garde applicative ; les épreuves d'isolation, elles, parlent au
+    /// moteur en SQL nu, pour qu'aucune couche d'abstraction ne puisse être
+    /// soupçonnée d'avoir filtré à la place des politiques.
+    /// </summary>
+    public static PalierDbContext Contexte(
+        string chaine,
+        Action<NpgsqlDbContextOptionsBuilder>? npgsql = null
+    )
+    {
+        var options = new DbContextOptionsBuilder<PalierDbContext>()
+            .UseNpgsql(chaine, npgsql ?? (_ => { }))
+            .Options;
+        return new PalierDbContext(options);
+    }
 
     private static string TrouverRacine()
     {

@@ -64,6 +64,22 @@ dotnet_diagnostic.CA1515.severity = none
 # portent une assertion.
 dotnet_diagnostic.CA2007.severity = none
 
+# Les migrations EF Core sont du code ÉCRIT PAR UN OUTIL. `dotnet ef migrations
+# add` produit un fichier que les analyseurs refusent en bloc — mesuré le
+# 20/08/2026 sur `SocleInitial` : IDE0161 (espace de noms non inclus dans
+# l'étendue du fichier), IDE0005 (using inutile), CA1062 (paramètre non vérifié)
+# et CA1861 (tableaux constants) sortaient en erreur, et chaque migration future
+# rouvrirait la liste. Corriger à la main un fichier régénéré à la commande
+# suivante n'est pas une correction, c'est une dette qui se réécrit toute seule.
+#
+# `generated_code = true` est le mécanisme documenté par Roslyn pour ce cas
+# exact : les analyseurs cessent de porter sur ces fichiers. Ce que le SQL écrit
+# à la main dans ces migrations fait vraiment est éprouvé bien mieux qu'un
+# analyseur ne le ferait — SchemaTests et IsolationTests l'exécutent sur un
+# moteur réel, à chaque `npm run verify`.
+[**/Migrations/*.cs]
+generated_code = true
+
 [*.{ts,tsx,js,jsx,json,md,yml,yaml}]
 indent_size = 2
 

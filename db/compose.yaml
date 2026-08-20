@@ -48,6 +48,25 @@ services:
     # qui permet `pg_upgrade --link` sans franchir de frontière de montage.
     volumes:
       - palier-db-data:/var/lib/postgresql
+      # `amorcage/` est monté en LECTURE SEULE dans le répertoire d'amorçage de
+      # l'image : l'entrypoint y exécute les `*.sql` par ordre alphabétique,
+      # sous le compte d'administration, avant que la base accepte la moindre
+      # connexion. C'est ainsi que les trois rôles de D37 existent avant que
+      # `dotnet ef database update` s'y connecte.
+      #
+      # AJOUTÉ À LA TÂCHE 6, ET C'EST UN DÉFAUT DU PLAN CORRIGÉ, PAS UNE
+      # AMÉLIORATION. L'étape 7 de la tâche 6 demandait d'appliquer la migration
+      # « sans aucune commande manuelle intercalée » sur la base levée par
+      # `npm run db:up` — mesuré le 20/08/2026, elle ne portait que
+      # `palier_admin`, et la migration échouait sur un rôle inexistant. Aucune
+      # tâche du lot ne montait ce dossier.
+      #
+      # L'entrypoint n'exécute ces fichiers QUE si le répertoire de données est
+      # vide. Sur un volume déjà créé, il faut `npm run db:reset` — qui détruit
+      # les données locales — puis `npm run db:up`. C'est écrit dans
+      # `db/README.md` § Appliquer, parce que le symptôme (« le rôle
+      # palier_migrations n'existe pas ») ne dit pas le remède.
+      - ./amorcage:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U palier_admin -d palier']
       interval: 5s

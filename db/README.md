@@ -60,7 +60,79 @@ Le code de sortie est **3**, distinct du 1 que rend un échec de `compose` :
 
 ## Appliquer
 
-<!-- Écrit à la tâche 6 du lot 2. -->
+Le schéma vit dans `back/Palier.Infrastructure/Migrations/`, en migrations EF
+Core versionnées — **D14**. Aucune modification manuelle du schéma, par quelque
+console que ce soit.
+
+```bash
+npm run db:up
+# La variable porte quatre couples, séparés par des points-virgules :
+#   Host=localhost · Port=5432 · Database=palier · Username=palier_migrations
+# suivis du mot de passe local, celui de `amorcage/01-roles.sql`.
+export ConnectionStrings__PalierMigrations=…
+dotnet ef database update \
+  --project back/Palier.Infrastructure --startup-project back/Palier.Infrastructure
+```
+
+**La chaîne passe par la variable d'environnement, jamais par un fichier du
+dépôt.** `.gitleaks.regles.toml` porte la règle `chaine-connexion-postgres`, et
+elle refuse un fichier suivi qui porterait une chaîne complète, mot de passe
+compris.
+
+**Le motif n'est PAS recopié ici, et l'exemple ci-dessus est délibérément
+décomposé.** Mesuré le 20/08/2026 : écrite d'un seul tenant, la ligne
+d'exemple déclenchait la règle sur ce fichier même, et le commit était refusé
+— trois fois. La parade retenue est de ne pas écrire la chaîne ; élargir
+l'exception aurait rendu la règle aveugle sur tout le dossier, ce qui est
+exactement ce que `db/compose.yaml` explique déjà pour lui-même.
+
+**Le rôle est `palier_migrations`, jamais l'API et jamais l'administrateur.**
+C'est lui qui devient propriétaire des tables, et c'est cette propriété qui rend
+`force row level security` observable. Migrer sous un autre compte produirait un
+schéma dont personne n'est propriétaire au sens du produit — et des politiques
+qui ne mordent pas.
+
+### Les rôles avant le schéma
+
+`amorcage/` est monté en lecture seule dans `/docker-entrypoint-initdb.d/` :
+l'image y exécute les `*.sql` **par ordre alphabétique et sous le compte
+d'administration**, avant que la base accepte la moindre connexion. C'est le
+seul usage de ce compte.
+
+**L'entrypoint ne les exécute que sur un répertoire de données VIDE.** Sur un
+volume déjà créé — donc sur toute machine où `db:up` a déjà tourné une fois — il
+faut :
+
+```bash
+npm run db:reset    # DÉTRUIT les données locales
+npm run db:up
+```
+
+Sans cela, la migration échoue sur `role "palier_migrations" does not exist`, et
+le message ne dit pas quoi faire. Mesuré le 20/08/2026 : le montage manquait, la
+base locale ne portait que `palier_admin`, et l'étape « appliquer sans commande
+manuelle intercalée » était impossible.
+
+### Ce que la migration écrit à la main
+
+EF Core ne pilote ni les vues, ni RLS, ni les privilèges. `SocleInitial` les
+écrit par `migrationBuilder.Sql(...)`, **chacun avec son `Down`** :
+
+| Objet                                      | Pourquoi à la main                                                                                                                                                                                                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| la vue `weekly_volume`                     | EF ne génère pas de vue. Elle porte `security_invoker = true` — sans quoi elle filtrerait avec les droits de son propriétaire, et non de l'appelant                                                                                                             |
+| `enable` **et** `force row level security` | sur les **treize** tables de `public`, historique des migrations compris. `enable` seul laisse le propriétaire contourner ses propres politiques                                                                                                                |
+| la politique `migrations_referentiel`      | sous `FORCE`, le propriétaire est lui aussi soumis aux politiques. Le chargement du référentiel passe donc par une politique **explicite**, jamais par `BYPASSRLS` ni par un `NO FORCE` temporaire — les deux façons d'éteindre RLS sans que rien ne le signale |
+| les `grant` de `palier_app`                | objet par objet — D37. Aucun `alter default privileges` : il accorderait d'avance sur des tables que personne n'a encore relues                                                                                                                                 |
+
+Les tables `AspNet*` reçoivent RLS **et aucune politique** — D38. Elles naissent
+en refus par défaut, pour tout le monde, propriétaire compris. Le chemin de
+connexion qui lit `AspNetUsers` par email avant toute identité casse donc fermé
+et bruyant ; **le lot 4 doit le concevoir**, et non le découvrir.
+
+**La migration suppose que les rôles existent.** Un `grant … to palier_app` sur
+une base sans ce rôle échoue en le nommant. C'est le couplage voulu entre
+`amorcage/` et les migrations : il est bruyant, et il est écrit ici.
 
 ## Réinitialiser
 
