@@ -190,11 +190,29 @@ Les épreuves du harnais ne figurent **pas** dans `verify` : elles font échouer
 {
   "scripts": {
     "verify": "node scripts/verify.mjs",
-    "test:harness": "npm --prefix front run test:harness && vitest run tests-harness back/tests-harness",
+    "test:harness": "npm --prefix front run test:harness && npm run test:harness:back",
+    "test:harness:back": "node front/node_modules/vitest/vitest.mjs run --config back/vitest.config.mjs",
     "front": "npm --prefix front run"
   }
 }
 ```
+
+> **Corrigé après la tâche 17.** La version précédente lançait `vitest run tests-harness back/tests-harness`
+> depuis la racine : ni Vitest ni configuration racine n'existent là. L'implémenteur du backend a dû
+> créer `back/vitest.config.mjs` pour pouvoir lancer ses épreuves — sans quoi aucune d'elles n'était
+> exécutable. Ce fichier n'était pas au plan ; il y entre ici.
+>
+> Trois choses à ne pas défaire dans cette configuration, chacune motivée par une mesure :
+> - `root` est la racine du dépôt, pas `back/` : les épreuves adressent `back/Palier.sln` et
+>   `scripts/verifier-licences.mjs` exactement comme les commandes que `verify` et la CI lancent.
+> - l'objet est exporté brut, sans `defineConfig` : `vitest` n'est installé que dans
+>   `front/node_modules`, hors de la chaîne de résolution d'un fichier de `back/`.
+> - `fileParallelism: false` : trois épreuves déposent un fichier de violation dans
+>   `back/Palier.Domain/` puis lancent MSBuild. En parallèle, la violation de l'une fait rougir
+>   l'autre pour la mauvaise raison — et un jour verdir pour la mauvaise raison.
+>
+> `tests-harness/verify.test.mjs` vit à la racine et sera donc ramassé par la configuration
+> backend : ajouter `'tests-harness/**/*.test.mjs'` à son `include`.
 
 - [ ] **Étape 5 : lancer l'épreuve pour la voir passer**
 
