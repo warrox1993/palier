@@ -39,8 +39,15 @@ services:
       POSTGRES_DB: palier
     ports:
       - '5432:5432'
+    # Le montage est sur `/var/lib/postgresql`, PAS sur son sous-dossier
+    # `/data`. PostgreSQL 18 a changé cette convention : monter directement sur
+    # `/data` fait refuser le démarrage — « There appears to be PostgreSQL data
+    # in /var/lib/postgresql/data (unused mount/volume) », mesuré au premier
+    # lancement réel, le conteneur démarrant puis s'arrêtant aussitôt.
+    # L'image place désormais les données dans un sous-dossier du montage, ce
+    # qui permet `pg_upgrade --link` sans franchir de frontière de montage.
     volumes:
-      - palier-db-data:/var/lib/postgresql/data
+      - palier-db-data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U palier_admin -d palier']
       interval: 5s
