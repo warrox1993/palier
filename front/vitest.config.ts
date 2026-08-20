@@ -19,5 +19,11 @@ export default defineConfig({
     // Oxlint : l'exclusion appartient à la commande qui n'en veut pas.
     exclude: ['**/node_modules/**'],
     testTimeout: 60000,
+    // `allowOnly: false` — le défaut de Vitest est `!process.env.CI`, donc les
+    // `.only` sont TOLÉRÉS en local, c'est-à-dire dans `npm run verify` et dans
+    // le hook de pré-envoi. Mesuré le 20/08/2026 : un seul `it.only` oublié fait
+    // sauter 5 épreuves du fichier concerné, et la suite sort en **code 0**.
+    // Un garde-fou désarmé qui affiche vert est le défaut que ce dépôt chasse.
+    allowOnly: false,
   },
 })

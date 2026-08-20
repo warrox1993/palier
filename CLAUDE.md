@@ -239,12 +239,14 @@ Le code mort n'est pas une question de propreté. C'est un mensonge sur ce que l
 
 **La règle : on ne supprime pas le code mort, on rend impossible de l'écrire.** Trois détecteurs, chacun sur son domaine, tous bloquants :
 
-| Domaine                  | Détecteur                                         | Ce qu'il attrape                                                                       |
-| ------------------------ | ------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| TypeScript, JavaScript   | `knip`                                            | fichiers orphelins, exports jamais importés, dépendances déclarées et jamais utilisées |
-| C# — membres privés      | Roslyn : `IDE0051`, `IDE0052`, `CA1823`, `CS0169` | champ, méthode ou propriété privée jamais lus                                          |
-| C# — `using`             | `IDE0005`                                         | import inutile                                                                         |
-| C# — membres **publics** | **la couverture à 100 %**                         | un membre public que rien n'appelle n'est pas couvert, donc le seuil échoue            |
+| Domaine                  | Détecteur                                                               | Ce qu'il attrape                                                                       |
+| ------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| TypeScript, JavaScript   | `knip`                                                                  | fichiers orphelins, exports jamais importés, dépendances déclarées et jamais utilisées |
+| C# — membres privés      | Roslyn : `IDE0051`, `IDE0052`, `IDE0044`, `IDE0060`, `CA1823`, `CS0169` | champ, méthode, propriété ou paramètre privé jamais lus                                |
+| C# — `using`             | `IDE0005`                                                               | import inutile                                                                         |
+| C# — membres **publics** | **la couverture à 100 %**                                               | un membre public que rien n'appelle n'est pas couvert, donc le seuil échoue            |
+
+> **Ces règles ont été promues en erreur le 20/08/2026, et c'était une correction.** Ce paragraphe affirmait qu'elles étaient bloquantes ; elles ne l'étaient pas. `AnalysisLevel: latest-all` ne promeut que les règles **CA**, jamais les **IDE** — mesuré, une méthode privée morte et une propriété privée morte compilaient en « 0 Avertissement(s), 0 Erreur(s) ». Seuls les **champs** étaient attrapés, par `CS0169` et `CA1823`, ce qui donnait l'illusion que le trou était fermé. Écrire une règle ne la met pas en vigueur : c'est la leçon la plus chère de ce dépôt, et elle vient de se payer sur ce document même.
 
 Ce dernier point mérite d'être compris : Roslyn **ne peut pas** signaler un membre public non utilisé — par construction, il pourrait l'être depuis l'extérieur de l'assemblage. C'est le seuil de couverture qui fait ce travail, et c'est une des raisons d'être des 100 % exigés sur `Palier.Domain`.
 

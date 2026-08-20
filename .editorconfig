@@ -14,6 +14,18 @@ csharp_style_namespace_declarations = file_scoped:error
 dotnet_style_require_accessibility_modifiers = always:error
 dotnet_diagnostic.IDE0005.severity = error
 
+# Code mort PRIVÉ, promu en erreur le 20/08/2026 — et c'est une correction, pas
+# un ajout. `CLAUDE.md` § 4 affirmait que ces règles étaient bloquantes ; elles ne
+# l'étaient pas. `AnalysisLevel: latest-all` ne promeut que les règles CA, jamais
+# les IDE : mesuré, une méthode privée morte et une propriété privée morte
+# compilaient en « 0 Avertissement(s), 0 Erreur(s) ». Seuls les CHAMPS étaient
+# attrapés, par CS0169 et CA1823 — d'où l'illusion que le trou était fermé.
+dotnet_diagnostic.IDE0051.severity = error
+dotnet_diagnostic.IDE0052.severity = error
+dotnet_diagnostic.IDE0044.severity = error
+dotnet_diagnostic.IDE0060.severity = error
+dotnet_code_quality_unused_parameters = all
+
 # Nommage — conventions .NET
 dotnet_naming_rule.types_pascal.symbols = types
 dotnet_naming_rule.types_pascal.style = pascal
