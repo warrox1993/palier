@@ -52,7 +52,12 @@ export function lancerOutil(
   options: { cwd?: string; delaiMs?: number } = {},
 ): ResultatOutil {
   const [binaire, ...args] = commande
-  if (!binaire) throw new Error('Commande vide')
+  // Les deux cas invalides sont distingués parce qu'ils n'ont pas la même
+  // origine : `undefined` vient d'un tableau vide, `''` d'un élément vide
+  // construit par erreur. `!binaire` les confondait, et `noUncheckedIndexedAccess`
+  // rend la déstructuration nullable — d'où l'avertissement strict-boolean-expressions.
+  if (binaire === undefined) throw new Error('Commande vide : aucun binaire à lancer.')
+  if (binaire === '') throw new Error('Commande invalide : le binaire est une chaîne vide.')
 
   // Surchargeable pour que l'épreuve du délai puisse franchir la branche sans
   // attendre cinq minutes. Une branche jamais franchie est une branche qui ment.
