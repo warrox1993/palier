@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /front
+    schedule:
+      interval: weekly
+    groups:
+      mineures:
+        update-types: [minor, patch]
+
+  # La racine porte elle aussi un package.json depuis le lot 1 — husky,
+  # lint-staged. Sans ce bloc, l'outillage de dépôt ne serait jamais mis à jour,
+  # et c'est lui qui s'exécute à chaque commit.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      mineures:
+        update-types: [minor, patch]
+
+  - package-ecosystem: nuget
+    directory: /back
+    schedule:
+      interval: weekly
+    groups:
+      mineures:
+        update-types: [minor, patch]
+
+  # Le bloc qu'on oublie ; c'est pourtant lui qui porte le risque d'exécution.
+  # Les actions sont épinglées par empreinte dans ci.yml : sans Dependabot,
+  # elles resteraient figées sur une version vulnérable, l'épinglage protégeant
+  # de la substitution mais pas de l'obsolescence.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Les actions sont épinglées par EMPREINTE, jamais par étiquette : une étiquette
+# est mutable, une empreinte ne l'est pas. Une action compromise puis repointée
+# exécuterait du code arbitraire avec les secrets du dépôt. Le commentaire donne
+# la version lisible ; l'empreinte fait foi. Relevées le 20/08/2026 par
+# `gh api repos/<action>/git/ref/tags/<version>`.
+jobs:
+  front:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      # `npm run test` embarque aujourd'hui les épreuves du harnais, dont celle
+      # des secrets : gitleaks est donc un prérequis de ce job aussi, pas
+      # seulement du job « securite ».
+      - uses: ./.github/actions/installer-gitleaks
+      - run: npm --prefix front ci
+      - run: npm --prefix front run format:check
+      - run: npm --prefix front run lint
+      - run: npm --prefix front run lint:types
+      - run: npm --prefix front run typecheck
+      - run: npm --prefix front run test
+      - run: npm --prefix front run knip
+      - run: npm run lint:scripts
+      - run: npm run format:scripts
+      - run: npm run regles
+      - run: npm --prefix front run build
+      - run: npm --prefix front run jscpd
+        continue-on-error: true
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - run: dotnet restore back/Palier.sln
+      - run: dotnet build back/Palier.sln --no-restore
+      - run: dotnet test back/Palier.sln --no-build --settings back/coverage.runsettings
+      - run: dotnet format back/Palier.sln --verify-no-changes
+      # `dotnet list package --vulnerable` sort en code 0 même quand il TROUVE
+      # quelque chose : la commande brute est un affichage, pas un garde-fou.
+      # C'est l'épreuve du harnais qui porte l'assertion sur la sortie — et,
+      # en amont, l'audit NuGet promu en erreur par `TreatWarningsAsErrors`,
+      # qui casse la restauration avant même que la commande ne tourne.
+      - run: npm run audit:back
+
+  securite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/installer-gitleaks
+      - run: npm --prefix front ci
+      - run: npm --prefix front audit --audit-level=high
+      # `fetch-depth: 0` ci-dessus n'est pas décoratif : `gitleaks git` parcourt
+      # l'HISTORIQUE, et un clone superficiel lui donnerait un commit à lire.
+      - run: gitleaks git --redact --no-banner -v --config .gitleaks.toml .
+      # semgrep est un outil Python. Le paquet `semgrep` du registre npm est un
+      # embryon à la version 0.0.1, comme celui de gitleaks : `npx semgrep` ne
+      # lancerait rien. `pipx` est préinstallé sur les images ubuntu-latest.
+      - run: pipx install semgrep
+      # L'exclusion des fixtures est portée par la COMMANDE, jamais par un
+      # fichier de configuration — décision D20, quatre outils l'ont prouvée.
+      - run: >-
+          semgrep --config=p/owasp-top-ten --error --quiet
+          --exclude=front/tests/harness/fixtures
+          --exclude=back/tests-harness/fixtures
+          .
+      - run: node scripts/verifier-licences.mjs
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - run: npm --prefix front ci
+      - run: npm --prefix front run e2e:install
+      - run: npm --prefix front run e2e
+
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - run: npm --prefix front ci
+      - run: npm --prefix front run build
+      # Lighthouse CI n'est PAS une dépendance déclarée du front — décision D27.
+      # Sa chaîne transitive (puppeteer-core, @puppeteer/browsers, extract-zip)
+      # porte sept avis de sévérité haute dont un SANS version corrigée : le
+      # déclarer ferait échouer `npm audit --audit-level=high` du job
+      # « securite », ou obligerait à abaisser ce seuil. Il est donc installé de
+      # façon éphémère, à version figée, dans le seul job qui le mesure.
+      - run: npx --yes @lhci/cli@0.15.1 autorun
+        working-directory: front
+
+  franchissement:
+    needs: [front, backend, securite, e2e, performance]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/installer-gitleaks
+      - run: npm --prefix front ci
+      - run: npm --prefix front run e2e:install
+      - name: La CI n'appelle-t-elle que verify en local ?
+        run: grep -q 'npm run verify' .husky/pre-push
+      - name: Les garde-fous refusent-ils encore ?
+        run: npm run test:harness
