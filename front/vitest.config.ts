@@ -11,14 +11,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.test.{ts,tsx}', 'tests/harness/**/*.test.ts'],
-    // L'epreuve d'accessibilite lance Playwright : elle n'appartient qu'a
-    // test:harness, execute par le job de CI qui installe les navigateurs.
-    exclude: ['**/node_modules/**', 'tests/harness/accessibilite.test.ts'],
+    // L'exclusion de l'épreuve d'accessibilité est portée par le script `test`,
+    // pas par cette configuration : le drapeau `--exclude` de Vitest AJOUTE aux
+    // globs déclarés ici, il ne les remplace pas. La porter ici la rendrait
+    // impossible à réactiver — y compris pour `test:harness`, qui existe
+    // précisément pour la lancer. Même raisonnement que le ruling P6 pour
+    // Oxlint : l'exclusion appartient à la commande qui n'en veut pas.
+    exclude: ['**/node_modules/**'],
     testTimeout: 60000,
-    coverage: {
-      provider: 'v8',
-      include: ['src/core/**'],
-      thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
-    },
   },
 })

@@ -14,5 +14,10 @@
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true
   },
-  "include": ["vite.config.ts"]
+  // `vitest.config.ts` pilote toute la suite, et Vitest ignore en SILENCE une
+  // clé inconnue : `threshold` au lieu de `thresholds` sort en 0 sans un mot.
+  // Le typecheck est le seul outil capable de voir la faute — il doit donc
+  // regarder ce fichier. Tout nouveau fichier de configuration à la racine de
+  // `front/` s'ajoute ici.
+  "include": ["vite.config.ts", "vitest.config.ts"]
 }

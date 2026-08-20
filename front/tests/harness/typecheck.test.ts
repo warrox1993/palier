@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { lancerOutil } from './run-outil'
