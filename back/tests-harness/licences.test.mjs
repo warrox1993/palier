@@ -26,7 +26,11 @@ const projetSonde = (attributs) =>
 // rougiraient pour la mauvaise cause.
 afterEach(() => {
   rmSync(SONDE, { force: true })
-  writeFileSync(RACINE, RACINE_ORIGINE)
+  // Réécrit seulement si le contenu a changé. `Directory.Build.props` est une
+  // entrée de build : le réécrire à l'identique suffit à invalider le contrôle
+  // d'obsolescence de MSBuild et à faire recompiler toute la solution aux
+  // épreuves suivantes.
+  if (!readFileSync(RACINE).equals(RACINE_ORIGINE)) writeFileSync(RACINE, RACINE_ORIGINE)
 })
 
 describe('garde-fou : licences des dépendances', () => {
