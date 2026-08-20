@@ -378,6 +378,63 @@ namespace Palier.Infrastructure.Migrations
                 """
             );
 
+            // ---- Le schéma `app` et ses DEUX accesseurs — D36 ----------------
+            //
+            // DEUX, et non un. Une politique de catalogue public qui appellerait
+            // une fonction qui LÈVE transformerait toute lecture anonyme en
+            // erreur 500. Et le contournement naïf —
+            // `using (is_custom = false or owner_id = app.utilisateur())` — ne
+            // marche pas : la documentation ne garantit AUCUN court-circuit,
+            // elle dit que les expressions « will be evaluated for each row »,
+            // et les politiques permissives multiples sont combinées par `OR`
+            // sans ordre garanti. La levée peut donc partir sur une ligne
+            // publique.
+            //
+            // `current_setting(…, true)` — le second argument est `missing_ok` :
+            // « If there is no such setting, current_setting throws an error
+            // UNLESS missing_ok is supplied and is true (in which case NULL is
+            // returned) ». Sans lui, la fonction lèverait une erreur DIFFÉRENTE
+            // de celle qu'on veut, et le message ne dirait pas ce qu'on croit.
+            //
+            // LE MESSAGE NE PORTE AUCUNE VALEUR. Ni identifiant, ni donnée.
+            // `01-conformite.md` § 4 : « Aucune donnée de santé dans les logs
+            // applicatifs ». La tentation d'y ajouter l'identifiant « pour
+            // déboguer » sera forte ; elle est refusée ici une fois pour toutes.
+            //
+            // `stable` et non `volatile` : c'est ce qui autorise le
+            // planificateur à hisser l'appel en InitPlan quand il est enveloppé
+            // dans un sous-select, donc une évaluation par INSTRUCTION au lieu
+            // d'une par ligne.
+            migrationBuilder.Sql(
+                """
+                create schema app;
+
+                create function app.utilisateur() returns uuid
+                  language plpgsql stable
+                as $corps$
+                declare pose text;
+                begin
+                  pose := current_setting('app.utilisateur', true);
+                  if pose is null or pose = '' then
+                    raise exception 'identite absente de la transaction courante'
+                      using errcode = '28000',
+                            hint = 'Le cas d usage doit ouvrir une transaction et y poser '
+                                   'app.utilisateur avant toute lecture.';
+                  end if;
+                  return pose::uuid;
+                end
+                $corps$;
+
+                create function app.utilisateur_ou_null() returns uuid
+                  language sql stable
+                as $corps$
+                  select nullif(current_setting('app.utilisateur', true), '')::uuid
+                $corps$;
+
+                grant usage on schema app to palier_app;
+                """
+            );
+
             // ---- RLS activée ET forcée sur TOUTE table de `public` -----------
             //
             // `enable` seul ne protège pas du PROPRIÉTAIRE : « Table owners
@@ -465,6 +522,95 @@ namespace Palier.Infrastructure.Migrations
                 );
             }
 
+            // ---- Les politiques des cinq formes — D36 ------------------------
+            //
+            // Chacune est réservée `to palier_app`. Une politique permissive ne
+            // s'applique qu'aux rôles qu'elle nomme : un rôle futur qu'on
+            // aurait oublié n'hérite donc de RIEN, et tombe sur le refus par
+            // défaut. C'est le bon sens de l'erreur.
+            //
+            // L'ACCESSEUR EST ENVELOPPÉ DANS UN SOUS-SELECT, et ce n'est pas
+            // une optimisation : c'est ce qui supprime un faux arbitrage. La
+            // documentation tranche la question — l'expression d'une politique
+            // est évaluée POUR CHAQUE LIGNE. `(select …)` force un InitPlan
+            // évalué une fois par instruction. On garde donc le `plpgsql` qui
+            // lève ET la vitesse ; on n'échange pas la conformité contre la
+            // latence.
+            //
+            // Réserve à connaître, écrite plutôt que tue : l'InitPlan étant
+            // évalué paresseusement, il AGGRAVE le trou de la table vide — zéro
+            // ligne parcourue, zéro évaluation, aucune exception. La garde
+            // applicative du pipeline est ce qui ferme ce trou, pas ces
+            // politiques.
+            migrationBuilder.Sql(
+                """
+                -- Forme « possédée directe ». Le WITH CHECK est identique au
+                -- USING : sans lui, A pourrait INSÉRER une ligne au nom de B
+                -- tout en étant incapable de la relire.
+                create policy proprietaire on public.workouts
+                  for all to palier_app
+                  using (owner_id = (select app.utilisateur()))
+                  with check (owner_id = (select app.utilisateur()));
+
+                create policy proprietaire on public.body_weight
+                  for all to palier_app
+                  using (owner_id = (select app.utilisateur()))
+                  with check (owner_id = (select app.utilisateur()));
+
+                -- Forme « possédée PAR JOINTURE ». `sets` n'a pas d'owner_id :
+                -- la politique doit remonter jusqu'à `workouts`, dont la
+                -- politique s'applique à son tour dans la sous-requête.
+                create policy proprietaire on public.sets
+                  for all to palier_app
+                  using (exists (select 1 from public.workouts w
+                                  where w.id = sets.workout_id
+                                    and w.owner_id = (select app.utilisateur())))
+                  with check (exists (select 1 from public.workouts w
+                                       where w.id = sets.workout_id
+                                         and w.owner_id = (select app.utilisateur())));
+
+                -- Forme « catalogue mixte ». DEUX POLITIQUES PERMISSIVES
+                -- SÉPARÉES, jamais un `OR` dans une seule : la documentation ne
+                -- garantit aucun ordre d'évaluation entre les branches d'un
+                -- `OR`, et se fier au court-circuit serait une supposition
+                -- déguisée en protection. Séparées, la branche publique ne peut
+                -- PAS déclencher l'accesseur qui lève.
+                create policy catalogue_public on public.exercises
+                  for select to palier_app
+                  using (is_custom = false);
+
+                create policy proprietaire on public.exercises
+                  for all to palier_app
+                  using (owner_id = (select app.utilisateur_ou_null()))
+                  with check (owner_id = (select app.utilisateur_ou_null()));
+
+                -- Forme « référence publique ». Lecture pour tous, et AUCUNE
+                -- politique d'écriture : « If no policy exists for the table, a
+                -- default-deny policy is used ». Le privilège manquant refuse
+                -- déjà l'écriture ; l'absence de politique la refuse une
+                -- seconde fois, sur un chemin différent.
+                create policy lecture_publique on public.nutrient_refs
+                  for select to palier_app
+                  using (true);
+
+                """
+            );
+
+            // Les tables `AspNet*` ne reçoivent AUCUNE politique — D38, et c'est
+            // la décision, pas un oubli. Elles porteront les empreintes de mots
+            // de passe, les secrets TOTP, les jetons de rafraîchissement et les
+            // sessions : y poser `using (true)` en ferait le SEUL endroit du
+            // schéma sans barrière de ligne, c'est-à-dire l'endroit où un filtre
+            // oublié coûterait le plus cher.
+            //
+            // Conséquence assumée : le chemin de connexion, qui lit
+            // `AspNetUsers` PAR EMAIL avant que la moindre identité existe,
+            // casse ici — fermé et bruyant, donc jamais en fuite. LE LOT 4 DOIT
+            // LE CONCEVOIR : rôle dédié avec sa politique, ou fonction
+            // `security definer` au périmètre minimal, jamais une pose de
+            // l'identité d'autrui. Ne pas ouvrir cette porte pour faire passer
+            // quelque chose.
+
             // ---- Les privilèges de `palier_app`, objet par objet -------------
             //
             // D37 : le rôle applicatif ne possède aucun objet et reçoit ses
@@ -506,6 +652,7 @@ namespace Palier.Infrastructure.Migrations
             // et sa RLS sont donc défaites explicitement, sans quoi un `Down`
             // suivi d'un `Up` échouerait sur « la politique existe déjà ».
             migrationBuilder.Sql("drop view if exists public.weekly_volume;");
+            migrationBuilder.Sql("drop schema if exists app cascade;");
             migrationBuilder.Sql(
                 """
                 drop policy if exists migrations_referentiel on public."__EFMigrationsHistory";

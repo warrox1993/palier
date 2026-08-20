@@ -169,10 +169,19 @@ public sealed class SchemaTests(BaseFixture baseDeDonnees)
         await using (var administrateur = new NpgsqlConnection(chaineAdministrateur))
         {
             await administrateur.OpenAsync();
+            // Les mêmes privilèges que `db/amorcage/01-roles.sql` accorde sur la
+            // base du produit : CREATE sur la BASE pour `create schema app`, et
+            // CREATE sur `public` pour les tables. Les rôles, eux, existent déjà
+            // — ils sont à l'échelle du groupe de bases, pas de la base.
+#pragma warning disable CA2100 // Même motif : `grant … on database` n'accepte pas de paramètre lié.
             await using var droits = new NpgsqlCommand(
-                "grant create, usage on schema public to palier_migrations;",
+                $"""
+                grant create on database "{nom}" to palier_migrations;
+                grant create, usage on schema public to palier_migrations;
+                """,
                 administrateur
             );
+#pragma warning restore CA2100
             await droits.ExecuteNonQueryAsync();
         }
 

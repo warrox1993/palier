@@ -77,7 +77,15 @@ dotnet_diagnostic.CA2007.severity = none
 # à la main dans ces migrations fait vraiment est éprouvé bien mieux qu'un
 # analyseur ne le ferait — SchemaTests et IsolationTests l'exécutent sur un
 # moteur réel, à chaque `npm run verify`.
-[**/Migrations/*.cs]
+# Le motif ne dit PAS `Migrations/*.cs`, et l'écart est mesuré. Avec le motif
+# large, un fichier écrit à la main et déposé dans ce dossier cessait d'être
+# analysé — y compris pour la mise en forme des espaces, et y compris quand on
+# le NOMMAIT explicitement en argument de `dotnet format --include` : réponse
+# « oui » à la question de D20 pour un cinquième outil. Le motif ne couvre donc
+# que les deux formes qu'`ef migrations add` produit — `<horodatage>_<Nom>.cs`,
+# son `.Designer.cs`, et le `ModelSnapshot`. Un fichier posé là à la main reste
+# vu, et le témoin l'a confirmé : trois erreurs sur un fichier identique.
+[**/Migrations/{*_*.cs,*ModelSnapshot.cs}]
 generated_code = true
 
 [*.{ts,tsx,js,jsx,json,md,yml,yaml}]

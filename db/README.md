@@ -130,6 +130,57 @@ en refus par défaut, pour tout le monde, propriétaire compris. Le chemin de
 connexion qui lit `AspNetUsers` par email avant toute identité casse donc fermé
 et bruyant ; **le lot 4 doit le concevoir**, et non le découvrir.
 
+### Comment l'identité parvient au moteur — D36
+
+```
+BEGIN
+select set_config('app.utilisateur', <identifiant>, true)   ← le troisième argument
+… le cas d'usage …
+COMMIT
+```
+
+**Le troisième argument est `true`, et c'est là que tient toute la sûreté du
+dispositif.** « If `is_local` is `true`, the new value will only apply during
+the current transaction » : aucune valeur ne peut survivre au `COMMIT` ni au
+`ROLLBACK`, quels que soient `No Reset On Close`, le multiplexing d'Npgsql ou un
+PgBouncer en mode transaction. **La défaillance possible est donc l'identité
+absente, jamais l'identité d'un autre.**
+
+À `false`, la valeur passe en portée **session**, survit à la connexion rendue
+au pool, et l'utilisateur suivant hérite de l'identité du précédent — sans
+erreur, sans journal. **Mesuré le 20/08/2026 : sur les vingt et une épreuves du
+projet, vingt restent VERTES avec `false`**, y compris « deux identités
+successives sur la même connexion physique ». Une seule le distingue :
+`La_portee_transaction_ne_survit_pas_au_commit_sur_la_meme_connexion`, qui
+ouvre une connexion `Pooling=false` et relit `current_setting` après le
+`COMMIT`. Ne pas l'affaiblir.
+
+Côté base, **deux** accesseurs dans le schéma `app` :
+
+| Fonction                    | Comportement                                 | Pour                       |
+| --------------------------- | -------------------------------------------- | -------------------------- |
+| `app.utilisateur()`         | **lève** `28000`, message sans aucune valeur | tables strictement privées |
+| `app.utilisateur_ou_null()` | rend `NULL`                                  | tables à branche publique  |
+
+**Deux, et non un.** Une politique de catalogue public qui appellerait la
+fonction qui lève transformerait toute lecture anonyme en erreur 500 — mesuré :
+en fusionnant les deux politiques d'`exercises` en un seul `OR`, la lecture
+d'une ligne **publique** rend `28000`. La documentation ne garantit aucun ordre
+d'évaluation, et se fier au court-circuit serait une supposition déguisée en
+protection.
+
+Chaque politique enveloppe l'accesseur dans un **sous-select** —
+`using (owner_id = (select app.utilisateur()))`. L'expression d'une politique
+est évaluée **pour chaque ligne** ; `(select …)` force un InitPlan évalué une
+fois par instruction. On garde le `plpgsql` qui lève _et_ la vitesse.
+
+> **Ce que ce dispositif n'achète PAS, et qu'il ne faut pas croire.** « L'échec
+> crie » est **faux sur une table vide** : zéro ligne parcourue, zéro
+> évaluation, aucune exception. Sur un compte neuf — donc les premiers jours de
+> production — « identité absente » et « cet utilisateur n'a pas de données »
+> sont indiscernables. La garde applicative du pipeline est ce qui ferme ce
+> trou. La fonction SQL est le **filet**, jamais le garde unique.
+
 **La migration suppose que les rôles existent.** Un `grant … to palier_app` sur
 une base sans ce rôle échoue en le nommant. C'est le couplage voulu entre
 `amorcage/` et les migrations : il est bruyant, et il est écrit ici.
