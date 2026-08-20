@@ -30,12 +30,12 @@ La performance et la santé sont les **bénéfices** ; la complétude de la mesu
 
 **Quatre piliers, une seule vue :**
 
-| Pilier | Ce que l'application mesure |
-|---|---|
-| **Entraînement** | Charges, volume par muscle, progression, équilibre, force estimée |
-| **Macronutriments** | Protéines, lipides, glucides, fibres, contre les fourchettes |
+| Pilier              | Ce que l'application mesure                                                       |
+| ------------------- | --------------------------------------------------------------------------------- |
+| **Entraînement**    | Charges, volume par muscle, progression, équilibre, force estimée                 |
+| **Macronutriments** | Protéines, lipides, glucides, fibres, contre les fourchettes                      |
 | **Micronutriments** | 40 nutriments, **alimentation et compléments cumulés**, contre les limites hautes |
-| **Hydratation** | Apport quotidien contre 35 ml/kg, majoré les jours d'entraînement |
+| **Hydratation**     | Apport quotidien contre 35 ml/kg, majoré les jours d'entraînement                 |
 
 Le positionnement reste défensif dans son exécution — éviter les excès, éviter les blessures — mais ambitieux dans sa promesse.
 
@@ -49,13 +49,16 @@ Cinquante utilisateurs payants recrutés par un kiné valent mieux que dix mille
 
 ## Produit fini, pas prototype
 
-**Chaque fonctionnalité livrée est finie** : testée, accessible, traduite, avec ses états de chargement, d'erreur et vide, sa gestion hors ligne et sa mesure. Il n'existe pas de « on finira plus tard » — c'est la définition de la dette qu'on refuse.
+**Chaque fonctionnalité livrée est finie** : testée, accessible, traduite, avec ses états de chargement, d'erreur et vide, et sa mesure.
+
+> **La gestion hors ligne n'y figure plus depuis le 20/08/2026 — D45.** Le produit est une application **web**, consultée dans un navigateur, et c'est la seule cible du moment. La résilience réseau de `11-qualite.md` § 1 reste voulue, mais elle devient un **chantier daté** (lot 7) au lieu d'une condition que chaque écran doit remplir dès sa première ligne. Une exigence portée par la définition de fini bloque toutes les livraisons ; portée par un lot, elle en bloque une. Il n'existe pas de « on finira plus tard » — c'est la définition de la dette qu'on refuse.
 
 Cela ne veut pas dire que tout s'écrit simultanément, ce qui est matériellement impossible. L'ordre de construction est défini dans `07-roadmap.md`. La différence tient en une phrase : **on séquence la livraison, jamais la qualité.**
 
 ## Périmètre complet
 
 ### Entraînement
+
 - Journal de séances : charge, répétitions, RIR — saisie en moins de trois interactions
 - Programmes modèles adaptés par contrainte déclarée (cervicale, lombaire, épaule, genou)
 - Suggestion de progression sur règles déterministes
@@ -66,6 +69,7 @@ Cela ne veut pas dire que tout s'écrit simultanément, ce qui est matérielleme
 - Minuteur de repos
 
 ### Nutrition
+
 - Saisie par recherche texte, code-barres et photo
 - Saisie des compléments par photo d'étiquette avec extraction des doses
 - Agrégation alimentation + compléments par nutriment
@@ -74,29 +78,36 @@ Cela ne veut pas dire que tout s'écrit simultanément, ce qui est matérielleme
 - Historique et tendances
 
 ### Hydratation
+
 - Cible dynamique : 35 ml/kg, majorée les jours d'entraînement et de cardio
 - Saisie en un appui depuis tout écran, contenants personnalisés
 - Boissons comptabilisées au prorata de leur teneur en eau
 - Signalement d'un apport inhabituellement élevé (risque d'hyponatrémie)
 
 ### Assistant
+
 - Explique les chiffres affichés
 - Répond aux questions générales d'entraînement et de nutrition
 - **Aucun pouvoir d'action** : ne modifie pas un objectif, ne recommande pas un complément, ne génère pas de plan de repas
 
 ### Compte et accès
+
 Google OAuth et email/mot de passe, vérification d'email, 2FA optionnelle, sessions listées, récupération manuelle. Onboarding en six écrans. Abonnement Stripe avec essai de 14 jours, plan gratuit conservant la saisie d'entraînement et l'historique complet. Détail dans `09-comptes.md`.
 
 ### Progression
+
 Radar à sept axes calculés sur données réelles, six états dérivés, avatar cosmétique en V2. Détail et garde-fous dans `10-progression.md`.
 
 ### Qualité de service
+
 Résilience réseau avec file de retry persistée, accessibilité WCAG 2.2 AA vérifiée, français et anglais, mesure d'usage respectueuse de la vie privée hébergée en UE. Détail dans `11-qualite.md`.
 
 ### Confort
+
 Duplication de journée, repas enregistrés, recettes, répétition de séance, import depuis Hevy et Strong, export JSON, CSV et PDF, unités impériales, masquage des calories. Détail dans `12-confort.md`.
 
 ### Administration
+
 Interface de validation pour le diététicien, journal versionné des libellés, revue des sorties du modèle, file de signalements, tableau de bord de conformité.
 
 ## Hors périmètre

@@ -16,7 +16,7 @@
 > se vend pas », le seuil de refus de la bêta, le paragraphe sur le marché mondial et celui sur
 > l'avatar 3D. Seul le **chiffre** de la durée est révisé, et il l'est avec sa base.
 
-**On séquence la livraison, jamais la qualité.** Chaque étape ci-dessous se termine par un ensemble fini : testé, accessible, traduit, avec ses états d'erreur et sa gestion hors ligne. Une étape n'est pas close tant que la définition de terminé de `08-workflow.md` n'est pas cochée intégralement.
+**On séquence la livraison, jamais la qualité.** Chaque étape ci-dessous se termine par un ensemble fini : testé, accessible, traduit, avec ses états d'erreur. La gestion hors ligne en a été retirée le 20/08/2026 — D45, elle est le chantier du lot 7. Une étape n'est pas close tant que la définition de terminé de `08-workflow.md` n'est pas cochée intégralement.
 
 Aucune étape ne produit un prototype. L'ordre existe parce qu'on ne peut pas écrire dix mille lignes simultanément, pas parce qu'on accepterait de livrer à moitié.
 

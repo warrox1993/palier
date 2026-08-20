@@ -345,7 +345,7 @@ GET  /repos/warrox1993/palier/automated-security-fixes → {"enabled": false}
 
 Ces décisions ont été prises **en conception**, avant toute ligne de code du socle de données, et chacune a été mesurée sur le dépôt ou vérifiée à la source. Elles se lisent avec deux avertissements.
 
-**Quatre d'entre elles portent un arbitrage qui ne m'appartient pas** — D33 (activer WSL2 ou Hyper-V), D37 (`FORCE ROW LEVEL SECURITY`), D39 (l'écart au « schéma complet » de la feuille de route) et D42 (Tailwind). L'arbitrage est nommé dans l'entrée, avec ce qu'il coûte de trancher dans un sens et dans l'autre. **Tant qu'il n'est pas rendu, la décision est proposée, pas prise.**
+**Quatre d'entre elles portaient un arbitrage qui ne m'appartient pas** — D33 (activer WSL2 ou Hyper-V), D37 (`FORCE ROW LEVEL SECURITY`), D39 (l'écart au « schéma complet » de la feuille de route) et D42 (Tailwind). **D33 et D42 sont tranchées depuis** : WSL2 est installé, et le porteur a refusé Tailwind. L'arbitrage est nommé dans l'entrée, avec ce qu'il coûte de trancher dans un sens et dans l'autre. **Tant qu'il n'est pas rendu, la décision est proposée, pas prise.**
 
 **D36 a été soumise à un jury de trois lentilles adversariales.** Les trois l'ont retenue — et les trois ont exigé des amendements bloquants avant adoption, parce que son plan de vérification réintroduisait en silence le mode de défaillance qu'elle prétendait supprimer. Ces amendements sont inscrits dans l'entrée, au même rang que la solution. Une décision qui cache son mode de défaillance est pire qu'une décision absente.
 
@@ -538,9 +538,13 @@ Le point 5 est une obligation, pas une précaution — Microsoft Learn, _Connect
 
 **Ce qui la rouvrirait :** le lot 6, obligatoirement. Sans cette échéance écrite, l'écran resterait par inertie.
 
-## D42 — Pas de Tailwind au lot 2 ; les jetons vivent dans `front/src/ui/jetons.ts` et en variables CSS
+## D42 — Pas de Tailwind, ni aucune bibliothèque de composants. CSS écrit à la main.
 
-**Tranché le :** 20/08/2026, en conception. **C'est un choix par défaut, valable jusqu'à réponse du porteur du projet — arbitrage à confirmer.**
+**Tranché le :** 20/08/2026, **par le porteur du projet**, qui a répondu à l'arbitrage : « pas de tailwind, garde les jetons avec html css et js+typescript ». Ce n'est plus un choix par défaut valable jusqu'à réponse — c'est la décision, et elle vaut au-delà du lot 2.
+
+**Ce que cela ferme.** Aucune bibliothèque de classes utilitaires, aucun jeu de composants tout fait — ni Tailwind, ni shadcn, ni Material, ni leurs équivalents. Le style s'écrit en CSS, alimenté par les jetons. `CLAUDE.md` § 3, qui annonçait Tailwind dans la pile depuis l'origine, est corrigé.
+
+**Ce que cela protège, et qui est le vrai motif.** `docs/design/references-visuelles.md` § 2 pose que les bibliothèques toutes faites « sont précisément la source du look générique : elles livrent dégradés, glassmorphism, cartes arrondies à ombre douce ». Le porteur du projet a été explicite depuis le début : « je refuse d'avoir un design type claude par défaut », « je ne veux plus de design saas ultra générique ». Installer une bibliothèque de composants revenait à réintroduire ce que la direction visuelle interdit — le coût technique décrit ci-dessous n'était que le second argument.
 
 **Tranche :** `front/src/ui/jetons.ts` exporte les dix couleurs, l'échelle typographique 11/13/15/19/24/30/38, la base 4 px, le rayon 2 px, la zone tactile de 48 px de `docs/02-design.md` § 4, et les trois durées avec la courbe de D8 ; il génère les variables CSS que consomment les feuilles de style.
 
@@ -550,7 +554,7 @@ Le point 5 est une obligation, pas une précaution — Microsoft Learn, _Connect
 
 **Ce que cette décision répare accessoirement :** `front/src/ui/jetons.ts` est exactement la cible que la règle attend déjà par son exclusion `/src[\\/]ui[\\/]jetons\./` (ligne 299, lue le 20/08/2026) — et ce fichier **n'existe pas**. Aujourd'hui, `couleur-hors-jetons` n'a aucune cible et ne protège rien.
 
-**Ce qui la rouvrirait :** la réponse du porteur, ou le lot 6, quand un jeu de composants complet arrive — c'est là que le choix se paie réellement, et là qu'il faut avoir mesuré ce que `couleur-hors-jetons` devient dans chaque cas.
+**Ce qui la rouvrirait :** rien sur le principe. Sur la mise en œuvre, le lot 6 dira si le CSS écrit à la main tient à l'échelle d'un jeu de composants complet — et si une aide s'avérait nécessaire, ce serait un outil qui laisse les valeurs visibles dans le code (modules CSS, variables natives), jamais un catalogue de classes qui rendrait `couleur-hors-jetons` aveugle.
 
 ## D43 — La feuille de route porte les durées constatées, lot par lot
 
@@ -592,3 +596,27 @@ Sous ICU, la version est celle de la bibliothèque — 153.128 — versionnée i
 **Ce que cela n'achète pas.** La version d'ICU changera, elle aussi — simplement de façon explicite et versionnée, au lieu de suivre l'image système. L'épreuve relève `datcollversion` sans l'asserter sur une valeur, précisément pour cette raison. Et rien n'a été mesuré sur l'instance managée d'OVHcloud, qui n'existe pas encore : si elle imposait un fournisseur ou une locale, cette décision se rouvrirait.
 
 **Ce qui la rouvrirait :** une contrainte d'OVHcloud sur le fournisseur de collation, ou un besoin de tri propre à une autre langue quand l'anglais arrivera — `docs/11-qualite.md` prévoit le français et l'anglais dès la première ligne, et la locale du **cluster** ne peut pas être les deux. Le cas échéant, la collation se pose par colonne ou par requête, pas par base.
+
+## D45 — Application web, et la résilience hors ligne sort de la définition de fini
+
+**Tranché le :** 20/08/2026, **par le porteur du projet** : « c'est web à 100 % la priorité », et sur le mode déconnecté : « on peut le laisser en soi ce n'est pas un problème mais je doute que ce soit utile, aujourd'hui on a toujours internet ».
+
+**Le défaut trouvé en cherchant.** L'exigence hors ligne était **essaimée dans cinq documents**, et le porteur du projet indiquait l'avoir déjà corrigée. Vérifié : `docs/11-qualite.md` n'a qu'**un seul commit**, `82aeecd` du 19/08 — sa correction n'a jamais atteint le dépôt. C'est le ruling P7 appliqué à quelqu'un d'autre que nous : une correction qui n'atteint pas tous ses lecteurs n'existe pas. Corriger un document sur cinq laissait l'exigence revenir par les quatre autres.
+
+**Ce qui change, et c'est le cœur.** « Gestion hors ligne » figurait dans la **définition de fini** de `00-produit.md` et de `07-roadmap.md`. Une exigence portée là bloque **toutes** les livraisons : chaque écran devait porter sa résilience dès sa première ligne, avant même qu'une API existe. Portée par un lot, elle en bloque un seul. Elle est donc retirée de la définition de fini et devient le **chantier du lot 7**.
+
+**Ce qui ne change pas.** `11-qualite.md` § 1 reste valable **mot pour mot**. Et son motif n'est pas celui qu'on lui prêtait : il ne s'agit pas d'utiliser l'application sans réseau — les salles ont du wifi, le porteur a raison — mais de **ne pas perdre une série saisie** quand le réseau hoquette entre deux répétitions. « On ne jette jamais silencieusement une donnée saisie » est une exigence de fiabilité de la saisie, pas de mode déconnecté. La nuance explique pourquoi le chantier reste au programme au lieu d'être supprimé.
+
+**Trois choses distinctes, qui se décident séparément, et dont deux ne sont pas tranchées :**
+
+|                                                                                              | Statut au 20/08/2026                                                                                   |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Le **mode déconnecté** — service worker, pré-cache de 500 aliments, consultation sans réseau | **À décider au lot 7.** C'est la partie la plus coûteuse et la moins justifiée                         |
+| L'**écriture locale d'abord** — la saisie va en IndexedDB puis part au réseau                | **À décider au lot 7.** Sans elle, chaque série attend la réponse de l'API avant de s'afficher validée |
+| La **PWA installable** — icône sur l'écran d'accueil, plein écran                            | **Reportée**, lot 6. Indépendante des deux autres                                                      |
+
+**Pourquoi ne pas trancher maintenant, alors que le porteur penche vers le retrait.** Parce qu'aucune donnée n'existe. Et parce que `07-roadmap.md` prévoit déjà le moment exact où elle existera : l'étape 2 impose que **le fondateur utilise l'application pour son propre bloc pendant au moins trois semaines, sans autre outil**. C'est là qu'on saura si le réseau lâche à la salle, combien de fois, et ce que ça coûte. Décider avant, dans un sens ou dans l'autre, serait deviner — construire une résilience inutile ou supprimer une protection qu'on regrettera.
+
+**Le design reste conçu pour les petits écrans.** Le porteur avait dit « la priorité de cette app va être sur téléphone » ; il dit maintenant « web à 100 % ». Les deux ne se contredisent pas : le premier parlait de la **conception visuelle**, le second de la **plateforme**. Une application web, consultée dans un navigateur de téléphone, dessinée pour cet écran d'abord.
+
+**Ce qui la rouvrirait :** les trois semaines d'usage de l'étape 2. Si le réseau tient, le mode déconnecté saute et le lot 7 se réduit. S'il lâche, on saura exactement quoi construire — et sur quelle fréquence réelle.

@@ -21,11 +21,11 @@ Ce projet se construit avec le framework **Superpowers** (Jesse Vincent / Prime 
 
 Vérifier au démarrage de chaque session que les commandes sont disponibles via `/help`. **Leur nom exact varie selon la version installée** — la version courante expose `brainstorming`, `writing-plans` et `executing-plans`. Ce qui compte est la fonction, pas le libellé :
 
-| Fonction | Commande (à confirmer via `/help`) |
-|---|---|
-| Clarification avant conception | `brainstorming` |
-| Plan d'implémentation | `writing-plans` |
-| Exécution par lots | `executing-plans` |
+| Fonction                       | Commande (à confirmer via `/help`) |
+| ------------------------------ | ---------------------------------- |
+| Clarification avant conception | `brainstorming`                    |
+| Plan d'implémentation          | `writing-plans`                    |
+| Exécution par lots             | `executing-plans`                  |
 
 Si les noms diffèrent encore, utiliser ceux que `/help` affiche et le signaler.
 
@@ -53,13 +53,13 @@ On séquence la livraison, jamais la qualité. « On finira plus tard » n'exist
 
 ### Agentique, pas vibecoding
 
-| Interdit | Attendu |
-|---|---|
-| Écrire du code dès la première réponse | Comprendre, spécifier, planifier, puis exécuter |
-| Enchaîner les fonctionnalités sans tests | TDD — RED, GREEN, REFACTOR |
-| « Ça devrait marcher » | Vérification effective avant de déclarer terminé |
-| Corriger un symptôme | `systematic-debugging` — cause racine en 4 phases |
-| Avancer seul sur une décision structurante | Poser la question à l'utilisateur |
+| Interdit                                   | Attendu                                           |
+| ------------------------------------------ | ------------------------------------------------- |
+| Écrire du code dès la première réponse     | Comprendre, spécifier, planifier, puis exécuter   |
+| Enchaîner les fonctionnalités sans tests   | TDD — RED, GREEN, REFACTOR                        |
+| « Ça devrait marcher »                     | Vérification effective avant de déclarer terminé  |
+| Corriger un symptôme                       | `systematic-debugging` — cause racine en 4 phases |
+| Avancer seul sur une décision structurante | Poser la question à l'utilisateur                 |
 
 Les skills Superpowers `test-driven-development`, `systematic-debugging`, `verification-before-completion` et `requesting-code-review` s'activent automatiquement. Ne pas les contourner.
 
@@ -90,30 +90,30 @@ Toute investigation dépassant trois lectures de fichiers part en sous-agent, av
 
 ## 2. Le projet en une phrase
 
-Application web (PWA) de suivi de musculation et d'apports nutritionnels, avec un assistant conversationnel, dont la promesse est **d'éviter les excès et les blessures**, pas d'optimiser la performance.
+Application **web** de suivi de musculation et d'apports nutritionnels, avec un assistant conversationnel, dont la promesse est **d'éviter les excès et les blessures**, pas d'optimiser la performance.
 
 Documents de référence, à lire avant de commencer :
 
-| Fichier | Contenu |
-|---|---|
-| `docs/00-produit.md` | Cible, promesse, périmètre V1, ce qui est hors périmètre |
-| `docs/01-conformite.md` | Cadre juridique, ligne informer/prescrire, garde-fous |
-| `docs/02-design.md` | Direction artistique, jetons, structure de l'écran de séance |
-| `docs/03-donnees.md` | Schéma PostgreSQL, RLS |
-| `docs/04-nutrition.md` | Formules, références EFSA, logique de calcul |
-| `docs/05-entrainement.md` | Volume, progression, adaptation par contrainte |
-| `docs/06-ia.md` | Architecture LLM, mix de modèles, prompts, coûts |
-| `docs/07-roadmap.md` | Séquence de construction |
-| `docs/08-workflow.md` | **Ingénierie agentique : boucle, harnais, vérification** |
-| `docs/09-comptes.md` | Auth, onboarding, abonnement, notifications, support, admin |
-| `docs/10-progression.md` | Radar, états, avatar — et leurs garde-fous |
-| `docs/11-qualite.md` | Résilience, accessibilité, i18n, mesure |
-| `docs/12-confort.md` | Duplication, import/export, états d'interface, performance, sécurité |
-| `docs/13-juridique.md` | Mineurs, transferts vers les modèles, structure, assurance, partenariats |
-| `docs/14-contenu.md` | Catalogue d'exercices, programmes, emails, environnements, supervision |
-| `docs/15-marque.md` | Nom, dépôt, classes, identité |
-| `docs/16-projet.md` | **Arborescence, conventions, variables d'environnement, seed, glossaire** |
-| `docs/17-donnees-sources.md` | **Licences ODbL, attribution, interdiction de fusionner les sources** |
+| Fichier                      | Contenu                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `docs/00-produit.md`         | Cible, promesse, périmètre V1, ce qui est hors périmètre                  |
+| `docs/01-conformite.md`      | Cadre juridique, ligne informer/prescrire, garde-fous                     |
+| `docs/02-design.md`          | Direction artistique, jetons, structure de l'écran de séance              |
+| `docs/03-donnees.md`         | Schéma PostgreSQL, RLS                                                    |
+| `docs/04-nutrition.md`       | Formules, références EFSA, logique de calcul                              |
+| `docs/05-entrainement.md`    | Volume, progression, adaptation par contrainte                            |
+| `docs/06-ia.md`              | Architecture LLM, mix de modèles, prompts, coûts                          |
+| `docs/07-roadmap.md`         | Séquence de construction                                                  |
+| `docs/08-workflow.md`        | **Ingénierie agentique : boucle, harnais, vérification**                  |
+| `docs/09-comptes.md`         | Auth, onboarding, abonnement, notifications, support, admin               |
+| `docs/10-progression.md`     | Radar, états, avatar — et leurs garde-fous                                |
+| `docs/11-qualite.md`         | Résilience, accessibilité, i18n, mesure                                   |
+| `docs/12-confort.md`         | Duplication, import/export, états d'interface, performance, sécurité      |
+| `docs/13-juridique.md`       | Mineurs, transferts vers les modèles, structure, assurance, partenariats  |
+| `docs/14-contenu.md`         | Catalogue d'exercices, programmes, emails, environnements, supervision    |
+| `docs/15-marque.md`          | Nom, dépôt, classes, identité                                             |
+| `docs/16-projet.md`          | **Arborescence, conventions, variables d'environnement, seed, glossaire** |
+| `docs/17-donnees-sources.md` | **Licences ODbL, attribution, interdiction de fusionner les sources**     |
 
 ---
 
@@ -121,22 +121,22 @@ Documents de référence, à lire avant de commencer :
 
 > Cette section a été réécrite le 20/08/2026 pour appliquer les décisions **D9, D10, D11, D14, D15, D16 et D17** de `docs/decisions.md`, tranchées le 19/08. Elle décrivait encore une pile Supabase + Vercel abandonnée. Le journal des décisions fait foi ; en cas d'écart, c'est lui qu'il faut lire.
 
-| Couche | Choix | Contrainte |
-|---|---|---|
-| Front | React + Vite + TypeScript + Tailwind | PWA installable |
-| Backend | **ASP.NET Core (.NET 10), Clean Architecture en quatre projets** | `Palier.Domain` ne référence aucun autre projet — D11 |
-| Base de données | PostgreSQL, via **EF Core** | Hébergée en Europe. Les vues et contraintes passent par `migrationBuilder.Sql` — D14 |
-| Auth | **ASP.NET Identity** : Google OAuth + email/mot de passe | Pas de lien magique. Les sept exigences de `docs/09-comptes.md` § 1 sont à implémenter — D17 |
-| Répartition | `Mediator.SourceGenerator` (MIT) | **MediatR est interdit** : RPL-1.5, incompatible avec un service commercial — D12 |
-| État serveur | TanStack Query | Mutations optimistes |
-| Cache local | IndexedDB (Dexie) | Écriture immédiate, réseau en arrière-plan, file de retry persistée — `docs/11-qualite.md` |
-| Hébergement | **OVHcloud** | Fournisseur européen, hors portée du Cloud Act. Backend conteneurisé sur VPS ou Public Cloud — D15 |
-| Domaine | **Front et API sous le même domaine** | Le cookie de rafraîchissement reste de même site — D16 |
-| Paiement | Stripe | À partir de la V2 seulement |
-| LLM | API Claude + Gemini | Abstraction multi-fournisseur obligatoire, voir `docs/06-ia.md` |
-| i18n | i18next | Français et anglais dès la première ligne |
-| Tests | Vitest + Playwright + axe-core, xUnit côté backend | En place avant la première fonctionnalité |
-| Mesure | Plausible ou Umami auto-hébergé | UE, sans donnée de santé |
+| Couche          | Choix                                                            | Contrainte                                                                                                                                  |
+| --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Front           | React + Vite + TypeScript, **CSS écrit à la main**               | **Web d'abord**, conçu pour petits écrans. Pas de Tailwind ni d'aucune bibliothèque de composants — D42. PWA installable **reportée** — D45 |
+| Backend         | **ASP.NET Core (.NET 10), Clean Architecture en quatre projets** | `Palier.Domain` ne référence aucun autre projet — D11                                                                                       |
+| Base de données | PostgreSQL, via **EF Core**                                      | Hébergée en Europe. Les vues et contraintes passent par `migrationBuilder.Sql` — D14                                                        |
+| Auth            | **ASP.NET Identity** : Google OAuth + email/mot de passe         | Pas de lien magique. Les sept exigences de `docs/09-comptes.md` § 1 sont à implémenter — D17                                                |
+| Répartition     | `Mediator.SourceGenerator` (MIT)                                 | **MediatR est interdit** : RPL-1.5, incompatible avec un service commercial — D12                                                           |
+| État serveur    | TanStack Query                                                   | Mutations optimistes                                                                                                                        |
+| Cache local     | IndexedDB (Dexie)                                                | **Lot 7, pas avant** — D45. Écriture immédiate, réseau en arrière-plan, file de retry persistée — `docs/11-qualite.md` § 1                  |
+| Hébergement     | **OVHcloud**                                                     | Fournisseur européen, hors portée du Cloud Act. Backend conteneurisé sur VPS ou Public Cloud — D15                                          |
+| Domaine         | **Front et API sous le même domaine**                            | Le cookie de rafraîchissement reste de même site — D16                                                                                      |
+| Paiement        | Stripe                                                           | À partir de la V2 seulement                                                                                                                 |
+| LLM             | API Claude + Gemini                                              | Abstraction multi-fournisseur obligatoire, voir `docs/06-ia.md`                                                                             |
+| i18n            | i18next                                                          | Français et anglais dès la première ligne                                                                                                   |
+| Tests           | Vitest + Playwright + axe-core, xUnit côté backend               | En place avant la première fonctionnalité                                                                                                   |
+| Mesure          | Plausible ou Umami auto-hébergé                                  | UE, sans donnée de santé                                                                                                                    |
 
 **Ce que le changement d'architecture a déplacé.** La sécurité ne repose plus sur les politiques RLS du moteur PostgreSQL mais sur un point de contrôle applicatif : l'API est le seul chemin vers les données. RLS reste activé en défense en profondeur, il n'est plus la ligne unique. L'authentification devient un traitement que vous opérez, non un service délégué — `docs/13-juridique.md` doit en tenir compte dans l'AIPD et le registre.
 
