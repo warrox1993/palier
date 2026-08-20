@@ -509,12 +509,27 @@ export function agregeQuelqueChose(): number {
 - [ ] **Étape 6 : ajouter le script type-aware**
 
 ```json
-{ "scripts": { "lint": "oxlint src tests", "lint:types": "oxlint --type-aware src" } }
+{
+  "scripts": {
+    "lint": "oxlint --ignore-pattern \"tests/harness/fixtures/**\" .",
+    "lint:types": "oxlint --type-aware --ignore-pattern \"tests/harness/fixtures/**\" src"
+  }
+}
 ```
 
 - [ ] **Étape 7 : lancer l'épreuve pour la voir passer**
 
 Attendu : 3 tests passent.
+
+- [ ] **Étape 7 bis : vérifier que le front réel reste propre**
+
+Lancer : `npm run lint` et `npm run lint:types`.
+Attendu : code 0, aucune sortie.
+
+Cette étape existe parce que le script `lint` porte l'exclusion des fixtures
+(ruling P6) : toute réécriture du script qui l'oublie fait rougir le lint sur
+les violations délibérées. La tâche 5 avait cette étape ; son absence ici avait
+laissé passer une régression jusqu'à la revue.
 
 - [ ] **Étape 8 : commit**
 
@@ -797,6 +812,10 @@ describe('garde-fou : Prettier', () => {
   it('refuse un fichier mal formaté', () => {
     const r = lancerOutil(['npx', 'prettier', '--check', FIXTURE])
     expect(r.code, `Prettier a accepté le fichier :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion obligatoire : un code non nul prouve seulement que
+    // quelque chose a échoué, pas que Prettier a refusé. Sans elle, l'épreuve
+    // passe au vert quand l'outil est simplement absent — mesuré.
+    expect(r.sortie).toMatch(/Code style issues/)
   })
 })
 ```
@@ -928,9 +947,18 @@ npm install -D knip jscpd
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.mjs"],
   "ignore": ["tests/harness/fixtures/**"],
-  "ignoreDependencies": []
+  "ignoreDependencies": [
+    "@testing-library/jest-dom",
+    "@testing-library/react"
+  ]
 }
 ```
+
+Les deux `@testing-library` sont installées et pas encore consommées : elles
+attendent les premiers composants du lot 2. Elles sont déclarées ici plutôt que
+retirées puis réinstallées, mais la mention est **datée** — si le lot 2 se
+termine sans qu'elles soient câblées (aucun `setupFiles`, aucun import), elles
+sortent de cette liste et du `package.json`.
 
 `knip.fixtures.json` — configuration dédiée à l'épreuve :
 
@@ -989,7 +1017,7 @@ Attendu : 2 tests passent.
 
 - [ ] **Étape 6 : consigner les faux positifs**
 
-Lancer : `npm run knip` sur le projet principal. Noter le nombre de signalements écartés et la raison de chacun **dans le rapport de tâche** — `docs/decisions.md` n'existe qu'à la tâche 12, qui les y reprendra. Ruling C2 du ledger. Un détecteur qui se trompe est un détecteur qu'on cesse de lire.
+Lancer : `npm run knip` sur le projet principal. Noter le nombre de signalements écartés et la raison de chacun **dans le rapport de tâche** — `docs/decisions.md` existe déjà (créé hors plan, il porte D1 à D17) : le rapport de tâche reste le lieu du détail, et la tâche 20 y consigne ce qui doit survivre au lot. Ruling C2 du ledger. Un détecteur qui se trompe est un détecteur qu'on cesse de lire.
 
 - [ ] **Étape 7 : commit**
 
@@ -1617,6 +1645,10 @@ describe('garde-fou : couverture du domaine', () => {
       '--settings', 'back/coverage.runsettings',
     ])
     expect(r.code, `Le seuil de couverture n'a pas mordu :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion obligatoire : un code non nul prouve seulement que
+    // quelque chose a échoué, pas que l'outil a refusé. Sans elle, l'épreuve
+    // passe au vert quand l'outil est absent, indisponible ou mal appelé.
+    expect(r.sortie).toMatch(/threshold|seuil|coverage/i)
   })
 })
 ```
@@ -1711,6 +1743,10 @@ describe('garde-fou : format du code', () => {
     copyFileSync(SOURCE, CIBLE)
     const r = lancerOutil(['dotnet', 'format', 'back/Palier.sln', '--verify-no-changes'])
     expect(r.code, `dotnet format a accepté le fichier :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion obligatoire : un code non nul prouve seulement que
+    // quelque chose a échoué, pas que l'outil a refusé. Sans elle, l'épreuve
+    // passe au vert quand l'outil est absent, indisponible ou mal appelé.
+    expect(r.sortie).toMatch(/WHITESPACE|IDE\d{4}|formatted incorrectly/)
   })
 })
 ```
@@ -2119,6 +2155,12 @@ describe('garde-fou : secrets', () => {
   it('gitleaks détecte une clé au format reconnu', () => {
     const r = lancerOutil(['npx', 'gitleaks', 'detect', '--no-git', '--source', 'tests/harness/fixtures', '--redact'])
     expect(r.code, `gitleaks n'a rien vu :\n${r.sortie}`).not.toBe(0)
+    // Seconde assertion obligatoire : un code non nul prouve seulement que
+    // quelque chose a échoué, pas que l'outil a refusé. Sans elle, l'épreuve
+    // passe au vert quand l'outil est absent, indisponible ou mal appelé.
+    // Ce cas est le plus exposé : le plan prévient lui-même que `npx gitleaks`
+    // n'expose pas forcément un binaire sur toutes les plateformes.
+    expect(r.sortie).toMatch(/secret|leak/i)
   })
 
   it('les deux hooks existent', () => {
@@ -2406,8 +2448,21 @@ jobs:
       - run: npx --prefix front playwright install --with-deps chromium webkit
       - run: npm --prefix front run e2e
 
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@<SHA> # v4
+      - uses: actions/setup-node@<SHA> # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - run: npm --prefix front ci
+      - run: npm --prefix front run build
+      - run: npx --prefix front @lhci/cli autorun
+
   franchissement:
-    needs: [front, backend, securite, e2e]
+    needs: [front, backend, securite, e2e, performance]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@<SHA> # v4
@@ -2424,6 +2479,40 @@ jobs:
       - name: Les garde-fous refusent-ils encore ?
         run: npm run test:harness
 ```
+
+- [ ] **Étape 2 bis : écrire `front/.lighthouserc.json`**
+
+`08-workflow.md` § 5 liste Lighthouse CI comme dixième élément du harnais, et
+§ 9 fait de « Lighthouse supérieur à 90 » un critère de sortie du domaine
+frontend. Il manquait au plan entier — trouvé par la revue de fin de tâche 5.
+
+```json
+{
+  "ci": {
+    "collect": {
+      "staticDistDir": "./dist",
+      "numberOfRuns": 3
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["error", { "minScore": 0.9 }],
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
+        "categories:best-practices": ["error", { "minScore": 0.9 }],
+        "categories:seo": ["warn", { "minScore": 0.9 }]
+      }
+    },
+    "upload": { "target": "temporary-public-storage" }
+  }
+}
+```
+
+Ajouter `@lhci/cli` aux dépendances de développement du front.
+
+> **Le seuil se recalibre au lot 2.** Aujourd'hui la seule page est le squelette
+> Vite : un score élevé ne prouve rien sur le produit. Le garde-fou est installé
+> maintenant pour qu'une régression soit visible dès la première vraie page,
+> pas pour valider quoi que ce soit sur celle-ci. Le job échoue si le score
+> baisse — c'est tout ce qu'on lui demande à ce stade.
 
 - [ ] **Étape 3 : écrire `.github/dependabot.yml`**
 

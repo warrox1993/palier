@@ -115,3 +115,74 @@ Correctif retenu, celui de l'implémenteur : exclusion portée par `--ignore-pat
 *Coût si erroné :* aucun. La configuration actuelle est vérifiée : lint propre sur le code réel, épreuves qui voient leurs cibles.
 
 Task 5: minor (deferred) : incertitude sur la stabilité des noms internes affichés par `--print-config` (`no-unused-vars` sans préfixe `eslint/`) d'une version d'Oxlint à l'autre. Sans effet aujourd'hui.
+
+## Revue complète du lot — 20/08/2026
+
+Sept dimensions relues en parallèle, 20 constats soumis à un jury adversarial de
+deux lentilles (reproduction, conséquence), 15 confirmés, 5 réfutés, plus une
+critique de complétude qui a trouvé ce que la revue elle-même n'avait pas regardé.
+
+**Verdict initial : le harnais ne protégeait réellement que sur trois garde-fous
+sur huit.** Deux règles étaient supprimables sans qu'aucun test ne bouge, la
+primitive partagée par toutes les épreuves rendait « refusé » quand l'outil
+n'avait jamais tourné, et deux mécanismes déjà armés allaient dégrader la
+protection sans un signal.
+
+### Les quatre bloquants, corrigés et éprouvés (commit 63c8300)
+
+| # | Défaut | Preuve du correctif |
+|---|---|---|
+| 1 | `--exclude ''` s'ajoute aux globs, il ne les remplace pas | sonde `accessibilite.test.ts` : `test` → 3 fichiers, `test:harness` → 4 |
+| 2 | `lancerOutil` déguisait 3 défaillances en refus | les 4 épreuves rougissent quand on désarme ; celle du délai en 30 287 ms |
+| 3 | `no-console`, `no-cycle`, `plugins` supprimables en silence | les 3 épreuves rougissent avec les règles retirées |
+| 4 | `vitest.config.ts` hors typecheck et hors lint | `testTimeouts` → TS2769 avec la suggestion exacte |
+
+**Ruling P7 — le plan avait un quatrième endroit, et le ruling P6 en annonçait trois.**
+L'étape 6 de la tâche 6 réécrivait le script `lint` sans `--ignore-pattern`,
+défaisant P6 douze tâches avant qu'on ne s'en aperçoive. Le brief était déjà
+extrait avec la valeur périmée. Corrigé aux deux endroits, brief régénéré, et
+l'étape « vérifier que le front réel est propre » — présente en tâche 5,
+disparue en tâche 6 — rétablie.
+*Leçon :* une correction de plan n'atteint son lecteur que si le brief est
+régénéré. Le ledger ne remplace pas l'extraction.
+
+**Ruling P8 — la doctrine des deux assertions devient uniforme.**
+Quatre épreuves du plan (Prettier, couverture, `dotnet format`, gitleaks)
+n'avaient qu'une assertion sur le code de sortie. Mesuré : Prettier n'étant pas
+installé, l'épreuve T8 reproduite verbatim rend code 2 avec « No files matching
+the pattern were found » — **au vert**, alors que Prettier n'a rien vérifié.
+Les trois épreuves livrées s'en protégeaient déjà par une assertion sur le motif ;
+les quatre autres l'ont désormais.
+
+### Ce que la critique de complétude a ajouté
+
+- **`npm run verify` est cassé** : `scripts/verify.mjs` n'a jamais existé. Connu
+  et accepté (ruling P3), mais aucune dimension ne l'avait lancé.
+- **Aucune des 22 épreuves ne lance un script npm** — elles éprouvent les
+  *outils*, jamais les *commandes* que le hook, `verify` et la CI exécutent
+  réellement. Cause commune des bloquants 1 et 2. À traiter en tâche 18.
+- **Lighthouse CI était absent du plan entier**, alors que `08-workflow.md` § 5
+  en fait le 10e élément du harnais et § 9 un critère de sortie. Ajouté en T21.
+- **Le ledger et les 21 briefs n'étaient pas versionnés** (`.gitignore` = `*`)
+  alors qu'ils portent P1 à P8 et vivent dans un worktree qui se supprime. Corrigé.
+- **Onze contradictions documentaires** entre le dossier et les décisions D1-D17
+  (Supabase, Vercel, ESLint, Node 20, arborescence d'avant la tâche 3). Traitées
+  en tâche 20 — ce n'est pas trancher, c'est propager une décision déjà prise.
+- **Le coût de la boucle** : 15,4 s dont 10,7 s de jsdom, pour des épreuves qui
+  ne touchent jamais le DOM. Passées en environnement node → 11,8 s.
+
+### Ce qui n'a pas pu être vérifié
+
+- Le comportement en CI sous Linux : la tâche 21 n'existe pas. Toutes les
+  mesures sont sous Windows via cmd.exe. La branche `shell:false` de
+  `lancerOutil` n'est pas couverte.
+- Aucune violation provoquée dans un fichier **suivi par git** : la chaîne
+  « fichier commité en violation → contrôle rouge » n'est pas éprouvée de bout
+  en bout.
+- Le backend entier, et les tâches 6 à 21 par construction.
+
+*Incident de méthode, à ma charge :* un script Python de correction du plan a
+converti les 2 561 lignes du fichier en CRLF (`io.open` en mode `w` sans
+`newline=''`). Détecté parce que le remplacement suivant ne trouvait plus son
+motif, réparé avant tout commit. Sans ce hasard, `.gitattributes` l'aurait
+masqué à la validation et le diff aurait été illisible.

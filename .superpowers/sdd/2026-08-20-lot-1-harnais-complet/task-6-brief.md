@@ -126,12 +126,27 @@ export function agregeQuelqueChose(): number {
 - [ ] **Étape 6 : ajouter le script type-aware**
 
 ```json
-{ "scripts": { "lint": "oxlint src tests", "lint:types": "oxlint --type-aware src" } }
+{
+  "scripts": {
+    "lint": "oxlint --ignore-pattern \"tests/harness/fixtures/**\" .",
+    "lint:types": "oxlint --type-aware --ignore-pattern \"tests/harness/fixtures/**\" src"
+  }
+}
 ```
 
 - [ ] **Étape 7 : lancer l'épreuve pour la voir passer**
 
 Attendu : 3 tests passent.
+
+- [ ] **Étape 7 bis : vérifier que le front réel reste propre**
+
+Lancer : `npm run lint` et `npm run lint:types`.
+Attendu : code 0, aucune sortie.
+
+Cette étape existe parce que le script `lint` porte l'exclusion des fixtures
+(ruling P6) : toute réécriture du script qui l'oublie fait rougir le lint sur
+les violations délibérées. La tâche 5 avait cette étape ; son absence ici avait
+laissé passer une régression jusqu'à la revue.
 
 - [ ] **Étape 8 : commit**
 
