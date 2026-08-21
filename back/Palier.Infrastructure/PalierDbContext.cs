@@ -31,10 +31,46 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
 
     public DbSet<BodyWeight> BodyWeights => Set<BodyWeight>();
 
+    /// <summary>
+    /// Les sessions de rafraîchissement — lot 4. Déclarées ici parce que le
+    /// schéma appartient à ce contexte et à lui seul ; c'est
+    /// <c>PalierAuthDbContext</c> qui les LIT, sous le rôle qui en a le droit.
+    /// </summary>
+    public DbSet<SessionRafraichissement> Sessions => Set<SessionRafraichissement>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
         base.OnModelCreating(builder);
+
+        builder.Entity<SessionRafraichissement>(t =>
+        {
+            t.ToTable("sessions_refresh");
+            t.HasKey(x => x.Id);
+            t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            t.Property(x => x.OwnerId).HasColumnName("owner_id");
+            t.Property(x => x.TokenHash).HasColumnName("token_hash").IsRequired();
+            t.Property(x => x.FamilyId).HasColumnName("family_id");
+            t.Property(x => x.CreatedAt).HasColumnName("created_at");
+            t.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            t.Property(x => x.ConsumedAt).HasColumnName("consumed_at");
+            t.Property(x => x.RevokedAt).HasColumnName("revoked_at");
+            t.Property(x => x.ReplacedById).HasColumnName("replaced_by_id");
+            t.Property(x => x.Device).HasColumnName("device");
+            t.Property(x => x.LastSeenAt).HasColumnName("last_seen_at");
+
+            // L'empreinte est unique : deux sessions ne peuvent pas porter le
+            // même jeton, et la recherche au rafraîchissement passe par cet index.
+            t.HasIndex(x => x.TokenHash).IsUnique();
+            t.HasIndex(x => x.OwnerId);
+            t.HasIndex(x => x.FamilyId);
+
+            // Article 17 : les sessions ne survivent pas au compte.
+            t.HasOne<Utilisateur>()
+                .WithMany()
+                .HasForeignKey(x => x.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
         builder.Entity<NutrientRef>(t =>
         {
