@@ -77,9 +77,9 @@ La référence transmise au domaine porte donc : la valeur, **son statut**, sa f
 
 ## 3. Ce que la vérification des formules a trouvé
 
-Trois écarts avec les documents du projet. Ils sont **signalés, non tranchés** — `CLAUDE.md` § 6.
+Trois écarts avec les documents du projet, **tranchés** après recherche complémentaire. Chaque décision porte le fait qui l'emporte.
 
-### Écart 1 — Mifflin-St Jeor est déconseillée pour la population cible
+### Écart 1 — Mifflin-St Jeor, contestée puis conservée
 
 `04-nutrition.md` § 1 pose Mifflin-St Jeor comme formule principale. La méta-analyse de référence sur les sportifs (Sports Medicine, 2023) conclut l'inverse : cinq équations satisfont les critères d'exactitude **sans différence significative** avec la mesure — Cunningham 1980, Cunningham 1991, Harris-Benedict, De Lorenzo et Ten-Haaf — tandis que Mifflin-St Jeor **sous-estime significativement** et figure parmi celles à éviter.
 
@@ -94,7 +94,17 @@ Ten-Haaf (masse maigre)
   22,771 × MM(kg) + 484,264
 ```
 
-**À trancher :** la cible du produit est le pratiquant qui veut éviter les excès et les blessures, pas l'athlète de performance — mais c'est bien une population qui s'entraîne, et Ten-Haaf a été construite sur elle.
+**Décision : garder Mifflin-St Jeor.** Trois faits l'emportent sur sa moindre exactitude.
+
+**Ten-Haaf n'est validée que de 18 à 35 ans.** C'est le titre même de l'article, et aucune validation externe au-delà n'a été trouvée. La population du produit ne s'arrête pas à 35 ans ; l'y appliquer serait une extrapolation hors du domaine où l'équation a été construite. Mifflin-St Jeor a été développée sur une population de 19 à 78 ans.
+
+**Katch-McArdle est plus exacte, mais seulement si le pourcentage de masse grasse l'est.** Les balances à impédance domestiques mesurent en moyenne **4,4 points sous la DXA**, et les écarts constatés vont de 21 à 34 %. Or l'erreur se propage : environ **16 kcal par point de pourcentage**. Une formule exacte nourrie d'une donnée fausse est moins fiable qu'une formule biaisée nourrie d'une donnée juste — d'autant que le biais de Mifflin est **systématique et documentable**, quand celui d'une balance est aléatoire et invisible.
+
+**Et le choix ne dure que trois semaines.** `04-nutrition.md` § 1 le dit : « à la semaine 4, elle n'est plus utilisée du tout ». Optimiser une estimation qu'un TDEE mesuré remplace au bout de vingt et un jours revient à polir ce qu'on va jeter. Ce qui compte est ailleurs : que l'estimation sorte **avec sa fourchette**, et que le passage à la mesure se fasse vite.
+
+**Ce qui change quand même :** Katch-McArdle est retenue lorsque le pourcentage de masse grasse provient d'une **mesure fiable** — DXA, pesée hydrostatique, plis cutanés par un professionnel — et **jamais** d'une balance à impédance. La provenance de la mesure devient donc une donnée du produit, pas seulement sa valeur.
+
+**Ce qui rouvrirait cette décision :** une validation externe de Ten-Haaf au-delà de 35 ans.
 
 ### Écart 2 — aucune formule ne relie charge et répétitions à une dépense
 
@@ -108,23 +118,41 @@ La seule voie praticable reste le MET : **1 MET = 1 kcal/kg/h**, la musculation 
 
 **Ce qui n'est pas acquis :** relier le MET au RIR serait séduisant — un RIR bas signale un effort proche de l'échec — mais **aucune source ne le valide**. À ne pas implémenter.
 
+**Décision : `MET × Masse(kg) × durée(h)` remplace le forfait.** Il utilise une donnée que le produit possède déjà et il cesse de facturer le même coût à une femme de 55 kg et à un homme de 95 kg.
+
+**Et le MET ne sera pas une constante du domaine.** Les sources consultées donnent 3,5 · 5,0 · 5,8 · 6,0 · 9,0 selon la version du Compendium et le code retenu, et je n'ai **pas pu trancher** : le site du Compendium et ses PDF refusent l'accès automatisé (HTTP 403). La valeur vit donc en base avec son code d'activité, sa version de Compendium et sa date — exactement le traitement réservé aux limites hautes au § 2, et pour la même raison : une valeur de référence qui bouge n'a rien à faire dans du code compilé.
+
+**À faire avant l'implémentation :** ouvrir le Compendium 2024 à la main et relever la valeur du code « resistance training, multiple exercises, 8-15 reps at varied resistance », qui est le cas d'usage du produit.
+
 ### Écart 3 — le ratio tirage/poussée de 1,3 est une convention
 
 `05-entrainement.md` § 4 fixe une cible minimale de 1,3. La littérature ne soutient aucune valeur précise : les recommandations vont de 1:1 à 3:1 selon les auteurs, et la pertinence même d'un ratio fixe est débattue. Une mesure sur sédentaires donne un rapport tirage/poussée de 1,36 chez l'homme et 2,69 chez la femme — c'est un **constat de population**, pas une cible thérapeutique.
 
-**Proposition :** garder 1,3 comme paramètre de référence, jamais comme seuil de santé, et ne pas l'exprimer comme une constante du domaine.
+**Décision : garder 1,3, mais le déclasser.** Ce n'est pas un seuil de santé, c'est un repère d'équilibre. Il vit comme paramètre de référence versionné, jamais comme constante du domaine, et le produit ne dira jamais qu'un ratio inférieur expose à une blessure — aucune source ne le soutient.
+
+### Ce que l'ACSM 2026 ajoute, et qui manquait
+
+Le _Position Stand_ de l'ACSM sur l'entraînement en résistance a été publié en 2026, première mise à jour depuis dix-sept ans, sur **137 revues systématiques et plus de 30 000 participants**. Trois de ses conclusions concernent directement ce lot.
+
+**Le volume par groupe musculaire a enfin une cible :** environ **10 séries hebdomadaires par groupe** pour l'hypertrophie, avec une relation dose-réponse au-delà, et **tous les groupes majeurs entraînés au moins deux fois par semaine**. `05-entrainement.md` calcule le volume hebdomadaire sans jamais dire à quoi le comparer. Cette référence comble le trou.
+
+**La charge compte moins que le volume :** de 30 à 100 % du 1RM, les gains sont équivalents à volume égalisé, dès lors que chaque série est menée proche de l'échec.
+
+**Et le point qui valide la promesse du produit :** s'entraîner à **2 ou 3 répétitions en réserve produit les mêmes gains** de masse et de force que l'échec absolu, avec moins de fatigue accumulée et **un risque de blessure moindre**. La règle de progression de `05-entrainement.md` § 2, qui s'appuie sur un RIR cible, n'est donc pas une prudence commerciale : c'est la recommandation de référence.
+
+Ces trois valeurs entrent comme **références versionnées**, au même titre que les limites hautes et les METs.
 
 ### Ce que la vérification a confirmé
 
-| Élément                                                       | Verdict                                                                                                                                                                                                                           |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mifflin-St Jeor, forme `10 × P + 6,25 × T − 5 × A + 5 / −161` | Exacte — forme canonique de l'article de 1990                                                                                                                                                                                     |
-| Katch-McArdle `370 + 21,6 × MM`                               | Exacte, et **identique à Cunningham 1991 révisée**. Cunningham 1980 est `500 + 22 × MM`, une autre équation — ne pas confondre                                                                                                    |
-| Protéines 1,6 à 2,2 g/kg                                      | Fondé : Morton 2018 place le point d'inflexion à **1,62 g/kg**, l'intervalle de confiance à 95 % montant à 2,2                                                                                                                    |
-| Planchers 1 200 kcal femme et 1 500 homme                     | Bornes **basses** des recommandations cliniques (1 200-1 500 femme, 1 500-1 800 homme)                                                                                                                                            |
-| Eau, 35 ml/kg                                                 | Cohérent avec l'EFSA : 2,0 L femme et 2,5 L homme correspondent à 57 et 71 kg                                                                                                                                                     |
-| Epley et Brzycki                                              | Précises **sous 10 répétitions**. Le projet signale la marge au-delà de 12 : plus permissif que la littérature                                                                                                                    |
-| Coefficient 7 700 kcal/kg                                     | Règle de Wishnofsky, largement critiquée en **prédiction**. L'usage du projet est **rétrospectif** — inférer une dépense passée — ce qui est un autre problème, mais la composition de la perte affecte quand même le coefficient |
+| Élément                                                       | Verdict                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mifflin-St Jeor, forme `10 × P + 6,25 × T − 5 × A + 5 / −161` | Exacte — forme canonique de l'article de 1990                                                                                                                                                                                                                     |
+| Katch-McArdle `370 + 21,6 × MM`                               | Exacte, et **identique à Cunningham 1991 révisée**. Cunningham 1980 est `500 + 22 × MM`, une autre équation — ne pas confondre                                                                                                                                    |
+| Protéines 1,6 à 2,2 g/kg                                      | Fondé : Morton 2018 place le point d'inflexion à **1,62 g/kg**, l'intervalle de confiance à 95 % montant à 2,2                                                                                                                                                    |
+| Planchers 1 200 kcal femme et 1 500 homme                     | Bornes **basses** des recommandations cliniques (1 200-1 500 femme, 1 500-1 800 homme)                                                                                                                                                                            |
+| Eau, 35 ml/kg                                                 | Cohérent avec l'EFSA : 2,0 L femme et 2,5 L homme correspondent à 57 et 71 kg                                                                                                                                                                                     |
+| Epley et Brzycki                                              | **Le projet a raison.** Erreur de prédiction sous 0,03 entre 3 et 8 répétitions, exactitude maximale au 5RM, dégradation au-delà de 10, et « beyond 12 reps, prediction error increases significantly » — précisément le seuil que porte `05-entrainement.md` § 3 |
+| Coefficient 7 700 kcal/kg                                     | Règle de Wishnofsky, largement critiquée en **prédiction**. L'usage du projet est **rétrospectif** — inférer une dépense passée — ce qui est un autre problème, mais la composition de la perte affecte quand même le coefficient                                 |
 
 ---
 
@@ -148,12 +176,13 @@ Où chaque grandeur intervient réellement.
   plancher appliqué en DERNIER, non contournable
 ```
 
-**Le choix de la formule suit la donnée disponible**, ce qui règle l'écart 1 sans élire un vainqueur universel :
+**Le choix de la formule suit la donnée disponible — et sa provenance**, ce qui règle l'écart 1 sans élire un vainqueur universel :
 
-| Donnée disponible                  | Formule                              | Motif                                                                                                 |
-| ---------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Pourcentage de masse grasse connu  | Katch-McArdle / Cunningham 1991      | Sans biais significatif chez le sportif ; le sexe sort de l'équation, la composition le contient déjà |
-| Poids, taille, âge, sexe seulement | **à trancher** — Ten-Haaf ou Mifflin | Ten-Haaf est validée sur la population cible ; Mifflin-St Jeor est ce que porte `04-nutrition.md`     |
+| Donnée disponible                                                                                        | Formule                         | Motif                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Masse grasse issue d'une **mesure fiable** — DXA, pesée hydrostatique, plis cutanés par un professionnel | Katch-McArdle / Cunningham 1991 | Sans biais significatif chez le sportif ; le sexe sort de l'équation, la composition le contient déjà                                               |
+| Masse grasse issue d'une **balance à impédance**                                                         | **Mifflin-St Jeor**             | La balance dévie de 4,4 points sous la DXA, et l'erreur se propage à ~16 kcal par point. La formule exacte devient la moins fiable des deux         |
+| Poids, taille, âge, sexe seulement                                                                       | **Mifflin-St Jeor**             | Ten-Haaf n'est validée que de 18 à 35 ans ; Mifflin couvre 19 à 78 ans. Le biais sur la population sportive est connu et documenté, donc corrigible |
 
 **Ce que ces grandeurs ne font pas.** `Charge`, `Repetitions` et `Rir` **n'entrent pas** dans le calcul calorique — aucune formule validée ne les y relie. Elles servent à la force estimée, au volume par groupe musculaire et à la détection de plateau. Les faire entrer dans une dépense reviendrait à inventer un chiffre de santé, ce que `01-conformite.md` interdit.
 
@@ -212,15 +241,27 @@ Aucune classification d'aliment, aucun score, aucune notion d'aliment interdit, 
 
 ---
 
-## 10. Points ouverts, à trancher par le porteur du projet
+## 10. Ce qui a été tranché, et ce qui reste
 
-1. **Mifflin-St Jeor ou Ten-Haaf** comme formule sans composition corporelle (§ 3).
-2. **Le forfait de 5 kcal/min** remplacé par `MET × Masse × durée` (§ 3).
-3. **Le seuil de fiabilité du 1RM** : 12 répétitions effectives dans le projet, 10 dans la littérature (§ 3).
-4. **La forme chimique et le périmètre** deviennent des colonnes de `nutrient_refs` — c'est un changement de schéma, donc une décision (§ 2).
-5. **La validation du diététicien** reste due. Elle ne bloque pas ces calculs ; elle bloquera leur affichage.
+### Tranché après recherche
 
-Ces cinq points appellent une entrée datée dans `docs/decisions.md` une fois tranchés.
+| Question                            | Décision                                                                                   | Ce qui l'emporte                                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Formule sans composition corporelle | **Mifflin-St Jeor**, conservée                                                             | Ten-Haaf n'est validée que de 18 à 35 ans, et le TDEE adaptatif remplace l'estimation en trois semaines |
+| Katch-McArdle, quand ?              | **Uniquement sur mesure fiable**, jamais sur balance à impédance                           | La balance dévie de 4,4 points sous la DXA, soit ~70 kcal d'erreur propagée                             |
+| Coût de l'entraînement              | **`MET × Masse × durée`**, le MET vivant en base                                           | Le forfait de 5 kcal/min ignore la masse et sort par le haut chez une femme de 55 kg                    |
+| Seuil de fiabilité du 1RM           | **Le projet est confirmé** : marge signalée au-delà de 12, rien au-delà de 15              | « Beyond 12 reps, prediction error increases significantly »                                            |
+| Ratio tirage/poussée                | **1,3 conservé, déclassé** en repère et non en seuil de santé                              | Les recommandations vont de 1:1 à 3:1 ; aucune ne fonde une valeur précise                              |
+| Volume par groupe musculaire        | **~10 séries/semaine**, chaque groupe deux fois par semaine — nouvelle référence           | ACSM 2026 : 137 revues systématiques, plus de 30 000 participants                                       |
+| Planchers de sécurité               | **Implémentés** selon `01-conformite.md` § 5, sans produire aucune formulation utilisateur | Le domaine calcule des seuils, il ne rédige rien                                                        |
+
+### Reste à trancher — ce ne sont pas des questions techniques
+
+1. **La forme chimique et le périmètre** deviennent des colonnes de `nutrient_refs`, et **la provenance de la mesure de masse grasse** une donnée du profil. Ce sont deux **changements de schéma** : `CLAUDE.md` § 6 les réserve au porteur du projet.
+2. **La valeur MET exacte** du code « 8-15 reps at varied resistance » du Compendium 2024 : les sources consultées donnent 3,5 ou 5,8, et le site refuse l'accès automatisé. À relever à la main avant l'implémentation.
+3. **La validation du diététicien** reste due. Elle ne bloque pas ces calculs ; elle bloquera leur affichage.
+
+Les décisions du premier tableau appellent une entrée datée dans `docs/decisions.md`.
 
 ---
 
@@ -249,6 +290,17 @@ Ces cinq points appellent une entrée datée dans `docs/decisions.md` une fois t
 - [DHA supplémenté — safe level 1 g/j](https://efsa.onlinelibrary.wiley.com/doi/10.2903/j.efsa.2026.9858) — adopté le 15/12/2025
 - [Vitamine C — aucune UL dérivable](https://www.efsa.europa.eu/en/efsajournal/pub/59) — 2004
 - [Guidance for establishing and applying tolerable upper intake levels](https://efsa.onlinelibrary.wiley.com/doi/10.2903/j.efsa.2024.9052) — 2024
+
+**Entraînement**
+
+- [ACSM Position Stand 2026 — Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults](https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/) — 137 revues systématiques
+- [ACSM — présentation des recommandations 2026](https://acsm.org/resistance-training-guidelines-update-2026/)
+- [Validation of the Brzycki and Epley Equations](https://opensiuc.lib.siu.edu/cgi/viewcontent.cgi?article=1744&context=gs_rp)
+- [2024 Adult Compendium of Physical Activities](https://pacompendium.com/adult-compendium/) — accès automatisé refusé, valeur MET à relever à la main
+
+**Composition corporelle**
+
+- [Practical but Inaccurate? A-Mode Ultrasound and Bioelectrical Impedance Underestimate Body Fat Percentage Compared to DXA](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11270340/)
 
 **Macronutriments**
 
