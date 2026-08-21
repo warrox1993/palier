@@ -266,11 +266,15 @@ Une table de sessions qui ne se vide jamais grossit indéfiniment, et chaque lig
 
 **Pas de tâche de fond dans ce lot.** Un ordonnanceur interne serait un mécanisme de plus à surveiller, et il n'appartient pas au socle de session : la commande est appelée par le déploiement, qui sait déjà lancer des migrations. Idempotente, donc rejouable sans dommage.
 
-### La suppression de compte
+### Ce que ce lot fait de la suppression de compte — et ce qu'il n'en fait pas
 
-RGPD article 17 : l'effacement se fait « sans délai indu ». Les sessions d'un compte supprimé **partent avec lui** — la contrainte de clé étrangère vers `AspNetUsers` porte `on delete cascade`, et une épreuve vérifie qu'aucune session ne survit à son utilisateur.
+**Il en livre la cascade, pas le parcours.** `09-comptes.md` § 3 décrit une suppression que ce lot ne peut pas porter en entier : « Confirmation par saisie de l'email. **Export proposé avant.** Effacement réel sous 30 jours, **purge des sauvegardes comprise.** » Trois de ces quatre éléments demandent un écran, un export complet et une politique de sauvegarde — ils appartiennent à des lots ultérieurs.
 
-**Elle se fait en deux temps, et l'ordre compte.** Le pipeline vérifie d'abord l'identité du demandeur — on ne supprime que son propre compte — puis le service d'identité, sous `palier_auth`, exécute la suppression. `palier_app` n'a aucun privilège sur `AspNetUsers` et ne peut donc pas la faire lui-même : c'est la conséquence directe du § 2 bis, et elle est voulue.
+**Ce que le lot 4 garantit :** les sessions d'un compte supprimé **partent avec lui**. La contrainte de clé étrangère vers `AspNetUsers` porte `on delete cascade`, et une épreuve vérifie qu'aucune session ne survit à son utilisateur. C'est l'article 17 appliqué à ce que ce lot crée, et rien de plus.
+
+**Quand le parcours complet arrivera**, il se fera en deux temps et l'ordre comptera : le pipeline vérifie d'abord l'identité du demandeur — on ne supprime que son propre compte — puis le service d'identité, sous `palier_auth`, exécute. `palier_app` n'a aucun privilège sur `AspNetUsers` et ne peut donc pas le faire lui-même : conséquence directe du § 2 bis, et elle est voulue.
+
+**Le point que ce lot ne referme pas, et qu'il ne faut pas croire refermé :** `01-conformite.md` § 4 exige un « effacement **réel** du compte et des données, **pas un drapeau en base** ». La cascade des sessions le respecte ; la purge des sauvegardes reste entière.
 
 ---
 
@@ -288,13 +292,73 @@ RGPD article 17 : l'effacement se fait « sans délai indu ». Les sessions d'un
 
 ---
 
+## 7 quater. Ce que ce lot doit produire pour l'AIPD et le registre
+
+Ce n'est pas du code, et c'est pourtant un livrable du lot — `13-juridique.md` le rend obligatoire.
+
+### L'état d'implémentation des sept exigences
+
+> « L'authentification devient une **mesure technique de l'AIPD**, et non plus une garantie de sous-traitant. Les sept exigences de `09-comptes.md` § 1 […] sont à décrire comme telles, **avec leur état d'implémentation**. D17 note qu'ASP.NET Identity en couvre une partie, pas tout : **l'écart se documente, il ne se suppose pas comblé.** »
+
+Ce lot en couvre cinq et en reporte deux. L'écart doit être **écrit**, pas laissé à deviner :
+
+| Exigence                                 | Après ce lot                                              |
+| ---------------------------------------- | --------------------------------------------------------- |
+| 1. Google OAuth                          | **reporté — lot 4b**, identifiants à créer chez Google    |
+| 2. Email vérifié avant la nutrition      | **règle écrite et éprouvée** ; l'envoi reste au lot 4b    |
+| 3. Mot de passe contre HaveIBeenPwned    | **livré**, à deux étages (§ 6)                            |
+| 4. Limitation et verrouillage progressif | **livré**, sous réserve du proxy renseigné (§ 2)          |
+| 5. 2FA TOTP                              | **livré** côté serveur ; le QR au front                   |
+| 6. Rotation des jetons                   | **livré**, avec détection de réemploi et fenêtre de grâce |
+| 7. Fusion des comptes                    | **reporté — lot 4b**, dépend de l'exigence 1              |
+
+### Les durées de conservation
+
+Le registre des traitements (RGPD article 30) réclame « finalité, base légale, catégories de données, destinataires, **durées** et transferts ». Ce lot crée des données personnelles qui n'existaient pas :
+
+| Donnée                                 | Durée                                     |
+| -------------------------------------- | ----------------------------------------- |
+| Empreinte du jeton de rafraîchissement | 14 jours, puis purge                      |
+| Famille de session, horodatages        | idem                                      |
+| Appareil (user-agent)                  | idem — sert la liste des sessions actives |
+| Compteur d'échecs et verrouillage      | fenêtre glissante de 15 minutes           |
+
+**Aucune de ces données n'est une donnée de santé**, et aucune ne part au journal.
+
+---
+
+## 7 quinquies. La définition de terminé, et les trois points qui ne s'appliquent pas
+
+`08-workflow.md` § 9 pose douze cases, et « une tâche qui ne coche pas ces douze cases n'est pas terminée ». Neuf se cochent normalement ici. **Trois supposent un écran, et ce lot n'en a pas** :
+
+| Point                                                   | Statut sur ce lot                                                                                                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accessible au clavier, axe-core vert, contraste vérifié | **sans objet** — aucune interface. À couvrir au lot qui livre les écrans                                                                            |
+| États de chargement, erreur, vide et partiel traités    | **sans objet côté écran.** L'équivalent serveur est couvert : chaque route rend un code d'erreur distinct, et aucun ne révèle la cause à l'appelant |
+| Textes en français et en anglais, aucune chaîne en dur  | **sans objet** — l'API rend des **codes**, jamais des phrases. C'est la règle du § 8, et une épreuve la garde                                       |
+
+**Ce n'est pas une dispense, c'est un report nommé.** Les trois points reviennent au lot qui livrera les écrans d'authentification, et ce report est écrit ici pour qu'il ne se perde pas.
+
+---
+
 ## 8. Ce que ce lot ne contient pas
 
-Aucun envoi d'email, aucune connexion externe, aucune fusion de comptes. La règle d'autorisation « **pas de nutrition** sans email vérifié » est écrite et éprouvée — c'est une politique applicative, distincte de `RequireConfirmedEmail` qui bloquerait la connexion entière alors que l'entraînement doit rester ouvert. Le drapeau de vérification est posé par le lot 4b ; la règle qui le lit existe dès celui-ci.
+Aucun envoi d'email, aucune connexion externe, aucune fusion de comptes.
+
+**La porte de la nutrition a deux verrous, et non un seul.** Le premier jet de cette spec n'en voyait qu'un.
+
+| Verrou                 | Source              | Ce qu'il exige                                                                                                                      |
+| ---------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Email vérifié**      | `09-comptes.md` § 1 | « pas de **nutrition** sans email vérifié » — pas « pas de connexion »                                                              |
+| **Consentement santé** | `09-comptes.md` § 2 | présenté à l'écran 2 de l'accueil, séparé des CGU, **refusable** — « en cas de refus : accès à l'entraînement, pas à la nutrition » |
+
+Les deux sont des politiques **applicatives**, distinctes de `RequireConfirmedEmail`, qui bloquerait la connexion entière alors que l'entraînement doit rester ouvert dans les deux cas. Ce lot écrit et éprouve **les deux règles** ; les drapeaux qu'elles lisent sont posés ailleurs — la vérification d'email au lot 4b, le consentement à l'accueil.
+
+**Aucun écran non plus.** Ce lot est backend, et il est vérifiable de bout en bout **au sens des tests d'intégration** — inscription, connexion, rotation, réemploi détecté, déconnexion de tous les appareils — pas au sens où vous pourriez vous connecter dans un navigateur. Les écrans appartiennent au lot 6, qui porte le socle d'écran ; les livrer ici imposerait de concevoir la direction visuelle de l'authentification avant celle du produit.
 
 Aucun message destiné à un utilisateur : les libellés vivent en base et passent par i18next.
 
-**Aucun écran non plus.** Ce lot est backend, et il est vérifiable de bout en bout **au sens des tests d'intégration** — inscription, connexion, rotation, réemploi détecté, déconnexion de tous les appareils — pas au sens où vous pourriez vous connecter dans un navigateur. Les écrans appartiennent au lot 6, qui porte le socle d'écran ; les livrer ici imposerait de concevoir la direction visuelle de l'authentification avant celle du produit.
+**Et la suppression de compte n'est livrée qu'en partie** — voir § 7 bis. La cascade des sessions, oui ; le parcours de confirmation, l'export préalable et la purge des sauvegardes, non.
 
 ---
 
@@ -312,6 +376,12 @@ Aucun message destiné à un utilisateur : les libellés vivent en base et passe
 ### Bloqué par l'extérieur
 
 4. **L'adresse du proxy OVHcloud** pour `KnownProxies` — inconnue tant que l'instance n'existe pas. La configuration est portée par variable d'environnement, et l'épreuve utilise une adresse de test. **Tant qu'elle n'est pas renseignée en exploitation, la limitation par IP ne protège pas** : c'est à vérifier au déploiement, pas ici.
+
+### Ce que ce lot laisse derrière lui, et qui ne doit pas se perdre
+
+6. **La portabilité** — `01-conformite.md` § 4 : « export complet en un clic, sans condition, **dès la V1** ». Hors de ce lot, mais elle n'apparaissait nulle part dans la suite prévue.
+7. **La suppression de compte complète** — confirmation par saisie de l'email, export proposé avant, purge des sauvegardes (§ 7 bis).
+8. **Les trois points de la définition de terminé** reportés au lot des écrans (§ 7 quinquies).
 
 ### Décisions à consigner
 
