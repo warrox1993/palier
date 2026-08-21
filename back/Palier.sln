@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Palier.Domain.Tests", "Pali
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Palier.Database.Tests", "Palier.Database.Tests\Palier.Database.Tests.csproj", "{60145636-6E5D-4B2F-9219-3F0FE14E8738}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Palier.Application.Tests", "Palier.Application.Tests\Palier.Application.Tests.csproj", "{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -97,6 +99,18 @@ Global
 		{60145636-6E5D-4B2F-9219-3F0FE14E8738}.Release|x64.Build.0 = Release|Any CPU
 		{60145636-6E5D-4B2F-9219-3F0FE14E8738}.Release|x86.ActiveCfg = Release|Any CPU
 		{60145636-6E5D-4B2F-9219-3F0FE14E8738}.Release|x86.Build.0 = Release|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Debug|x64.Build.0 = Debug|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Debug|x86.Build.0 = Debug|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Release|x64.ActiveCfg = Release|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Release|x64.Build.0 = Release|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Release|x86.ActiveCfg = Release|Any CPU
+		{00DC0C5C-9994-46B2-ACB8-1B029FB5C58F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
