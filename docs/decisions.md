@@ -870,3 +870,70 @@ Ce dernier point valide la promesse du produit : la règle de progression de `05
 **Ce que le domaine en fait.** Trois paliers de fiabilité — bonne jusqu'à 8 répétitions effectives, moyenne jusqu'à 12, faible jusqu'à 15 — et **rien du tout au-delà**. `ForceEstimee.Epley` rend `null` plutôt qu'une charge : un nombre rendu quand même serait indiscernable d'une estimation valide.
 
 **Ce qui la rouvrirait :** rien de connu.
+
+---
+
+## D54 — Un quatrième rôle PostgreSQL porte le chemin d'authentification
+
+**Tranché le :** 21/08/2026, au démarrage du lot 4. **Choisi par le porteur du projet parmi trois options.**
+
+D38 avait fermé les six tables `AspNet*` en refus par défaut — `enable` + `force row level security`, aucune politique — en laissant à concevoir le chemin qui les atteindrait. Le lot 4 a buté sur ce mur : l'authentification lit `AspNetUsers` **avant** qu'une identité existe, or `ExecuteurDeCasDUsage` refuse sans identité, `ArchitectureTests` interdit tout autre accès au contexte, et D38 a fermé les tables.
+
+**Le rôle `palier_auth`** est le seul chemin. Il ne possède rien, ne contourne pas RLS, et n'a **aucun privilège** sur `workouts`, `sets` ni `body_weight` — trois épreuves de `RolesTests` l'exigent en code 42501. Le contexte `PalierAuthDbContext` ne déclare que les tables d'identité et les sessions : ce qui n'est pas déclaré n'est pas atteignable, et la barrière du moteur n'est plus la seule.
+
+**Les deux voies écartées, et pourquoi.**
+
+- **Fonctions `SECURITY DEFINER`** — elles auraient obligé à réécrire cinq interfaces du magasin Identity, et chacune aurait dû porter `SET search_path` sous peine de rouvrir CVE-2018-1058. Beaucoup de surface pour une barrière que le rôle donne gratuitement.
+- **Un drapeau de contexte applicatif** — la barrière aurait dépendu d'une variable posée par l'application. Une barrière qu'un défaut applicatif peut lever n'est pas une barrière.
+
+**Ce qui la rouvrirait :** un magasin Identity qui n'irait plus en base — improbable — ou un besoin de lire les tables d'identité depuis le chemin des cas d'usage, qui serait d'abord un défaut de conception à corriger.
+
+---
+
+## D55 — Le hachage passe à 210 000 itérations, et la mesure est écrite
+
+**Tranché le :** 21/08/2026, pendant le lot 4. `docs/09-comptes.md` § 1 laissait l'arbitrage ouvert : « conserver le défaut ou relever le nombre d'itérations reste à arbitrer, et l'arbitrage **se mesure**, il ne se devine pas ».
+
+**L'algorithme réel, vérifié en décodant le format du haché octet par octet :** PBKDF2 **HMAC-SHA512**, sel de 128 bits, sous-clé de 256 bits, **100 000 itérations** par défaut. La documentation Microsoft annonce tantôt SHA-256, tantôt 10 000 — aucune des deux n'est ce que le code fait.
+
+**La mesure**, le 21/08/2026 sur seize cœurs : **56,7 ms** à 100 000 itérations contre **111,2 ms** à 210 000. Soit **54 ms de plus par connexion**. Sur un vCPU mutualisé, compter le double.
+
+**210 000** est ce qu'OWASP recommande pour PBKDF2-HMAC-SHA512 — la fonction que cette version emploie réellement, pas celle que la documentation annonce.
+
+**Ce que la mesure a changé dans le code :** l'ordre des contrôles. La limitation par adresse vient **avant** le hachage, sans quoi 111 ms deviennent un levier d'épuisement de ressources.
+
+**Ce qui la rouvrirait :** une recommandation OWASP révisée, ou une mesure sur l'instance OVHcloud réelle qui montrerait un coût par connexion incompatible avec la charge attendue. Le marqueur de version en tête du haché rend le changement sûr dans les deux sens.
+
+---
+
+## D56 — La fenêtre de grâce de rotation vaut trente secondes
+
+**Tranché le :** 21/08/2026, pendant le lot 4.
+
+RFC 9700 (janvier 2025) impose de révoquer la famille entière au réemploi d'un jeton de rafraîchissement : deux porteurs détiennent la même chaîne, lequel est le voleur est indécidable. Appliquée sans nuance, la règle **déconnecte les utilisateurs légitimes** — deux onglets qui se rafraîchissent à la même seconde présentent aussi la même chaîne.
+
+**Trente secondes**, le défaut d'Okta, réglable de 0 à 60 chez lui. Assez court pour qu'un jeton volé ne serve pas : un attaquant qui rejoue à la seconde près est dans la course, pas dans une exploitation. Assez long pour couvrir un aller-retour réseau dégradé, un second onglet, une reprise de connexion.
+
+**Ce que le rejeu dans la grâce fait exactement :** il rend un jeton **neuf de la même famille**, et ne consomme rien de plus. Le successeur porte son empreinte et non son jeton — il ne peut pas être reconstruit.
+
+**Ce qui la rouvrirait :** une mesure de déconnexions intempestives en exploitation, qui la ferait monter ; ou un incident de vol de jeton exploité dans la fenêtre, qui la ferait descendre. Aucune des deux ne se devine : `ParametresDeSession.FenetreDeGrace` est à un seul endroit, et `DecisionDeRotation` est couverte à 100 %.
+
+---
+
+## D57 — Les seuils de couverture des adaptateurs sont posés au niveau atteint
+
+**Tranché le :** 21/08/2026, fin du lot 4.
+
+| Projet                                 | Seuil                                               | Ce qu'il détecte                                                         |
+| -------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------ |
+| `Palier.Domain`                        | **100 %** ligne, branche, méthode                   | le code mort **public** — un membre que rien n'appelle n'est pas couvert |
+| `Palier.Application`                   | **100 %** ligne, branche, méthode                   | idem                                                                     |
+| `Palier.Infrastructure` + `Palier.Api` | **96 / 79 / 71 %** (mesuré : 96,63 / 79,60 / 71,55) | un **cliquet**, pas un détecteur                                         |
+
+**Un seuil sous la couverture réelle laisse celle-ci redescendre sans rien dire** — c'est un contrôle qui approuve. Les valeurs sont donc les entiers immédiatement inférieurs aux mesures, et rien de plus bas.
+
+**Ce que le seuil des adaptateurs ne fait PAS, et qu'il faut savoir :** à 71 % de méthodes, la détection de code mort public **n'existe pas** sur ces deux projets. Un membre public inutilisé y passe. Roslyn ne peut pas le signaler — par construction, il pourrait être appelé depuis l'extérieur de l'assemblage — et seule la couverture le ferait.
+
+Le chiffre des méthodes est plombé par le code **généré** : migrations EF, `Designer.cs`, `ModelSnapshot`. Les exclure demanderait une décision datée avec son échéance (`CLAUDE.md` § 4) ; elle n'a **pas** été prise, et le seuil vit donc avec eux.
+
+**Ce qui la rouvrirait :** chaque montée réelle de la couverture doit relever le seuil dans le même geste — sans quoi le cliquet ne cliquette pas. Et une décision d'exclure le code généré, si le chiffre des méthodes devient un obstacle plutôt qu'une mesure.

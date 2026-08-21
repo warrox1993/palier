@@ -13,8 +13,10 @@
 **Date de l'état :** 21 août 2026, fin du lot 4.
 **Portée :** les sept exigences de `docs/09-comptes.md` § 1.
 **Ce qui fait foi :** le code du dépôt à cette date, et les épreuves qui le
-gardent. Chaque ligne ci-dessous nomme les épreuves qui la vérifient — une
-mesure sans épreuve est une intention.
+gardent — 388 au total, dont chaque garde-fou a été franchi, c'est-à-dire vu
+rouge sur la violation qu'il refuse. Les fichiers d'épreuves sont nommés au
+§ 5 ; une mesure sans épreuve est une intention, et ce document n'en porte
+aucune.
 
 ---
 
@@ -95,3 +97,24 @@ document nomme les mesures plutôt que de les résumer.
 - **La limitation sur plusieurs répliques.** Le jour où l'API tournera à plus
   d'une instance, le compteur devra passer par un magasin partagé.
 - **L'envoi de courriels**, sans lequel l'exigence 2 reste incomplète.
+
+---
+
+## 5. Où sont les épreuves
+
+Une mesure sans épreuve est une intention. Chaque exigence du § 1 renvoie ici,
+et chaque fichier ci-dessous a vu ses garde-fous **franchis** — la violation
+provoquée, le rouge constaté, le motif vérifié.
+
+| Exigence                             | Fichiers                                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| 2 — email vérifié avant la nutrition | `PorteDesDomainesTests`, `PolitiquesDAutorisationTests`                                  |
+| 3 — mot de passe contre HIBP         | `ValidateurDeMotDePasseTests`                                                            |
+| 4 — limitation et verrouillage       | `LimitationTests`, `DecisionDeVerrouillageTests`, `VerrouillageTests`                    |
+| 5 — 2FA TOTP                         | `DeuxFacteursTests`                                                                      |
+| 6 — rotation des jetons              | `DecisionDeRotationTests`, `MagasinDeSessionsTests`, `RotationDesSessionsTests`          |
+| Socle — identité, jeton, composition | `JetonDAccesTests`, `IdentiteDepuisJetonTests`, `CompositionTests`, `PointsDEntreeTests` |
+| Isolation, rôles, cascade            | `IsolationTests`, `RolesTests`, `SchemaTests`, `SauvegardeTests`                         |
+
+Les exigences **1** et **7** n'ont aucun fichier, et c'est la mesure exacte de
+leur absence.
