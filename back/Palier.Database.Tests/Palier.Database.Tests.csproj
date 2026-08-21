@@ -7,7 +7,41 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!-- Seuil des deux projets d'ADAPTATEURS, posé AU NIVEAU ATTEINT.
+
+       Mesuré le 21/08/2026, en fin de lot 4 :
+         Palier.Api            88,69 % lignes · 78,40 % branches · 82,07 % méthodes
+         Palier.Infrastructure 98,37 % lignes · 82,43 % branches · 62,69 % méthodes
+         Total                 96,63 % lignes · 79,60 % branches · 71,55 % méthodes
+
+       Un seuil SOUS la couverture réelle laisse celle-ci redescendre sans rien
+       dire — c'est un contrôle qui approuve. Les valeurs ci-dessous sont donc
+       les entiers immédiatement inférieurs aux mesures, et rien de plus bas.
+
+       CE QUE CE CHIFFRE NE DIT PAS. Les 100 % de `Palier.Domain` et de
+       `Palier.Application` détectent le code mort public : un membre que rien
+       n'appelle n'est pas couvert, donc le seuil échoue. Ici, à 71 % de
+       méthodes, cette détection n'existe PAS — un membre public inutilisé
+       passe. La couverture des adaptateurs est un cliquet, pas un détecteur.
+
+       Le chiffre des méthodes est par ailleurs plombé par le code GÉNÉRÉ :
+       migrations EF, `Designer.cs`, `ModelSnapshot`. Les exclure demanderait
+       une décision datée (CLAUDE.md § 4, « aucune exception sans échéance ») ;
+       elle n'a pas été prise ici, et le seuil vit donc avec eux. -->
+  <PropertyGroup>
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <Include>[Palier.Infrastructure]*,[Palier.Api]*</Include>
+    <Threshold>96,79,71</Threshold>
+    <ThresholdType>line,branch,method</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
+  </PropertyGroup>
+
   <ItemGroup>
+    <PackageReference Include="coverlet.msbuild" Version="10.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="coverlet.collector" Version="10.0.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
