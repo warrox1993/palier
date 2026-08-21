@@ -13,10 +13,10 @@ namespace Palier.Domain.Tests.Entrainement;
 /// </summary>
 public sealed class VolumeParGroupeTests
 {
-    private static readonly DateOnly Fin = new(2026, 8, 21);
+    private static readonly DateOnly _fin = new(2026, 8, 21);
 
     private static SerieEffectuee S(string groupe, RoleMouvement role, int joursAvant) =>
-        new(groupe, role, Fin.AddDays(-joursAvant));
+        new(groupe, role, _fin.AddDays(-joursAvant));
 
     [Fact]
     public void Les_series_sont_comptees_par_groupe()
@@ -27,7 +27,7 @@ public sealed class VolumeParGroupeTests
                 S("dos", RoleMouvement.Tirage, 2),
                 S("pectoraux", RoleMouvement.Poussee, 1),
             ],
-            Fin,
+            _fin,
             10,
             1.3m);
 
@@ -38,21 +38,21 @@ public sealed class VolumeParGroupeTests
     [Fact]
     public void Une_serie_hors_fenetre_de_sept_jours_est_ignoree()
     {
-        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, 7)], Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, 7)], _fin, 10, 1.3m);
         Assert.Empty(b.SeriesParGroupe);
     }
 
     [Fact]
     public void La_borne_de_six_jours_reste_dans_la_fenetre()
     {
-        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, 6)], Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, 6)], _fin, 10, 1.3m);
         Assert.Equal(1, b.SeriesParGroupe["dos"]);
     }
 
     [Fact]
     public void Une_serie_posterieure_a_la_fenetre_est_ignoree()
     {
-        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, -1)], Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, -1)], _fin, 10, 1.3m);
         Assert.Empty(b.SeriesParGroupe);
     }
 
@@ -65,7 +65,7 @@ public sealed class VolumeParGroupeTests
             .Concat(Enumerable.Range(0, 10).Select(_ => S("pectoraux", RoleMouvement.Poussee, 1)))
             .ToArray();
 
-        var b = VolumeParGroupe.SurSeptJours(series, Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours(series, _fin, 10, 1.3m);
 
         Assert.Equal(1.3m, b.RatioTiragePoussee);
         Assert.False(b.RatioSousLaCible);
@@ -80,7 +80,7 @@ public sealed class VolumeParGroupeTests
             .Concat(Enumerable.Range(0, 10).Select(_ => S("pectoraux", RoleMouvement.Poussee, 1)))
             .ToArray();
 
-        var b = VolumeParGroupe.SurSeptJours(series, Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours(series, _fin, 10, 1.3m);
 
         Assert.Equal(1m, b.RatioTiragePoussee);
         Assert.True(b.RatioSousLaCible);
@@ -91,7 +91,7 @@ public sealed class VolumeParGroupeTests
     [Fact]
     public void Sans_ratio_rien_n_est_dit_de_la_cible()
     {
-        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, 1)], Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, 1)], _fin, 10, 1.3m);
 
         Assert.Null(b.RatioTiragePoussee);
         Assert.Null(b.RatioSousLaCible);
@@ -108,7 +108,7 @@ public sealed class VolumeParGroupeTests
                 S("pectoraux", RoleMouvement.Poussee, 1),
                 S("deltoide_lateral", RoleMouvement.NiTirageNiPoussee, 1),
             ],
-            Fin,
+            _fin,
             10,
             1.3m);
 
@@ -121,7 +121,7 @@ public sealed class VolumeParGroupeTests
     [Fact]
     public void Sans_poussee_le_ratio_n_existe_pas()
     {
-        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, 1)], Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours([S("dos", RoleMouvement.Tirage, 1)], _fin, 10, 1.3m);
         Assert.Null(b.RatioTiragePoussee);
     }
 
@@ -134,7 +134,7 @@ public sealed class VolumeParGroupeTests
             .Append(S("pectoraux", RoleMouvement.Poussee, 1))
             .ToArray();
 
-        var b = VolumeParGroupe.SurSeptJours(series, Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours(series, _fin, 10, 1.3m);
 
         Assert.DoesNotContain("dos", b.GroupesSousLaCible);
         Assert.Contains("pectoraux", b.GroupesSousLaCible);
@@ -143,7 +143,7 @@ public sealed class VolumeParGroupeTests
     [Fact]
     public void Une_semaine_vide_ne_fait_pas_echouer_le_bilan()
     {
-        var b = VolumeParGroupe.SurSeptJours([], Fin, 10, 1.3m);
+        var b = VolumeParGroupe.SurSeptJours([], _fin, 10, 1.3m);
 
         Assert.Empty(b.SeriesParGroupe);
         Assert.Null(b.RatioTiragePoussee);
@@ -156,27 +156,27 @@ public sealed class VolumeParGroupeTests
     public void Une_cible_non_positive_est_refusee(int cible)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => VolumeParGroupe.SurSeptJours([], Fin, cible, 1.3m));
+            () => VolumeParGroupe.SurSeptJours([], _fin, cible, 1.3m));
     }
 
     [Fact]
     public void Un_ratio_cible_non_positif_est_refuse()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => VolumeParGroupe.SurSeptJours([], Fin, 10, 0m));
+            () => VolumeParGroupe.SurSeptJours([], _fin, 10, 0m));
     }
 
     [Fact]
     public void Un_role_hors_enumeration_est_refuse()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => VolumeParGroupe.SurSeptJours([S("dos", (RoleMouvement)99, 1)], Fin, 10, 1.3m));
+            () => VolumeParGroupe.SurSeptJours([S("dos", (RoleMouvement)99, 1)], _fin, 10, 1.3m));
     }
 
     [Fact]
     public void Un_groupe_musculaire_vide_est_refuse()
     {
         Assert.Throws<ArgumentException>(
-            () => VolumeParGroupe.SurSeptJours([S(" ", RoleMouvement.Tirage, 1)], Fin, 10, 1.3m));
+            () => VolumeParGroupe.SurSeptJours([S(" ", RoleMouvement.Tirage, 1)], _fin, 10, 1.3m));
     }
 }
