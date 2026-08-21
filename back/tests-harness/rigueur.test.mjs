@@ -9,7 +9,7 @@ const HERITE = 'back/Palier.Domain/ChampInutilise.cs'
 // L'exception CA1707 du `.editorconfig` doit couvrir les DEUX profondeurs d'un
 // projet de tests. Ces deux sondes les provoquent l'une et l'autre.
 const SONDE_RACINE = 'back/Palier.Domain.Tests/SondeRacineTests.cs'
-const SONDE_SOUS_DOSSIER = 'back/Palier.Domain.Tests/Energie/SondeSousDossierTests.cs'
+const SONDE_SOUS_DOSSIER = 'back/Palier.Domain.Tests/Depense/SondeSousDossierTests.cs'
 
 const classeSonde = (espace, nom, corps) =>
   `namespace ${espace};\n\npublic sealed class ${nom}\n{\n${corps}    [Fact]\n` +
@@ -62,7 +62,7 @@ describe('garde-fou : rigueur du compilateur', () => {
   // L'exception CA1707 du `.editorconfig` s'écrivait `[**/*.Tests/**/*.cs]`, ce
   // qui ne couvre que les SOUS-DOSSIERS. Mesuré le 20/08/2026 :
   // `Palier.Domain.Tests/SondeRacineTests.cs` sortait en `error CA1707`,
-  // `Palier.Domain.Tests/Energie/SondeSousDossierTests.cs` passait. Le seul
+  // `Palier.Domain.Tests/Depense/SondeSousDossierTests.cs` passait. Le seul
   // fichier de tests existant vivant dans `Energie/`, le trou était invisible —
   // et le prochain fichier créé à l'endroit le plus naturel, la racine du
   // projet, aurait cassé le build avec le nommage que la tâche 13 impose.
@@ -70,9 +70,13 @@ describe('garde-fou : rigueur du compilateur', () => {
     writeFileSync(SONDE_RACINE, classeSonde('Palier.Domain.Tests', 'SondeRacineTests', ''))
     writeFileSync(
       SONDE_SOUS_DOSSIER,
-      classeSonde('Palier.Domain.Tests.Energie', 'SondeSousDossierTests', ''),
+      classeSonde('Palier.Domain.Tests.Depense', 'SondeSousDossierTests', ''),
     )
-    const r = lancerOutil(['dotnet', 'build', 'back/Palier.Domain.Tests/Palier.Domain.Tests.csproj'])
+    const r = lancerOutil([
+      'dotnet',
+      'build',
+      'back/Palier.Domain.Tests/Palier.Domain.Tests.csproj',
+    ])
     expect(
       r.code,
       `Un nom de test xUnit a été refusé — l'exception CA1707 ne couvre pas les deux profondeurs :\n${r.sortie}`,
@@ -93,9 +97,13 @@ describe('garde-fou : rigueur du compilateur', () => {
     writeFileSync(SONDE_RACINE, classeSonde('Palier.Domain.Tests', 'SondeRacineTests', champ))
     writeFileSync(
       SONDE_SOUS_DOSSIER,
-      classeSonde('Palier.Domain.Tests.Energie', 'SondeSousDossierTests', champ),
+      classeSonde('Palier.Domain.Tests.Depense', 'SondeSousDossierTests', champ),
     )
-    const r = lancerOutil(['dotnet', 'build', 'back/Palier.Domain.Tests/Palier.Domain.Tests.csproj'])
+    const r = lancerOutil([
+      'dotnet',
+      'build',
+      'back/Palier.Domain.Tests/Palier.Domain.Tests.csproj',
+    ])
     expect(r.code, `Le champ inutilisé a été accepté :\n${r.sortie}`).not.toBe(0)
     // Les deux profondeurs doivent être nommées dans le refus. Une seule
     // suffirait à faire échouer la build, et l'autre passerait inaperçue.

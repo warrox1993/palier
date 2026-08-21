@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { describe, expect, it, afterAll } from 'vitest'
 import { lancerOutil } from '../../front/tests/harness/run-outil.js'
 
-const NON_TESTE = 'back/Palier.Domain/Energie/NonTeste.cs'
+const NON_TESTE = 'back/Palier.Domain/Depense/NonTeste.cs'
 
 // C'est ce projet, et non `back/coverage.runsettings`, qui porte le seuil : le
 // collecteur VSTest de coverlet ignore `Threshold` en silence (ruling P11).
@@ -37,13 +37,16 @@ describe('garde-fou : couverture du domaine', () => {
     // en ne contrôlant rien.
     writeFileSync(
       NON_TESTE,
-      `namespace Palier.Domain.Energie;\n\n` +
+      `namespace Palier.Domain.Depense;\n\n` +
         `public static class NonTeste\n{\n` +
         `    public static decimal Doubler(decimal x) => x * 2m;\n}\n`,
     )
     const r = lancerOutil([
-      'dotnet', 'test', 'back/Palier.Domain.Tests',
-      '--settings', 'back/coverage.runsettings',
+      'dotnet',
+      'test',
+      'back/Palier.Domain.Tests',
+      '--settings',
+      'back/coverage.runsettings',
     ])
     expect(r.code, `Le seuil de couverture n'a pas mordu :\n${r.sortie}`).not.toBe(0)
     // Seconde assertion obligatoire : un code non nul prouve seulement que
