@@ -1,6 +1,7 @@
-using Palier.Domain.Energie;
+using Palier.Domain.Depense;
+using Palier.Domain.Grandeurs;
 
-namespace Palier.Domain.Tests.Energie;
+namespace Palier.Domain.Tests.Depense;
 
 public sealed class MetabolismeDeBaseTests
 {

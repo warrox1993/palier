@@ -1,4 +1,4 @@
-namespace Palier.Domain.Energie;
+namespace Palier.Domain.Grandeurs;
 
 public enum Sexe
 {

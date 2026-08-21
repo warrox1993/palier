@@ -1,4 +1,6 @@
-namespace Palier.Domain.Energie;
+using Palier.Domain.Grandeurs;
+
+namespace Palier.Domain.Depense;
 
 /// <summary>
 /// Métabolisme de base. Voir docs/04-nutrition.md § 1.
