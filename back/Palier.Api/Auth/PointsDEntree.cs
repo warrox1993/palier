@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Palier.Application.Pipeline;
 using Palier.Infrastructure.Identite;
 
 namespace Palier.Api.Auth;
@@ -92,6 +93,21 @@ internal static class PointsDEntree
         // jeton qu'elles réclament.
         groupe.MapPost("/inscription", InscrireAsync).AllowAnonymous();
         groupe.MapPost("/connexion", ConnecterAsync).AllowAnonymous();
+
+        // Le rafraîchissement et la déconnexion sont ANONYMES, et ce n'est pas
+        // un oubli : le cookie est leur seul justificatif, et le jeton d'accès
+        // est justement celui qui vient d'expirer quand on les appelle. Les
+        // exiger authentifiés rendrait la déconnexion impossible passé un quart
+        // d'heure d'inactivité — et la première réaction serait de fermer
+        // l'onglet en laissant la session vivante.
+        groupe.MapPost("/rafraichir", RafraichirAsync).AllowAnonymous();
+        groupe.MapPost("/deconnexion", DeconnecterAsync).AllowAnonymous();
+
+        // Ces deux-là, en revanche, agissent sur TOUTES les sessions : il faut
+        // savoir de qui, et un cookie ne le dit pas — il dit seulement qu'on
+        // détient une chaîne.
+        groupe.MapPost("/deconnexion-totale", DeconnecterPartoutAsync).RequireAuthorization();
+        groupe.MapGet("/sessions", ListerAsync).RequireAuthorization();
     }
 
     /// <summary>
@@ -204,6 +220,148 @@ internal static class PointsDEntree
     }
 
     /// <summary>
+    /// Fait tourner le jeton de rafraîchissement. Le cookie est le seul
+    /// justificatif ; le jeton d'accès qui accompagne la réponse est neuf.
+    /// </summary>
+    /// <remarks>
+    /// <b>Un seul code d'échec pour six causes.</b> Cookie absent, session
+    /// inconnue, expirée, révoquée, réemploi détecté : la réponse est la même.
+    /// Distinguer « réemploi détecté » apprendrait à un voleur qu'il a été
+    /// repéré — et lui dirait, du même coup, que le jeton qu'il détient était
+    /// bien authentique.
+    /// </remarks>
+    public static async Task<IResult> RafraichirAsync(
+        MagasinDeSessions sessions,
+        SignataireDeJetons signataire,
+        TimeProvider horloge,
+        HttpContext contexte,
+        CancellationToken jeton
+    )
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(signataire);
+        ArgumentNullException.ThrowIfNull(horloge);
+        ArgumentNullException.ThrowIfNull(contexte);
+
+        var presente = CookieDeRafraichissement.Lire(contexte.Request);
+        if (presente is null)
+        {
+            return SessionRefusee();
+        }
+
+        var maintenant = horloge.GetUtcNow();
+        var rotation = await sessions
+            .FaireTournerAsync(presente, Appareil(contexte.Request), maintenant, jeton)
+            .ConfigureAwait(false);
+
+        if (rotation.Jeton is not { } neuf || rotation.Utilisateur is not { } utilisateur)
+        {
+            // Le cookie est EFFACÉ. Le garder ferait re-présenter la même
+            // chaîne morte à chaque tentative, et sur un réemploi détecté cela
+            // rejouerait la révocation indéfiniment.
+            CookieDeRafraichissement.Effacer(contexte.Response);
+            return SessionRefusee();
+        }
+
+        CookieDeRafraichissement.Poser(contexte.Response, neuf, maintenant);
+
+        return Results.Ok(
+            new ReponseDeConnexion(
+                signataire.Emettre(utilisateur),
+                SignataireDeJetons.DureeEnSecondes
+            )
+        );
+    }
+
+    /// <summary>Coupe la chaîne du cookie présenté. Rend <b>toujours</b> 204.</summary>
+    /// <remarks>
+    /// Une déconnexion n'échoue jamais du point de vue de l'utilisateur : quoi
+    /// qu'il arrive, le cookie est effacé. Rendre une erreur sur un cookie déjà
+    /// périmé laisserait un bouton « se déconnecter » qui refuse de marcher.
+    /// </remarks>
+    public static async Task<IResult> DeconnecterAsync(
+        MagasinDeSessions sessions,
+        TimeProvider horloge,
+        HttpContext contexte,
+        CancellationToken jeton
+    )
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(horloge);
+        ArgumentNullException.ThrowIfNull(contexte);
+
+        var presente = CookieDeRafraichissement.Lire(contexte.Request);
+        if (presente is not null)
+        {
+            await sessions
+                .RevoquerFamilleAsync(presente, horloge.GetUtcNow(), jeton)
+                .ConfigureAwait(false);
+        }
+
+        CookieDeRafraichissement.Effacer(contexte.Response);
+        return Results.NoContent();
+    }
+
+    /// <summary>Révoque TOUTES les sessions de l'utilisateur, immédiatement.</summary>
+    /// <remarks>
+    /// C'est le geste qu'on fait après avoir perdu un téléphone. Il agit sur le
+    /// champ, là où le <c>SecurityStamp</c> d'Identity ne produit qu'un effet
+    /// différé, borné par l'intervalle de revalidation.
+    /// </remarks>
+    public static async Task<IResult> DeconnecterPartoutAsync(
+        IIdentiteDemandeur demandeur,
+        MagasinDeSessions sessions,
+        TimeProvider horloge,
+        HttpContext contexte,
+        CancellationToken jeton
+    )
+    {
+        ArgumentNullException.ThrowIfNull(demandeur);
+        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(horloge);
+        ArgumentNullException.ThrowIfNull(contexte);
+
+        if (demandeur.Identifiant is not { } utilisateur)
+        {
+            return Results.Unauthorized();
+        }
+
+        await sessions
+            .RevoquerToutesAsync(utilisateur, horloge.GetUtcNow(), jeton)
+            .ConfigureAwait(false);
+
+        CookieDeRafraichissement.Effacer(contexte.Response);
+        return Results.NoContent();
+    }
+
+    /// <summary>Les sessions vivantes de l'utilisateur, pour l'écran des réglages.</summary>
+    /// <remarks>
+    /// L'identité vient du jeton VÉRIFIÉ, jamais d'un paramètre de requête —
+    /// D36. Sans cela, <c>?utilisateur=&lt;autre&gt;</c> listerait les appareils
+    /// de n'importe qui, avec leurs dates de dernière activité.
+    /// </remarks>
+    public static async Task<IResult> ListerAsync(
+        IIdentiteDemandeur demandeur,
+        MagasinDeSessions sessions,
+        TimeProvider horloge,
+        CancellationToken jeton
+    )
+    {
+        ArgumentNullException.ThrowIfNull(demandeur);
+        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(horloge);
+
+        if (demandeur.Identifiant is not { } utilisateur)
+        {
+            return Results.Unauthorized();
+        }
+
+        return Results.Ok(
+            await sessions.ListerAsync(utilisateur, horloge.GetUtcNow(), jeton).ConfigureAwait(false)
+        );
+    }
+
+    /// <summary>
     /// L'appareil déclaré, tel quel et coupé. Il n'est jamais interprété : il
     /// sert seulement à ce que l'utilisateur reconnaisse ses propres sessions.
     /// </summary>
@@ -224,5 +382,14 @@ internal static class PointsDEntree
         Results.Json(new Reponse("InscriptionEnregistree"), statusCode: StatusCodes.Status202Accepted);
 
     private static IResult Refus() =>
-        Results.Json(new Reponse("IdentifiantsInvalides"), statusCode: StatusCodes.Status401Unauthorized);
+        Results.Json(
+            new Reponse("IdentifiantsInvalides"),
+            statusCode: StatusCodes.Status401Unauthorized
+        );
+
+    private static IResult SessionRefusee() =>
+        Results.Json(
+            new Reponse("SessionInvalide"),
+            statusCode: StatusCodes.Status401Unauthorized
+        );
 }

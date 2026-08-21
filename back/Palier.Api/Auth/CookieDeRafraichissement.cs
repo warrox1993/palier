@@ -34,8 +34,8 @@ namespace Palier.Api.Auth;
 ///     relâchement sans contrepartie.
 ///   </item>
 ///   <item>
-///     <c>Path</c> restreint — il ne part que sur la route de rafraîchissement.
-///     Toutes les autres requêtes de l'application ne le voient pas passer :
+///     <c>Path</c> restreint — il ne part que sur les routes d'authentification.
+///     Aucune requête de séance, de poids ou de nutrition ne le voit passer :
 ///     un journal de serveur frontal trop bavard, un intermédiaire, une trace
 ///     de débogage ne peuvent pas le capter au passage.
 ///   </item>
@@ -59,7 +59,22 @@ internal static class CookieDeRafraichissement
     public const string Nom = "palier_rafraichissement";
 
     /// <summary>Le seul chemin sur lequel le cookie est émis — et donc renvoyé.</summary>
-    public const string Chemin = "/api/v1/auth/rafraichir";
+    /// <remarks>
+    /// <para>
+    /// Le préfixe des routes d'authentification, et non la seule route de
+    /// rafraîchissement : <c>/deconnexion</c> a besoin du cookie pour savoir
+    /// QUELLE chaîne couper, et un cookie de chemin plus étroit ne lui
+    /// parviendrait jamais — la déconnexion répondrait « c'est fait » sans rien
+    /// avoir coupé.
+    /// </para>
+    ///
+    /// <para>
+    /// Il est écrit UNE fois, ici, en dérivant du préfixe. Deux constantes qui
+    /// doivent rester d'accord divergent : le jour où le préfixe change, le
+    /// cookie cesserait silencieusement d'être renvoyé.
+    /// </para>
+    /// </remarks>
+    public const string Chemin = PointsDEntree.Prefixe;
 
     /// <summary>Pose le cookie, pour la durée de vie du rafraîchissement.</summary>
     public static void Poser(HttpResponse reponse, string valeur, DateTimeOffset maintenant)

@@ -2,7 +2,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Palier.Api;
 using Palier.Api.Auth;
@@ -32,7 +31,6 @@ namespace Palier.Database.Tests;
 [Collection(BaseFixture.Collection)]
 public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
 {
-    private const string _cle = "cle-de-signature-des-epreuves-du-lot-quatre-";
     private const string _motDePasseSolide = "brouette-hivernale-38-oscille";
 
     // ================================================================
@@ -47,7 +45,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
         var email = EmailNeuf();
 
-        var (code, corps) = await ExecuterAsync(portee.ServiceProvider,
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, _motDePasseSolide),
                 utilisateurs,
@@ -56,7 +54,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         );
 
         Assert.Equal(StatusCodes.Status202Accepted, code);
-        Assert.Equal("InscriptionEnregistree", Code(corps));
+        Assert.Equal("InscriptionEnregistree", HarnaisHttp.Code(corps));
         Assert.NotNull(await utilisateurs.FindByEmailAsync(email));
     }
 
@@ -71,14 +69,14 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
         var email = EmailNeuf();
 
-        var premiere = await ExecuterAsync(portee.ServiceProvider,
+        var premiere = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, _motDePasseSolide),
                 utilisateurs,
                 CancellationToken.None
             )
         );
-        var seconde = await ExecuterAsync(portee.ServiceProvider,
+        var seconde = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, _motDePasseSolide),
                 utilisateurs,
@@ -106,7 +104,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
         var email = EmailNeuf();
 
-        await ExecuterAsync(portee.ServiceProvider,
+        await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, _motDePasseSolide),
                 utilisateurs,
@@ -116,7 +114,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
 
         // Adresse DÉJÀ PRISE et mot de passe trop court : si l'unicité passait
         // en premier, on obtiendrait la réponse générique.
-        var (code, corps) = await ExecuterAsync(portee.ServiceProvider,
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, "court"),
                 utilisateurs,
@@ -125,7 +123,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         );
 
         Assert.Equal(StatusCodes.Status400BadRequest, code);
-        Assert.Equal("PasswordTooShort", Code(corps));
+        Assert.Equal("PasswordTooShort", HarnaisHttp.Code(corps));
     }
 
     [Fact]
@@ -137,7 +135,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         await using var hote = Hote();
         using var portee = hote.Services.CreateScope();
 
-        var (code, corps) = await ExecuterAsync(portee.ServiceProvider,
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(EmailNeuf(), "azertyuiop"),
                 portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
@@ -146,7 +144,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         );
 
         Assert.Equal(StatusCodes.Status400BadRequest, code);
-        Assert.Equal("MotDePasseCompromis", Code(corps));
+        Assert.Equal("MotDePasseCompromis", HarnaisHttp.Code(corps));
     }
 
     [Fact]
@@ -155,7 +153,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         await using var hote = Hote();
         using var portee = hote.Services.CreateScope();
 
-        var (code, corps) = await ExecuterAsync(
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(
             portee.ServiceProvider,
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(EmailNeuf(), "brouette9"),
@@ -165,7 +163,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         );
 
         Assert.Equal(StatusCodes.Status400BadRequest, code);
-        Assert.Equal("PasswordTooShort", Code(corps));
+        Assert.Equal("PasswordTooShort", HarnaisHttp.Code(corps));
     }
 
     [Fact]
@@ -179,7 +177,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         await using var hote = Hote();
         using var portee = hote.Services.CreateScope();
 
-        var (code, corps) = await ExecuterAsync(
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(
             portee.ServiceProvider,
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(EmailNeuf(), "grenouille verte sur le toit"),
@@ -189,7 +187,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         );
 
         Assert.Equal(StatusCodes.Status202Accepted, code);
-        Assert.Equal("InscriptionEnregistree", Code(corps));
+        Assert.Equal("InscriptionEnregistree", HarnaisHttp.Code(corps));
     }
 
     [Fact]
@@ -235,9 +233,9 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         await using var hote = Hote();
         using var portee = hote.Services.CreateScope();
         var email = await InscritAsync(portee.ServiceProvider);
-        var contexte = Contexte(portee.ServiceProvider);
+        var contexte = HarnaisHttp.Contexte(portee.ServiceProvider);
 
-        var (code, corps) = await ExecuterAsync(portee.ServiceProvider,
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             Connexion(portee.ServiceProvider, contexte, email, _motDePasseSolide),
             contexte
         );
@@ -261,9 +259,9 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         await using var hote = Hote();
         using var portee = hote.Services.CreateScope();
         var email = await InscritAsync(portee.ServiceProvider);
-        var contexte = Contexte(portee.ServiceProvider);
+        var contexte = HarnaisHttp.Contexte(portee.ServiceProvider);
 
-        await ExecuterAsync(portee.ServiceProvider,
+        await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             Connexion(portee.ServiceProvider, contexte, email, _motDePasseSolide),
             contexte
         );
@@ -288,9 +286,9 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         await using var hote = Hote();
         using var portee = hote.Services.CreateScope();
         var email = await InscritAsync(portee.ServiceProvider);
-        var contexte = Contexte(portee.ServiceProvider);
+        var contexte = HarnaisHttp.Contexte(portee.ServiceProvider);
 
-        var (_, corps) = await ExecuterAsync(portee.ServiceProvider,
+        var (_, corps) = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             Connexion(portee.ServiceProvider, contexte, email, _motDePasseSolide),
             contexte
         );
@@ -311,14 +309,14 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         using var portee = hote.Services.CreateScope();
         var email = await InscritAsync(portee.ServiceProvider);
 
-        var contexteInconnu = Contexte(portee.ServiceProvider);
-        var inconnu = await ExecuterAsync(portee.ServiceProvider,
+        var contexteInconnu = HarnaisHttp.Contexte(portee.ServiceProvider);
+        var inconnu = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             Connexion(portee.ServiceProvider, contexteInconnu, EmailNeuf(), _motDePasseSolide),
             contexteInconnu
         );
 
-        var contexteMauvais = Contexte(portee.ServiceProvider);
-        var mauvais = await ExecuterAsync(portee.ServiceProvider,
+        var contexteMauvais = HarnaisHttp.Contexte(portee.ServiceProvider);
+        var mauvais = await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             Connexion(
                 portee.ServiceProvider,
                 contexteMauvais,
@@ -331,7 +329,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         Assert.Equal(StatusCodes.Status401Unauthorized, inconnu.Code);
         Assert.Equal(inconnu.Code, mauvais.Code);
         Assert.Equal(inconnu.Corps, mauvais.Corps);
-        Assert.Equal("IdentifiantsInvalides", Code(inconnu.Corps));
+        Assert.Equal("IdentifiantsInvalides", HarnaisHttp.Code(inconnu.Corps));
 
         // Et AUCUN cookie dans les deux cas : un Set-Cookie émis sur un échec
         // distinguerait les deux chemins aussi sûrement qu'un message.
@@ -350,12 +348,12 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         // faites par le hacheur.
         await using var hote = Hote();
         using var portee = hote.Services.CreateScope();
-        var contexte = Contexte(portee.ServiceProvider);
+        var contexte = HarnaisHttp.Contexte(portee.ServiceProvider);
         var compteur = new HacheurComptant(
             portee.ServiceProvider.GetRequiredService<IPasswordHasher<Utilisateur>>()
         );
 
-        await ExecuterAsync(portee.ServiceProvider,
+        await HarnaisHttp.ExecuterAsync(portee.ServiceProvider,
             PointsDEntree.ConnecterAsync(
                 new DemandeDIdentifiants(EmailNeuf(), _motDePasseSolide),
                 portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
@@ -450,47 +448,5 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture)
         + "@exemple.test";
 
-    private static string Code(string corps) =>
-        JsonDocument.Parse(corps).RootElement.GetProperty("code").GetString() ?? string.Empty;
-
-    /// <summary>
-    /// Un contexte qui porte les services : <c>Results.Json</c> les résout à
-    /// l'exécution, et un <c>DefaultHttpContext</c> nu le fait échouer sur
-    /// « Value cannot be null. (Parameter 'provider') ».
-    /// </summary>
-    private static DefaultHttpContext Contexte(IServiceProvider services) =>
-        new() { RequestServices = services };
-
-    /// <summary>Exécute un <c>IResult</c> et rend le statut et le corps réels.</summary>
-    private static async Task<(int Code, string Corps)> ExecuterAsync(
-        IServiceProvider services,
-        Task<IResult> resultat,
-        HttpContext? contexte = null
-    )
-    {
-        contexte ??= Contexte(services);
-        using var corps = new MemoryStream();
-        contexte.Response.Body = corps;
-
-        await (await resultat).ExecuteAsync(contexte);
-
-        return (contexte.Response.StatusCode, System.Text.Encoding.UTF8.GetString(corps.ToArray()));
-    }
-
-    private WebApplication Hote()
-    {
-        var constructeur = WebApplication.CreateBuilder();
-        constructeur.Configuration.Sources.Clear();
-        constructeur.Configuration.AddInMemoryCollection(
-            new Dictionary<string, string?>(StringComparer.Ordinal)
-            {
-                ["ConnectionStrings:Palier"] = baseDeDonnees.ChaineApp,
-                ["ConnectionStrings:PalierAuth"] = baseDeDonnees.ChaineAuth,
-                ["JWT_SIGNING_KEY"] = _cle,
-            }
-        );
-
-        Composition.Composer(constructeur);
-        return constructeur.Build();
-    }
+    private WebApplication Hote() => HarnaisHttp.Hote(baseDeDonnees);
 }

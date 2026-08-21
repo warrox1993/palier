@@ -18,7 +18,25 @@ public sealed record OuvertureDeSession(string Jeton, Guid Famille);
 /// Ce qu'une rotation rend. <see cref="Jeton" /> est nul dès que l'issue n'est
 /// pas exploitable — inconnue, expirée, révoquée, réemploi.
 /// </summary>
-public sealed record RotationDeSession(IssueDeRotation Issue, string? Jeton, Guid? Famille);
+/// <remarks>
+/// <see cref="Utilisateur" /> suit exactement <see cref="Jeton" /> : il est
+/// renseigné quand la rotation a produit un jeton, et nul autrement. Le point
+/// d'entrée en a besoin pour SIGNER le jeton d'accès qui accompagne le
+/// rafraîchissement — le lui faire relire en base l'obligerait à toucher le
+/// contexte d'identité, que <c>ArchitectureTests</c> lui refuse.
+///
+/// <para>
+/// Et il est nul sur un refus, délibérément : un appelant qui le lirait après
+/// un réemploi signerait un jeton d'accès pour quelqu'un dont la famille vient
+/// d'être révoquée.
+/// </para>
+/// </remarks>
+public sealed record RotationDeSession(
+    IssueDeRotation Issue,
+    string? Jeton,
+    Guid? Famille,
+    Guid? Utilisateur = null
+);
 
 /// <summary>
 /// Le magasin des sessions de rafraîchissement.
@@ -146,6 +164,53 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, maintenant), jeton)
             .ConfigureAwait(false);
 
+    /// <summary>
+    /// Révoque la famille entière à laquelle appartient le jeton présenté.
+    /// Rend <c>false</c> si aucune session ne porte cette empreinte.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>La famille, et pas seulement la session présentée.</b> Une rotation a
+    /// pu produire un successeur avant la déconnexion : ne couper que la
+    /// session du cookie le laisserait vivant, et l'onglet resté ouvert
+    /// continuerait de se rafraîchir pendant deux semaines. L'utilisateur
+    /// croirait s'être déconnecté.
+    /// </para>
+    ///
+    /// <para>
+    /// Le retour booléen n'est pas cosmétique : sans lui, une déconnexion sur un
+    /// cookie périmé répondrait « c'est fait » sans que rien n'ait été fait.
+    /// </para>
+    /// </remarks>
+    public async Task<bool> RevoquerFamilleAsync(
+        string jetonPresente,
+        DateTimeOffset maintenant,
+        CancellationToken jeton = default
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(jetonPresente);
+        var empreinte = HachageDeJeton.Calculer(jetonPresente);
+
+        var famille = await contexte
+            .Sessions.AsNoTracking()
+            .Where(s => s.TokenHash == empreinte)
+            .Select(s => (Guid?)s.FamilyId)
+            .FirstOrDefaultAsync(jeton)
+            .ConfigureAwait(false);
+
+        if (famille is not { } identifiant)
+        {
+            return false;
+        }
+
+        await contexte
+            .Sessions.Where(s => s.FamilyId == identifiant && s.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, maintenant), jeton)
+            .ConfigureAwait(false);
+
+        return true;
+    }
+
     /// <summary>Les sessions vivantes d'un utilisateur, pour l'écran des réglages.</summary>
     public async Task<IReadOnlyList<SessionActive>> ListerAsync(
         Guid utilisateur,
@@ -212,7 +277,8 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
                             jeton
                         )
                         .ConfigureAwait(false),
-                    suivante.FamilyId
+                    suivante.FamilyId,
+                    suivante.OwnerId
                 );
         }
 
@@ -265,7 +331,12 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
             )
             .ConfigureAwait(false);
 
-        return new RotationDeSession(IssueDeRotation.Acceptee, neuf, session.FamilyId);
+        return new RotationDeSession(
+            IssueDeRotation.Acceptee,
+            neuf,
+            session.FamilyId,
+            session.OwnerId
+        );
     }
 
     private async Task<string> InscrireAsync(

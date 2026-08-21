@@ -225,6 +225,106 @@ public sealed class MagasinDeSessionsTests(BaseFixture baseDeDonnees)
         Assert.True(second == 0, $"le second passage a encore supprimé {second} ligne(s)");
     }
 
+    [Fact]
+    public async Task Une_rotation_ACCEPTEE_nomme_l_utilisateur()
+    {
+        // Le point d'entrée doit signer un jeton d'accès APRÈS la rotation : il
+        // lui faut donc l'identifiant. Le lui faire relire en base l'obligerait
+        // à toucher le contexte d'identité, que `ArchitectureTests` lui refuse.
+        var utilisateur = await UtilisateurAsync();
+        await using var contexte = BaseFixture.ContexteAuth(baseDeDonnees.ChaineAuth);
+        var magasin = new MagasinDeSessions(contexte);
+
+        var ouverture = await magasin.OuvrirAsync(utilisateur, null, _maintenant);
+        var rotation = await magasin.FaireTournerAsync(ouverture.Jeton, null, _maintenant);
+
+        Assert.Equal(IssueDeRotation.Acceptee, rotation.Issue);
+        Assert.Equal(utilisateur, rotation.Utilisateur);
+    }
+
+    [Fact]
+    public async Task Un_rejeu_DANS_LA_GRACE_nomme_aussi_l_utilisateur()
+    {
+        var utilisateur = await UtilisateurAsync();
+        await using var contexte = BaseFixture.ContexteAuth(baseDeDonnees.ChaineAuth);
+        var magasin = new MagasinDeSessions(contexte);
+
+        var ouverture = await magasin.OuvrirAsync(utilisateur, null, _maintenant);
+        await magasin.FaireTournerAsync(ouverture.Jeton, null, _maintenant);
+
+        // Le même jeton, dix secondes plus tard : dans la grâce.
+        var rejeu = await magasin.FaireTournerAsync(
+            ouverture.Jeton,
+            null,
+            _maintenant.AddSeconds(10)
+        );
+
+        Assert.Equal(IssueDeRotation.RejeuDansLaGrace, rejeu.Issue);
+        Assert.Equal(utilisateur, rejeu.Utilisateur);
+    }
+
+    [Fact]
+    public async Task Une_issue_SANS_JETON_ne_nomme_aucun_utilisateur()
+    {
+        // La contrepartie : un refus ne doit pas laisser filtrer à qui
+        // appartenait la session. Un appelant qui lirait `Utilisateur` sur un
+        // refus signerait un jeton d'accès pour quelqu'un qui vient d'être
+        // déconnecté.
+        await using var contexte = BaseFixture.ContexteAuth(baseDeDonnees.ChaineAuth);
+        var magasin = new MagasinDeSessions(contexte);
+
+        var inconnue = await magasin.FaireTournerAsync("un-jeton-qui-n-existe-pas", null, _maintenant);
+
+        Assert.Equal(IssueDeRotation.Inconnue, inconnue.Issue);
+        Assert.Null(inconnue.Utilisateur);
+        Assert.Null(inconnue.Jeton);
+    }
+
+    [Fact]
+    public async Task Revoquer_la_FAMILLE_coupe_toute_la_chaine()
+    {
+        // Une déconnexion qui ne révoquerait que la session présentée laisserait
+        // vivant le successeur déjà émis : l'utilisateur croirait s'être
+        // déconnecté, et l'onglet resté ouvert continuerait de se rafraîchir.
+        var utilisateur = await UtilisateurAsync();
+        await using var contexte = BaseFixture.ContexteAuth(baseDeDonnees.ChaineAuth);
+        var magasin = new MagasinDeSessions(contexte);
+
+        var premiere = await magasin.OuvrirAsync(utilisateur, null, _maintenant);
+        var seconde = await magasin.FaireTournerAsync(premiere.Jeton, null, _maintenant);
+        Assert.NotNull(seconde.Jeton);
+
+        var coupee = await magasin.RevoquerFamilleAsync(
+            seconde.Jeton,
+            _maintenant,
+            CancellationToken.None
+        );
+
+        Assert.True(coupee, "la révocation n'a trouvé aucune session à couper");
+        Assert.Equal(
+            IssueDeRotation.Revoquee,
+            (await magasin.FaireTournerAsync(seconde.Jeton, null, _maintenant)).Issue
+        );
+    }
+
+    [Fact]
+    public async Task Revoquer_une_famille_INCONNUE_rend_faux()
+    {
+        // Quatrième question du franchissement : un contrôle qui n'a plus de
+        // cible doit le DIRE. Sans ce retour, une déconnexion sur un cookie
+        // périmé rendrait « c'est fait » sans que rien n'ait été fait.
+        await using var contexte = BaseFixture.ContexteAuth(baseDeDonnees.ChaineAuth);
+        var magasin = new MagasinDeSessions(contexte);
+
+        Assert.False(
+            await magasin.RevoquerFamilleAsync(
+                "un-jeton-qui-n-existe-pas",
+                _maintenant,
+                CancellationToken.None
+            )
+        );
+    }
+
     private async Task<Guid> UtilisateurAsync()
     {
         var identifiant = Guid.NewGuid();
