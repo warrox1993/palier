@@ -27,13 +27,36 @@ namespace Palier.Api.Socle;
 /// contrôles passent au vert sans avoir rien regardé. Quatrième question du
 /// franchissement — un contrôle qui n'a plus de cible doit crier.
 /// </param>
+/// <param name="AuthIsSuperutilisateur">
+/// <c>palier_auth</c> est-il superutilisateur ? Il détient le seul chemin vers
+/// les tables d'identité : la question se pose sur lui comme sur le rôle de
+/// l'API.
+/// </param>
+/// <param name="AuthIsContournementRls">
+/// <c>palier_auth</c> porte-t-il <c>BYPASSRLS</c> ? Si oui, la fermeture que D38
+/// avait posée sur les tables d'identité devient décorative.
+/// </param>
+/// <param name="AuthTablesPossedees">
+/// Les tables de <c>public</c> que <c>palier_auth</c> possède. « Table owners
+/// normally bypass row security as well » : la liste doit rester vide.
+/// </param>
 internal sealed record DiagnosticDIsolation(
     string Role,
     bool IsSuperutilisateur,
     bool IsContournementRls,
     IReadOnlyList<string> TablesPossedees,
     IReadOnlyList<string> TablesSansForce,
-    int NombreDeTables
+    int NombreDeTables,
+    // ---- Le quatrième rôle, lot 4 ------------------------------------------
+    //
+    // D37 ne contrôlait que le rôle de la connexion. `palier_auth` détient
+    // désormais le seul chemin vers les empreintes de mots de passe, les secrets
+    // TOTP et les sessions : les mêmes questions se posent sur lui, et y
+    // répondre suppose de l'interroger nommément — `pg_roles` est « a publicly
+    // readable view », donc `palier_app` le peut sans aucun privilège.
+    bool AuthIsSuperutilisateur,
+    bool AuthIsContournementRls,
+    IReadOnlyList<string> AuthTablesPossedees
 );
 
 /// <summary>
@@ -82,6 +105,17 @@ internal sealed class LecteurDeSocle(PalierDbContext contexte)
         """;
 
     // 3. Toute table a RLS activée ET forcée.
+    private const string _requeteRoleAuth = """
+        select rolsuper, rolbypassrls from pg_roles where rolname = 'palier_auth'
+        """;
+
+    private const string _requeteTablesPossedeesParAuth = """
+        select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind = 'r'
+           and pg_get_userbyid(c.relowner) = 'palier_auth'
+         order by c.relname
+        """;
+
     private const string _requeteTablesSansForce = """
         select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
          where n.nspname = 'public' and c.relkind = 'r'
@@ -153,13 +187,42 @@ internal sealed class LecteurDeSocle(PalierDbContext contexte)
             var nombre = await EntierAsync(connexion, _requeteNombreDeTables, jeton)
                 .ConfigureAwait(false);
 
+            // Le quatrième rôle est interrogé NOMMÉMENT : il ne s'agit pas de la
+            // connexion courante, mais du rôle qui détiendra le seul chemin vers
+            // les tables d'identité.
+            var authSuperutilisateur = false;
+            var authContournement = false;
+            using (var commande = connexion.CreateCommand())
+            {
+                commande.CommandText = _requeteRoleAuth;
+                var lecteur = await commande.ExecuteReaderAsync(jeton).ConfigureAwait(false);
+                await using (lecteur.ConfigureAwait(false))
+                {
+                    if (await lecteur.ReadAsync(jeton).ConfigureAwait(false))
+                    {
+                        authSuperutilisateur = lecteur.GetBoolean(0);
+                        authContournement = lecteur.GetBoolean(1);
+                    }
+                }
+            }
+
+            var authPossedees = await ListerAsync(
+                    connexion,
+                    _requeteTablesPossedeesParAuth,
+                    jeton
+                )
+                .ConfigureAwait(false);
+
             return new DiagnosticDIsolation(
                 role,
                 isSuperutilisateur,
                 isContournement,
                 possedees,
                 sansForce,
-                (int)nombre
+                (int)nombre,
+                authSuperutilisateur,
+                authContournement,
+                authPossedees
             );
         }
         finally

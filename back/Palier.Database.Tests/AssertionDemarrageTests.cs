@@ -186,4 +186,106 @@ public sealed class AssertionDemarrageTests(BaseFixture baseDeDonnees)
                         : p
                 )
         );
+
+    // ================================================================
+    // VIOLATION 5 — le quatrième rôle, lot 4
+    // ================================================================
+
+    [Fact]
+    public async Task VIOLATION_5_avec_BYPASSRLS_sur_le_role_d_authentification_le_service_refuse()
+    {
+        // Ajouter un accès sans étendre le contrôle qui le surveille est
+        // l'erreur que le lot 1 a payée quatre fois. `palier_auth` détient le
+        // seul chemin vers les empreintes de mots de passe, les secrets TOTP et
+        // les sessions : s'il contournait RLS, la barrière que D38 avait posée
+        // sur ces tables deviendrait décorative, et rien ne le dirait.
+        await AvecBypassRlsSurAuthAsync(async () =>
+        {
+            await using var contexte = BaseFixture.Contexte(baseDeDonnees.ChaineApp);
+            var refus = await Assert.ThrowsAsync<IsolationNonGarantieException>(() =>
+                new AssertionDIsolation(new LecteurDeSocle(contexte)).VerifierAsync()
+            );
+
+            // Deux assertions, D19 : le refus a eu lieu, ET il nomme le rôle.
+            // Un refus pour une autre cause passerait la première sans rien
+            // démontrer.
+            Assert.Contains("palier_auth", refus.Cause, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public async Task VIOLATION_6_si_le_role_d_authentification_possede_une_table_le_service_refuse()
+    {
+        // « Table owners normally bypass row security as well ». Un rôle
+        // propriétaire échappe à ses propres politiques : le contrôle vaut pour
+        // palier_auth comme pour palier_app.
+        await ExecuterAdministrateurAsync(c => new NpgsqlCommand(
+            """
+            create table public.temoin_possedee_auth (id int);
+            alter table public.temoin_possedee_auth owner to palier_auth;
+            alter table public.temoin_possedee_auth enable row level security;
+            alter table public.temoin_possedee_auth force row level security;
+            """, c));
+
+        try
+        {
+            await using var contexte = BaseFixture.Contexte(baseDeDonnees.ChaineApp);
+            var refus = await Assert.ThrowsAsync<IsolationNonGarantieException>(() =>
+                new AssertionDIsolation(new LecteurDeSocle(contexte)).VerifierAsync()
+            );
+
+            Assert.Contains("palier_auth", refus.Cause, StringComparison.Ordinal);
+            Assert.Contains("temoin_possedee_auth", refus.Cause, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await ExecuterAdministrateurAsync(c =>
+                new NpgsqlCommand("drop table if exists public.temoin_possedee_auth", c));
+        }
+    }
+
+    /// <summary>
+    /// Pose un attribut sur un rôle, exécute le corps, puis le retire — quoi
+    /// qu'il arrive. Une épreuve qui laisserait BYPASSRLS derrière elle rendrait
+    /// toutes les suivantes vertes sans rien démontrer.
+    /// </summary>
+    private async Task AvecBypassRlsSurAuthAsync(Func<Task> corps)
+    {
+        await PoserBypassRlsSurAuthAsync();
+        try
+        {
+            await corps();
+        }
+        finally
+        {
+            await RetirerBypassRlsSurAuthAsync();
+        }
+    }
+
+    // `alter role` n'accepte de paramètre lié ni pour le nom ni pour l'attribut,
+    // et CA2100 refuse jusqu'à la variable issue d'un littéral. Les deux formes
+    // sont donc écrites au site d'appel — c'est la même leçon que RolesTests.
+    private Task PoserBypassRlsSurAuthAsync() =>
+        ExecuterAdministrateurAsync(c => new NpgsqlCommand("alter role palier_auth bypassrls", c));
+
+    private Task RetirerBypassRlsSurAuthAsync() =>
+        ExecuterAdministrateurAsync(c =>
+            new NpgsqlCommand("alter role palier_auth nobypassrls", c)
+        );
+
+    private async Task ExecuterAdministrateurAsync(Func<NpgsqlConnection, NpgsqlCommand> fabrique)
+    {
+        await using var connexion = await OuvrirAdministrateurAsync();
+        await using var commande = fabrique(connexion);
+        await commande.ExecuteNonQueryAsync();
+    }
+
+    private async Task<NpgsqlConnection> OuvrirAdministrateurAsync()
+    {
+        var connexion = new NpgsqlDataSourceBuilder(baseDeDonnees.ChaineAdministrateur)
+            .Build()
+            .CreateConnection();
+        await connexion.OpenAsync();
+        return connexion;
+    }
 }
