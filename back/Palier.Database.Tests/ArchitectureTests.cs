@@ -1,6 +1,7 @@
 using System.Reflection;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure;
+using Palier.Infrastructure.Identite;
 
 namespace Palier.Database.Tests;
 
@@ -49,7 +50,17 @@ public sealed class ArchitectureTests
     /// accepte une requête, et la route répond sans authentification jusqu'au
     /// lot 4 (D41).
     /// </summary>
-    private static readonly string[] _exemptionsNommees = ["Palier.Api.Socle.LecteurDeSocle"];
+    /// <c>Palier.Infrastructure.Identite.MagasinDeSessions</c> — le SEUL type
+    /// autorisé à prendre <c>PalierAuthDbContext</c>. Motif, vérifiable ligne à
+    /// ligne : il porte le chemin que D38 laissait à concevoir, celui qui lit
+    /// `AspNetUsers` par email AVANT qu'aucune identité n'existe, et il n'atteint
+    /// aucune table de donnée de santé — `palier_auth` n'y a aucun privilège, ce
+    /// que trois épreuves de `RolesTests` exigent en code 42501.
+    private static readonly string[] _exemptionsNommees =
+    [
+        "Palier.Api.Socle.LecteurDeSocle",
+        "Palier.Infrastructure.Identite.MagasinDeSessions",
+    ];
 
     [Fact]
     public void Les_trois_assemblages_du_produit_sont_bien_charges()
@@ -203,5 +214,12 @@ public sealed class ArchitectureTests
     /// `IsAssignableFrom` et non l'égalité : un type dérivé de
     /// <c>PalierDbContext</c> donnerait exactement les mêmes pouvoirs.
     /// </summary>
-    private static bool EstLeContexte(Type type) => typeof(PalierDbContext).IsAssignableFrom(type);
+    private static bool EstLeContexte(Type type) =>
+        typeof(PalierDbContext).IsAssignableFrom(type)
+        // Lot 4 : `PalierAuthDbContext` n'hérite PAS de `PalierDbContext` — il
+        // n'expose délibérément aucune table de donnée de santé. Sans cette
+        // seconde branche, un contexte neuf échapperait au contrôle par
+        // construction : on aurait ouvert une seconde porte en croyant n'en
+        // surveiller qu'une.
+        || typeof(PalierAuthDbContext).IsAssignableFrom(type);
 }
