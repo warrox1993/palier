@@ -1,8 +1,10 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using Palier.Api.Socle;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure;
+using Palier.Infrastructure.Identite;
 using Palier.Infrastructure.Pipeline;
 
 namespace Palier.Api;
@@ -21,6 +23,9 @@ internal static class Composition
 {
     /// <summary>Le nom de la chaîne du rôle RESTREINT — jamais celle des migrations.</summary>
     internal const string CleDeChaine = "Palier";
+
+    /// <summary>La chaîne du rôle d'authentification — D38, lot 4.</summary>
+    internal const string CleDeChaineAuth = "PalierAuth";
 
     /// <summary>Le chemin de la route de santé. <c>/api/v1</c> dès la PREMIÈRE route.</summary>
     internal const string CheminDeSante = "/api/v1/sante";
@@ -84,6 +89,50 @@ internal static class Composition
         constructeur.Services.AddScoped<IIdentiteDemandeur, DemandeurSansIdentite>();
 
         // Le lecteur du socle et l'assertion de D37.
+        // ---- L'authentification — lot 4 ---------------------------------
+        //
+        // Le contexte d'identité se connecte sous `palier_auth`, JAMAIS sous
+        // `palier_app` : ce dernier n'a aucun privilège sur les tables d'identité
+        // et le moteur le refuserait par un 42501. C'est le chemin que D38
+        // laissait à concevoir.
+        var chaineAuth =
+            constructeur.Configuration.GetConnectionString(CleDeChaineAuth)
+            ?? throw new InvalidOperationException(
+                "ConnectionStrings__PalierAuth est absente. Le chemin d'authentification se "
+                    + "connecte sous le rôle `palier_auth`, seul autorisé sur les tables "
+                    + "d'identité — voir back/.env.example et db/amorcage/01-roles.sql."
+            );
+        constructeur.Services.AddDbContext<PalierAuthDbContext>(options =>
+            options.UseNpgsql(chaineAuth)
+        );
+        constructeur.Services.AddScoped<MagasinDeSessions>();
+
+        constructeur
+            .Services.AddIdentityCore<Utilisateur>()
+            .AddEntityFrameworkStores<PalierAuthDbContext>();
+
+        // 210 000 itérations, là où Identity en applique 100 000 par défaut.
+        //
+        // C'est ce qu'OWASP recommande pour PBKDF2-HMAC-SHA512, la fonction que
+        // cette version emploie réellement — vérifié en décodant le format du
+        // haché, la documentation annonçant tantôt SHA-256, tantôt 10 000
+        // itérations. Mesuré le 21/08/2026 sur seize cœurs : 56,7 ms contre
+        // 111,2 ms, soit 54 ms de plus par connexion. Sur un vCPU mutualisé,
+        // compter le double — d'où l'ordre des contrôles, la limitation venant
+        // AVANT le hachage.
+        //
+        // Le marqueur de version en tête du haché rend l'opération sûre : les
+        // hachés existants restent vérifiables et sont recalculés à la connexion
+        // suivante.
+        constructeur.Services.Configure<PasswordHasherOptions>(options =>
+            options.IterationCount = 210_000
+        );
+
+        // docs/09-comptes.md § 1 : dix caractères, là où Identity en exige six.
+        constructeur.Services.Configure<IdentityOptions>(options =>
+            options.Password.RequiredLength = 10
+        );
+
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();
         constructeur.Services.AddHostedService<AssertionAuDemarrage>();

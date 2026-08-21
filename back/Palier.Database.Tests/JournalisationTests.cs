@@ -96,6 +96,8 @@ public sealed class JournalisationTests(BaseFixture baseDeDonnees)
             new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["ConnectionStrings:Palier"] = baseDeDonnees.ChaineApp,
+                // Lot 4 : la composition exige aussi le chemin d'authentification.
+                ["ConnectionStrings:PalierAuth"] = baseDeDonnees.ChaineAuth,
             }
         );
 
