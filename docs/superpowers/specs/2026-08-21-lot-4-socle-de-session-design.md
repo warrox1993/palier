@@ -76,6 +76,59 @@ Ce réglage **s'éprouve** : une requête portant un `X-Forwarded-For` forgé, �
 
 ---
 
+## 2 bis. Le chemin d'accès sans identité — ce que D38 laissait à concevoir
+
+C'est la question centrale du lot, et elle était absente du premier jet de cette spec.
+
+**Le problème, énoncé par D38 elle-même :** « le chemin de connexion lit `AspNetUsers` par email **avant** que la moindre identité existe ; il ne peut donc pas passer par `app.utilisateur()` ». Le lot 2 a fermé la porte — `enable` **et** `force row level security` sans aucune politique, donc refus par défaut — précisément pour que le lot 4 **conçoive** ce chemin au lieu de le découvrir.
+
+Trois obstacles se cumulent aujourd'hui, tous éprouvés :
+
+| Obstacle                                                                                | Preuve                                                               |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `palier_app` n'a **aucun privilège** sur les tables `AspNet*`                           | refus `42501`, épreuve 8 d'`IsolationTests`                          |
+| Le propriétaire lui-même est bloqué par `force` sans politique                          | zéro ligne visible, même épreuve                                     |
+| `ExecuteurDeCasDUsage` **refuse** avant d'ouvrir la transaction quand l'identité manque | D36, et `ArchitectureTests` interdit tout autre accès au `DbContext` |
+
+### La décision : un quatrième rôle
+
+D37 en a déjà trois — `palier_app`, `palier_migrations`, `palier_sauvegarde` — chacun avec sa chaîne et son périmètre. **`palier_auth` est le quatrième**, et il suit exactement la même forme : il ne possède aucune table, il ne contourne pas RLS, et ses privilèges sont accordés objet par objet.
+
+```sql
+-- Ne possède rien, pas de BYPASSRLS, privilèges nommés un par un.
+create role palier_auth login password :'mdp';
+
+grant select, insert, update, delete on
+  public."AspNetUsers", public."AspNetUserTokens", public."AspNetUserLogins",
+  public."AspNetUserClaims", public."AspNetUserRoles",
+  public.sessions_refresh
+  to palier_auth;
+
+-- La politique désigne le RÔLE, jamais une variable de session.
+create policy authentification on public."AspNetUsers"
+  for all to palier_auth using (true) with check (true);
+```
+
+**Ce qui a été écarté, et pourquoi.**
+
+Les **fonctions `SECURITY DEFINER`**, que D38 citait comme seconde voie, butent sur deux obstacles. ASP.NET Identity interroge le `DbContext` en LINQ à travers `UserStore<TUser>` : l'y brancher exigerait de réimplémenter `IUserStore`, `IUserPasswordStore`, `IUserEmailStore`, `IUserLockoutStore` et `IUserTwoFactorStore` — un magasin entier, réécrit à la main, sur le chemin le plus sensible du produit. Et chaque fonction devrait porter `SET search_path` sous peine de rouvrir **CVE-2018-1058**, où un objet homonyme créé dans un schéma accessible détourne la fonction vers du code choisi par l'attaquant.
+
+Le **drapeau de contexte en session** — `set_config('app.contexte', 'authentification')` — a été écarté pour une raison de fond : la barrière ne dépendrait plus du **rôle** mais d'une variable que le code applicatif contrôle. Un `FromSqlRaw` distrait, et toute la protection des tables d'identité tombe d'un coup, sans que rien le signale. C'est l'esprit de l'interdit de D38 — « jamais une pose de l'identité d'autrui ».
+
+### Ce que le quatrième rôle impose
+
+**L'assertion de démarrage doit le contrôler aussi.** D37 vérifie aujourd'hui que le rôle de la chaîne `Palier` ne contourne pas RLS et ne possède aucune table de `public`. Ajouter un rôle sans étendre ce contrôle reviendrait à ouvrir un accès **sans le garde-fou qui le surveille** — exactement ce que le lot 1 a payé quatre fois. Les trois requêtes de D37 s'appliquent donc à `palier_auth` : pas de `BYPASSRLS`, aucune table possédée, et refus de servir sinon.
+
+**Une seconde exemption nommée** au test d'architecture, pour le contexte d'authentification. `ArchitectureTests` porte déjà `Palier.Api.Socle.LecteurDeSocle` avec son écriteau, et une épreuve refuse le dépôt le jour où un type exempté disparaît. La nouvelle exemption suit la même forme et porte son motif en toutes lettres.
+
+**Le périmètre du rôle est le minimum vital, et il reste large sur une table.** `palier_auth` voit toutes les lignes d'`AspNetUsers` — c'est inhérent au problème : chercher un compte par email avant de savoir qui se présente exige de pouvoir lire la table. Aucune des trois voies ne l'évite. Ce qui change entre elles, c'est **qui** détient ce pouvoir : ici un rôle dédié, dont c'est la seule fonction, et qui n'a aucun privilège sur les données de santé.
+
+### Ce que cela laisse à trancher, hors de ce lot
+
+D38 signalait une contradiction **non résolue** : `08-workflow.md` § 6 exige « test RLS vert pour chaque table », mais les tables d'identité, les catalogues publics et les tables possédées par jointure n'entrent pas dans le modèle « A ne lit jamais une ligne de B ». La liste des tables hors de ce modèle doit être **nommée dans `docs/03-donnees.md`**, avec la forme de politique de chacune. C'est du contenu métier, il appartient au porteur du projet, et il reste ouvert.
+
+---
+
 ## 3. Le magasin de sessions
 
 C'est le cœur du lot, et la seule exigence des sept qu'Identity ne couvre **pas du tout**.
@@ -110,6 +163,22 @@ présentation d'un jeton
 ```
 
 **La troisième branche est la raison d'être du mécanisme.** Un jeton déjà consommé qui se représente signifie que deux porteurs détiennent la même chaîne : le légitime et un voleur. Lequel des deux se présente n'a pas d'importance — les deux perdent l'accès, et l'utilisateur se reconnecte.
+
+### La fenêtre de grâce, sans laquelle la rotation déconnecte les innocents
+
+**Le défaut est réel, connu, et il frappe des utilisateurs légitimes.** Deux requêtes de rafraîchissement concurrentes portant le même jeton — un second onglet, un rejeu réseau, une reprise de connexion — le voient toutes deux valide, le consomment toutes deux, et la seconde déclenche la détection de réemploi. L'utilisateur est déconnecté sans qu'aucun vol n'ait eu lieu. Auth.js, better-auth et les intégrateurs OAuth en portent tous des rapports.
+
+**La parade retenue : une fenêtre de grâce de 30 secondes.** Un jeton déjà consommé, présenté dans les trente secondes suivant sa consommation, rend **le jeton qui l'a remplacé** au lieu de révoquer la famille. Au-delà, la détection mord normalement.
+
+Trente secondes est le défaut d'Okta, qui laisse régler de 0 à 60. Je m'aligne sur cette référence plutôt que d'inventer une valeur : elle est assez courte pour qu'un jeton volé ne serve pas — un attaquant qui rejoue à la seconde près est déjà dans la fenêtre de course, pas dans une exploitation — et assez longue pour couvrir un aller-retour réseau dégradé.
+
+**Ce que la fenêtre ne dégrade pas :** hors de ces trente secondes, la sémantique de détection reste entière. Un jeton consommé il y a une heure et rejoué révoque toujours toute la famille.
+
+### La politique RLS de cette table
+
+`sessions_refresh` vit dans `public`, donc l'assertion de démarrage exige `enable` **et** `force row level security`. Sa politique désigne **`palier_auth` et lui seul** — même forme que les tables `AspNet*` du § 2 bis, pour le même motif : c'est le rôle qui décide, jamais une variable de session.
+
+`palier_app` n'a **aucun privilège** sur cette table. Une session porte l'empreinte d'un jeton et l'appareil de son porteur : elle n'a rien à faire sur le chemin des données de santé.
 
 **Et c'est ce magasin qui rend la déconnexion immédiate.** `09-comptes.md` le relève : le `SecurityStamp` d'Identity ne produit qu'un effet **différé**, borné par l'intervalle de revalidation ou par la durée du jeton d'accès. Révoquer les familles en base agit au rafraîchissement suivant, soit au plus tard quinze minutes — et immédiatement pour tout ce qui passe par le magasin.
 
@@ -189,19 +258,64 @@ otpauth://totp/Palier:{email}?secret={base32}&issuer=Palier&algorithm=SHA1&digit
 
 ---
 
+## 7 bis. Le cycle de vie des sessions
+
+### La purge des sessions éteintes
+
+Une table de sessions qui ne se vide jamais grossit indéfiniment, et chaque ligne morte est une empreinte de jeton conservée sans raison. Une **commande idempotente** supprime les lignes dont `expire_le` ou `revoque_le` a dépassé une rétention courte.
+
+**Pas de tâche de fond dans ce lot.** Un ordonnanceur interne serait un mécanisme de plus à surveiller, et il n'appartient pas au socle de session : la commande est appelée par le déploiement, qui sait déjà lancer des migrations. Idempotente, donc rejouable sans dommage.
+
+### La suppression de compte
+
+RGPD article 17 : l'effacement se fait « sans délai indu ». Les sessions d'un compte supprimé **partent avec lui** — la contrainte de clé étrangère vers `AspNetUsers` porte `on delete cascade`, et une épreuve vérifie qu'aucune session ne survit à son utilisateur.
+
+**Elle se fait en deux temps, et l'ordre compte.** Le pipeline vérifie d'abord l'identité du demandeur — on ne supprime que son propre compte — puis le service d'identité, sous `palier_auth`, exécute la suppression. `palier_app` n'a aucun privilège sur `AspNetUsers` et ne peut donc pas la faire lui-même : c'est la conséquence directe du § 2 bis, et elle est voulue.
+
+---
+
+## 7 ter. Les projets de tests, et leurs seuils
+
+`CLAUDE.md` § 4 est catégorique : « tout projet backend sans seuil de couverture n'a **aucune détection de code mort public** […] chaque projet qui acquiert des tests acquiert son seuil dans le même geste ». Aujourd'hui, seul `Palier.Domain.Tests` en porte un. Ce lot écrit dans `Application`, `Infrastructure` et `Api` — **trois projets sans filet**.
+
+| Projet créé                   | Seuil       | Motif                                                                                                         |
+| ----------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `Palier.Application.Tests`    | **100 %**   | Cas d'usage et validation : de la logique pure, testable sans simulacre, comme `Domain`                       |
+| `Palier.Infrastructure.Tests` | à la mesure | Adaptateurs EF Core et Identity. Annoncer 100 % serait une promesse que du code d'infrastructure ne tient pas |
+| `Palier.Api.Tests`            | à la mesure | Tests d'intégration sur base réelle, via Testcontainers comme `Palier.Database.Tests`                         |
+
+**Les deux seuils « à la mesure » se fixent une fois le code écrit, jamais avant** — et ils se fixent **au niveau atteint**, pas en dessous. Un seuil posé sous la couverture réelle est un seuil qui ne mord pas : il laisse la couverture redescendre sans rien dire.
+
+---
+
 ## 8. Ce que ce lot ne contient pas
 
 Aucun envoi d'email, aucune connexion externe, aucune fusion de comptes. La règle d'autorisation « **pas de nutrition** sans email vérifié » est écrite et éprouvée — c'est une politique applicative, distincte de `RequireConfirmedEmail` qui bloquerait la connexion entière alors que l'entraînement doit rester ouvert. Le drapeau de vérification est posé par le lot 4b ; la règle qui le lit existe dès celui-ci.
 
 Aucun message destiné à un utilisateur : les libellés vivent en base et passent par i18next.
 
+**Aucun écran non plus.** Ce lot est backend, et il est vérifiable de bout en bout **au sens des tests d'intégration** — inscription, connexion, rotation, réemploi détecté, déconnexion de tous les appareils — pas au sens où vous pourriez vous connecter dans un navigateur. Les écrans appartiennent au lot 6, qui porte le socle d'écran ; les livrer ici imposerait de concevoir la direction visuelle de l'authentification avant celle du produit.
+
 ---
 
 ## 9. Points ouverts
 
-1. **L'adresse du proxy OVHcloud** pour `KnownProxies` — inconnue tant que l'instance n'existe pas. En attendant, la configuration est portée par variable d'environnement et l'épreuve utilise une adresse de test.
-2. **La liste locale des mots de passe fréquents** : sa source exacte et son volume. Candidats — le sommet du classement HIBP par nombre d'occurrences, ou une liste publique établie. À trancher à l'implémentation, avec attribution CC BY.
-3. **Le passage à 210 000 itérations** appelle une entrée datée dans `docs/decisions.md`, avec la mesure qui la fonde.
+### À trancher à l'implémentation — de mon ressort
+
+1. **La liste locale des mots de passe fréquents** : sa source exacte et son volume. Candidats — le sommet du classement HIBP par nombre d'occurrences, ou une liste publique établie. Avec attribution CC BY.
+2. **Les seuils de couverture de `Infrastructure` et `Api`**, fixés au niveau atteint une fois le code écrit (§ 7 ter).
+
+### À trancher par le porteur du projet
+
+3. **La liste des tables hors du modèle « A ne lit jamais une ligne de B »**, à nommer dans `docs/03-donnees.md` avec la forme de politique de chacune. D38 signalait déjà cette contradiction avec `08-workflow.md` § 6 sans la résoudre — elle reste ouverte, et ce lot ajoute `sessions_refresh` à la liste des tables concernées.
+
+### Bloqué par l'extérieur
+
+4. **L'adresse du proxy OVHcloud** pour `KnownProxies` — inconnue tant que l'instance n'existe pas. La configuration est portée par variable d'environnement, et l'épreuve utilise une adresse de test. **Tant qu'elle n'est pas renseignée en exploitation, la limitation par IP ne protège pas** : c'est à vérifier au déploiement, pas ici.
+
+### Décisions à consigner
+
+5. Quatre entrées datées dans `docs/decisions.md` : le **quatrième rôle** `palier_auth` et ce qu'il écarte ; le passage à **210 000 itérations** avec la mesure qui le fonde ; la **fenêtre de grâce de 30 s** ; et les **seuils de couverture** des trois nouveaux projets.
 
 ---
 
