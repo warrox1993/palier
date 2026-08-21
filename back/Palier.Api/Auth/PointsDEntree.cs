@@ -10,7 +10,11 @@ namespace Palier.Api.Auth;
 /// entrée hostile, et un champ absent y est parfaitement légal. Les déclarer
 /// non-nullables donnerait une garantie que le désérialiseur ne tient pas.
 /// </remarks>
-internal sealed record DemandeDIdentifiants(string? Email, string? MotDePasse);
+internal sealed record DemandeDIdentifiants(
+    string? Email,
+    string? MotDePasse,
+    string? CodeDeDeuxFacteurs = null
+);
 
 /// <summary>Ce que la connexion rend. Le rafraîchissement n'y est PAS.</summary>
 internal sealed record ReponseDeConnexion(string JetonDAcces, int ExpireDansSecondes);
@@ -112,6 +116,8 @@ internal static class PointsDEntree
         // détient une chaîne.
         groupe.MapPost("/deconnexion-totale", DeconnecterPartoutAsync).RequireAuthorization();
         groupe.MapGet("/sessions", ListerAsync).RequireAuthorization();
+
+        DeuxFacteurs.Router(groupe);
     }
 
     /// <summary>
@@ -229,6 +235,37 @@ internal static class PointsDEntree
         {
             await gardien.EnregistrerUnEchecAsync(utilisateur, maintenant).ConfigureAwait(false);
             return Refus();
+        }
+
+        // La double authentification, si elle est active. Le mot de passe vient
+        // d'être vérifié : dire ici « il manque le code » n'apprend donc rien à
+        // qui ne le savait pas déjà, et c'est ce que le front doit lire pour
+        // afficher le champ.
+        if (utilisateur.TwoFactorEnabled)
+        {
+            var code = corps.CodeDeDeuxFacteurs;
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return Results.Json(
+                    new Reponse("DeuxFacteursRequis"),
+                    statusCode: StatusCodes.Status401Unauthorized
+                );
+            }
+
+            if (!await SecondFacteurValideAsync(utilisateurs, utilisateur, code).ConfigureAwait(false))
+            {
+                // Un code faux COMPTE comme un échec. Sans cela, la limitation
+                // par compte s'arrêterait au mot de passe, et six chiffres
+                // seraient devinables en un million d'essais — sans jamais
+                // verrouiller.
+                await gardien.EnregistrerUnEchecAsync(utilisateur, maintenant).ConfigureAwait(false);
+
+                return Results.Json(
+                    new Reponse("DeuxFacteursRequis"),
+                    statusCode: StatusCodes.Status401Unauthorized
+                );
+            }
         }
 
         await gardien.EnregistrerUneReussiteAsync(utilisateur).ConfigureAwait(false);
@@ -386,6 +423,37 @@ internal static class PointsDEntree
         return Results.Ok(
             await sessions.ListerAsync(utilisateur, horloge.GetUtcNow(), jeton).ConfigureAwait(false)
         );
+    }
+
+    /// <summary>
+    /// Un code d'authentificateur, ou un code de RÉCUPÉRATION.
+    /// </summary>
+    /// <remarks>
+    /// Les deux, et dans cet ordre. Ne vérifier que le code d'authentificateur
+    /// rendrait les codes de récupération décoratifs — ils ne serviraient
+    /// jamais, c'est-à-dire jamais le jour où le téléphone est perdu, qui est
+    /// le seul jour où ils comptent.
+    ///
+    /// <para>
+    /// Un code de récupération est CONSOMMÉ par cette vérification : Identity
+    /// le retire de la liste. C'est voulu — un code de secours qui resterait
+    /// valable ne serait qu'un second mot de passe, plus court.
+    /// </para>
+    /// </remarks>
+    private static async Task<bool> SecondFacteurValideAsync(
+        UserManager<Utilisateur> utilisateurs,
+        Utilisateur utilisateur,
+        string code
+    )
+    {
+        if (await DeuxFacteurs.CodeValideAsync(utilisateurs, utilisateur, code).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        return await utilisateurs
+            .RedeemTwoFactorRecoveryCodeAsync(utilisateur, code)
+            .ConfigureAwait(false) is { Succeeded: true };
     }
 
     /// <summary>

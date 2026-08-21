@@ -129,7 +129,25 @@ internal static class Composition
         constructeur
             .Services.AddIdentityCore<Utilisateur>()
             .AddEntityFrameworkStores<PalierAuthDbContext>()
-            .AddPasswordValidator<ValidateurDeMotDePasse>();
+            .AddPasswordValidator<ValidateurDeMotDePasse>()
+            // Sans cette ligne, `GetAuthenticatorKeyAsync` rend une clé VIDE et
+            // `VerifyTwoFactorTokenAsync` refuse tout : la double
+            // authentification afficherait un QR code qui n'enrôle rien.
+            // `AddIdentityCore` n'enregistre aucun fournisseur de jetons.
+            .AddDefaultTokenProviders();
+
+        // Une heure, là où le fournisseur en applique VINGT-QUATRE par défaut —
+        // docs/09-comptes.md § 1. Un jeton de réinitialisation de mot de passe
+        // valable un jour reste utilisable longtemps après que son courriel a
+        // été lu, transféré, ou retrouvé dans une boîte compromise.
+        //
+        // La réserve du document tient toujours : cette option est PARTAGÉE par
+        // tous les jetons de ce fournisseur — confirmation d'adresse comprise.
+        // Le jour où l'une des durées devra différer, il faudra un fournisseur
+        // dédié.
+        constructeur.Services.Configure<DataProtectionTokenProviderOptions>(options =>
+            options.TokenLifespan = TimeSpan.FromHours(1)
+        );
 
         // 210 000 itérations, là où Identity en applique 100 000 par défaut.
         //
