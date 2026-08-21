@@ -43,6 +43,18 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
         ArgumentNullException.ThrowIfNull(builder);
         base.OnModelCreating(builder);
 
+        // Les deux colonnes que le verrouillage progressif ajoute à
+        // `AspNetUsers`. Identity n'en a l'équivalent d'aucune : son compteur
+        // d'échecs n'a pas de fenêtre, et sa durée de verrouillage n'a pas
+        // d'escalade. Les noms restent en PascalCase, comme le reste des
+        // colonnes d'Identity — mélanger deux conventions dans une même table
+        // coûte plus qu'il ne rapporte.
+        builder.Entity<Utilisateur>(t =>
+        {
+            t.Property(x => x.DernierEchecLe).HasColumnName("DernierEchecLe");
+            t.Property(x => x.VerrouillagesSubis).HasColumnName("VerrouillagesSubis").HasDefaultValue(0);
+        });
+
         builder.Entity<SessionRafraichissement>(t =>
         {
             t.ToTable("sessions_refresh");

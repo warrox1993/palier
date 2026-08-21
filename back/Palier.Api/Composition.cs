@@ -117,6 +117,10 @@ internal static class Composition
         );
         constructeur.Services.AddScoped<MagasinDeSessions>();
 
+        // Le verrouillage progressif — la fenêtre et l'escalade qu'Identity n'a
+        // pas. La décision qu'il applique est pure, dans `Palier.Application`.
+        constructeur.Services.AddScoped<GardienDeVerrouillage>();
+
         // Le validateur à deux étages est enregistré AVEC son client : l'étage
         // réseau est opportuniste, mais il a besoin d'un client géré par la
         // fabrique — un HttpClient construit à la main épuise les sockets.

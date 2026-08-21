@@ -25,4 +25,27 @@ namespace Palier.Infrastructure.Identite;
 /// production, un changement de type de clé primaire n'est plus une décision,
 /// c'est une migration de données.
 /// </summary>
-public sealed class Utilisateur : IdentityUser<Guid>;
+public sealed class Utilisateur : IdentityUser<Guid>
+{
+    /// <summary>
+    /// Quand le dernier échec de connexion a eu lieu.
+    /// </summary>
+    /// <remarks>
+    /// C'est ce qui donne sa <b>fenêtre</b> au compteur d'échecs. Identity n'a
+    /// pas cette date : son <c>AccessFailedCount</c> est cumulatif et n'est
+    /// remis à zéro que par une connexion réussie — quatre fautes de frappe
+    /// étalées sur trois mois plus une aujourd'hui verrouillent le compte.
+    /// </remarks>
+    public DateTimeOffset? DernierEchecLe { get; set; }
+
+    /// <summary>
+    /// Le nombre de verrouillages déjà infligés — l'ESCALADE.
+    /// </summary>
+    /// <remarks>
+    /// Identity n'a qu'une durée unique, <c>DefaultLockoutTimeSpan</c>. Elle
+    /// laisse un attaquant patient reprendre cinq essais toutes les cinq
+    /// minutes, indéfiniment. Ce compteur fait grandir la peine à chaque
+    /// récidive — voir <c>DecisionDeVerrouillage</c>, qui décide, pure.
+    /// </remarks>
+    public int VerrouillagesSubis { get; set; }
+}

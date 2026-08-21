@@ -170,6 +170,7 @@ internal static class PointsDEntree
         UserManager<Utilisateur> utilisateurs,
         MagasinDeSessions sessions,
         SignataireDeJetons signataire,
+        GardienDeVerrouillage gardien,
         IPasswordHasher<Utilisateur> hacheur,
         TimeProvider horloge,
         HttpContext contexte,
@@ -179,25 +180,46 @@ internal static class PointsDEntree
         ArgumentNullException.ThrowIfNull(corps);
         ArgumentNullException.ThrowIfNull(utilisateurs);
         ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(gardien);
         ArgumentNullException.ThrowIfNull(signataire);
         ArgumentNullException.ThrowIfNull(hacheur);
         ArgumentNullException.ThrowIfNull(horloge);
         ArgumentNullException.ThrowIfNull(contexte);
 
         var email = corps.Email?.Trim() ?? string.Empty;
+        var maintenant = horloge.GetUtcNow();
         var utilisateur = string.IsNullOrEmpty(email)
             ? null
             : await utilisateurs.FindByEmailAsync(email).ConfigureAwait(false);
 
+        // LE HACHAGE A LIEU QUAND MÊME, sur les deux chemins qui refusent avant
+        // toute vérification. Sans lui, ces réponses reviendraient avant celle
+        // d'un mot de passe faux, et le chronomètre rendrait l'annuaire
+        // interrogeable — l'égalité des messages n'y changerait rien.
+        //
+        // `HashPassword` fait exactement le même PBKDF2 que la vérification du
+        // chemin nominal : 210 000 itérations, même fonction, même coût.
         if (utilisateur is null)
         {
-            // LE HACHAGE A LIEU QUAND MÊME. Sans lui, la réponse pour une
-            // adresse inconnue reviendrait avant celle d'un mot de passe faux,
-            // et le chronomètre rendrait l'annuaire interrogeable — l'égalité
-            // des messages n'y changerait rien.
-            //
-            // `HashPassword` fait exactement le même PBKDF2 que la vérification
-            // du chemin nominal : 210 000 itérations, même fonction, même coût.
+            _ = hacheur.HashPassword(new Utilisateur(), corps.MotDePasse ?? string.Empty);
+            return Refus();
+        }
+
+        // ⚠ LE VERROU SE CONTRÔLE AVANT LA VÉRIFICATION DU MOT DE PASSE, ET
+        // C'EST L'ORDRE QUI COMPTE.
+        //
+        // Vérifier d'abord, pour pouvoir dire « compte verrouillé » à qui
+        // connaît le mot de passe, serait plus agréable — et transformerait le
+        // verrouillage en ORACLE : l'attaquant continuerait de tester des mots
+        // de passe pendant le verrouillage et saurait, au changement de
+        // réponse, lequel est le bon. Le verrou n'empêcherait plus la
+        // découverte, seulement l'ouverture de session, c'est-à-dire rien.
+        //
+        // Le coût est réel et assumé : l'utilisateur légitime qui tape le BON
+        // mot de passe pendant son verrouillage lit « identifiants invalides ».
+        // C'est au message générique du front d'inviter à réessayer plus tard.
+        if (GardienDeVerrouillage.EstVerrouille(utilisateur, maintenant))
+        {
             _ = hacheur.HashPassword(new Utilisateur(), corps.MotDePasse ?? string.Empty);
             return Refus();
         }
@@ -205,10 +227,11 @@ internal static class PointsDEntree
         var motDePasse = corps.MotDePasse ?? string.Empty;
         if (!await utilisateurs.CheckPasswordAsync(utilisateur, motDePasse).ConfigureAwait(false))
         {
+            await gardien.EnregistrerUnEchecAsync(utilisateur, maintenant).ConfigureAwait(false);
             return Refus();
         }
 
-        var maintenant = horloge.GetUtcNow();
+        await gardien.EnregistrerUneReussiteAsync(utilisateur).ConfigureAwait(false);
         var ouverture = await sessions
             .OuvrirAsync(utilisateur.Id, Appareil(contexte.Request), maintenant, jeton)
             .ConfigureAwait(false);
