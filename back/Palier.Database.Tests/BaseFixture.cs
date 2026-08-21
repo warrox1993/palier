@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Palier.Infrastructure;
+using Palier.Infrastructure.Identite;
 using Testcontainers.PostgreSql;
 
 namespace Palier.Database.Tests;
@@ -236,6 +237,18 @@ public sealed class BaseFixture : IAsyncLifetime
             .UseNpgsql(chaine, npgsql ?? (_ => { }))
             .Options;
         return new PalierDbContext(options);
+    }
+
+    /// <summary>
+    /// Le contexte du rôle d'authentification — lot 4. Il ne voit que les tables
+    /// d'identité et les sessions ; le moteur refuse le reste par un 42501.
+    /// </summary>
+    public static PalierAuthDbContext ContexteAuth(string chaine)
+    {
+        var options = new DbContextOptionsBuilder<PalierAuthDbContext>()
+            .UseNpgsql(chaine)
+            .Options;
+        return new PalierAuthDbContext(options);
     }
 
     private static string TrouverRacine()
