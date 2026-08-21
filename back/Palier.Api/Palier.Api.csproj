@@ -24,4 +24,8 @@
     <InternalsVisibleTo Include="Palier.Database.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+  </ItemGroup>
+
 </Project>

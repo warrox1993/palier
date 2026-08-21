@@ -1,6 +1,8 @@
 using System.Data.Common;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using Palier.Api.Auth;
 using Palier.Api.Socle;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure;
@@ -29,6 +31,12 @@ internal static class Composition
 
     /// <summary>Le chemin de la route de santé. <c>/api/v1</c> dès la PREMIÈRE route.</summary>
     internal const string CheminDeSante = "/api/v1/sante";
+
+    /// <summary>
+    /// La clé de signature des jetons d'accès. Nom PLAT, sans double tiret bas :
+    /// c'est un secret unique, pas une branche de configuration.
+    /// </summary>
+    internal const string CleDeSignature = "JWT_SIGNING_KEY";
 
     // `LoggerMessage.Define` et non un appel direct : CA1848 refuse
     // `logger.LogError(...)` sur un chemin chaud, et un journal qui coûte finit
@@ -83,10 +91,12 @@ internal static class Composition
         // l'identité.
         constructeur.Services.AddScoped<IExecuteurDeCasDUsage, ExecuteurDeCasDUsage>();
 
-        // Tant que l'authentification n'existe pas (lot 4), le demandeur ne rend
-        // jamais d'identité — et tout cas d'usage échoue donc bruyamment, en se
-        // nommant.
-        constructeur.Services.AddScoped<IIdentiteDemandeur, DemandeurSansIdentite>();
+        // L'identité vient du jeton VÉRIFIÉ, et de nulle part ailleurs — D36.
+        // `IdentiteDepuisJeton` lit `HttpContext.User`, que l'intergiciel n'a
+        // peuplé qu'après avoir contrôlé signature, émetteur, audience et date.
+        // Il remplace `DemandeurSansIdentite`, le bouchon du lot 2.
+        constructeur.Services.AddHttpContextAccessor();
+        constructeur.Services.AddScoped<IIdentiteDemandeur, IdentiteDepuisJeton>();
 
         // Le lecteur du socle et l'assertion de D37.
         // ---- L'authentification — lot 4 ---------------------------------
@@ -139,6 +149,54 @@ internal static class Composition
             options.Password.RequiredLength = 10
         );
 
+        // ---- Le jeton d'accès ------------------------------------------
+        //
+        // La clé vient de la configuration, donc d'une variable
+        // d'environnement, jamais d'un fichier du dépôt. Absente ou trop
+        // courte, on lève ICI — `JetonDAcces.Validation` contrôle la longueur —
+        // et non à la première connexion, où le message de la bibliothèque ne
+        // nommerait ni la variable ni la longueur attendue.
+        var cleDeSignature =
+            constructeur.Configuration[CleDeSignature]
+            ?? throw new InvalidOperationException(
+                "JWT_SIGNING_KEY est absente. Aucun jeton d'accès ne peut être signé ni "
+                    + "vérifié ; voir back/.env.example. Engendrer une valeur d'au moins "
+                    + "32 octets, propre à chaque environnement."
+            );
+
+        // Construits ICI, et non dans le rappel : `AddJwtBearer` DIFFÈRE son
+        // délégué jusqu'à la résolution des options, c'est-à-dire jusqu'à la
+        // première requête portant un jeton. Le contrôle de longueur y serait
+        // tombé des heures après le démarrage, dans une réponse 500.
+        //
+        // Mesuré le 21/08/2026 : l'épreuve
+        // `Une_JWT_SIGNING_KEY_TROP_COURTE_est_refusee_au_DEMARRAGE` a rougi
+        // sur « No exception was thrown » tant que cet appel vivait dans le
+        // rappel — alors que le commentaire au-dessus affirmait le contraire.
+        var parametresDuJeton = JetonDAcces.Validation(cleDeSignature);
+
+        constructeur
+            .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = parametresDuJeton;
+
+                // `sub` reste `sub`. La transposition par défaut le renomme en
+                // `ClaimTypes.NameIdentifier`, une URI de schéma SOAP — et le
+                // code qui cherche la revendication qu'il a émise ne la trouve
+                // plus. La correspondance devient alors une convention tacite
+                // entre l'émission et la lecture.
+                options.MapInboundClaims = false;
+
+                // Le jeton ne voyage QUE dans l'en-tête `Authorization`. Le lire
+                // dans la chaîne de requête le ferait écrire dans les journaux
+                // du serveur frontal, l'historique du navigateur et le
+                // `Referer` sortant.
+                options.SaveToken = false;
+            });
+
+        constructeur.Services.AddAuthorization();
+
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();
         constructeur.Services.AddHostedService<AssertionAuDemarrage>();
@@ -158,6 +216,12 @@ internal static class Composition
         // lignes, zéro dépendance ». Conséquence directe : l'exception de licence
         // que D13 renvoyait au lot 2 n'est PAS due, puisque le paquet n'est pas
         // installé.
+        // L'ordre est celui du pipeline : authentifier, puis autoriser, puis
+        // servir. Inversé, l'autorisation s'exécuterait sur un principal encore
+        // anonyme et refuserait tout.
+        application.UseAuthentication();
+        application.UseAuthorization();
+
         application.MapGet(CheminDeSante, RepondreAsync);
     }
 

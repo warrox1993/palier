@@ -107,6 +107,7 @@ public sealed class HachageDeMotDePasseTests
         const string sansIdentifiants = "Host=127.0.0.1";
         constructeur.Configuration["ConnectionStrings:Palier"] = sansIdentifiants;
         constructeur.Configuration["ConnectionStrings:PalierAuth"] = sansIdentifiants;
+        constructeur.Configuration["JWT_SIGNING_KEY"] = "cle-de-signature-des-epreuves-du-lot-quatre";
         Composition.Composer(constructeur);
 
         using var fournisseur = constructeur.Services.BuildServiceProvider();

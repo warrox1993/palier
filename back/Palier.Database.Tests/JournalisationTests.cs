@@ -98,6 +98,8 @@ public sealed class JournalisationTests(BaseFixture baseDeDonnees)
                 ["ConnectionStrings:Palier"] = baseDeDonnees.ChaineApp,
                 // Lot 4 : la composition exige aussi le chemin d'authentification.
                 ["ConnectionStrings:PalierAuth"] = baseDeDonnees.ChaineAuth,
+                // ... et une clé de signature d'au moins 32 octets.
+                ["JWT_SIGNING_KEY"] = "cle-de-signature-des-epreuves-du-lot-quatre",
             }
         );
 
