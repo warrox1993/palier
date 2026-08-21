@@ -145,9 +145,46 @@ internal static class Composition
         );
 
         // docs/09-comptes.md § 1 : dix caractères, là où Identity en exige six.
+        //
+        // Et AUCUNE règle de composition, là où Identity en impose quatre par
+        // défaut — chiffre, minuscule, majuscule, signe non alphanumérique.
+        // NIST SP 800-63B révision 4 les interdit en toutes lettres :
+        // « Verifiers and CSPs SHALL NOT impose other composition rules (e.g.,
+        // requiring mixtures of different character types) for passwords. »
+        //
+        // Le motif n'est pas le confort. Ces règles produisent des mots de
+        // passe PRÉVISIBLES : la majuscule tombe en tête, le chiffre à la fin,
+        // le signe est un point d'exclamation — « P@ssw0rd » les satisfait
+        // toutes les quatre et figure dans la liste embarquée du validateur.
+        // Ce qui protège ici est la longueur et le refus des mots de passe
+        // compromis, contrôlés l'un et l'autre.
+        //
+        // Mesuré le 21/08/2026 : avec les défauts, l'inscription avec
+        // « brouette-hivernale-38-oscille » — vingt-neuf signes, absent de
+        // toute fuite — rendait 400 au lieu de 202, faute de MAJUSCULE. Deux
+        // épreuves gardent les deux bords : celui-là passe, neuf signes ne
+        // passent pas.
         constructeur.Services.Configure<IdentityOptions>(options =>
-            options.Password.RequiredLength = 10
-        );
+        {
+            options.Password.RequiredLength = 10;
+            options.Password.RequireDigit = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+
+            // L'unicité de l'ADRESSE, que le défaut d'Identity laisse à FAUX.
+            //
+            // Rien ne l'imposait tant que le nom d'utilisateur valait l'adresse
+            // — mais c'était un accident, pas une garantie : `UserValidator` ne
+            // contrôle l'unicité de l'email QUE si cette option est vraie.
+            // Découverte en franchissant : retirer `DuplicateEmail` de la liste
+            // des codes avalés laissait l'épreuve de l'énumération VERTE, parce
+            // qu'Identity ne produisait jamais ce code.
+            //
+            // Sans elle, `FindByEmailAsync` — sur lequel repose la connexion —
+            // choisirait arbitrairement l'un de deux comptes.
+            options.User.RequireUniqueEmail = true;
+        });
 
         // ---- Le jeton d'accès ------------------------------------------
         //
@@ -197,6 +234,19 @@ internal static class Composition
 
         constructeur.Services.AddAuthorization();
 
+        // L'horloge vient du conteneur. `DateTimeOffset.UtcNow` écrit en dur
+        // rendrait toute épreuve d'expiration dépendante de l'heure de la
+        // machine — trois épreuves du jeton l'ont déjà payé.
+        constructeur.Services.AddSingleton(TimeProvider.System);
+
+        // Le SEUL objet qui détient la clé. Elle n'est relue nulle part
+        // ailleurs : un secret qui circule dans chaque point d'entrée finit par
+        // être journalisé par l'un d'eux.
+        constructeur.Services.AddSingleton(fournisseur => new SignataireDeJetons(
+            cleDeSignature,
+            fournisseur.GetRequiredService<TimeProvider>()
+        ));
+
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();
         constructeur.Services.AddHostedService<AssertionAuDemarrage>();
@@ -223,6 +273,8 @@ internal static class Composition
         application.UseAuthorization();
 
         application.MapGet(CheminDeSante, RepondreAsync);
+
+        PointsDEntree.Router(application);
     }
 
     private static async Task<IResult> RepondreAsync(
