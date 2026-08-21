@@ -234,6 +234,11 @@ internal static class Composition
 
         constructeur.Services.AddAuthorization();
 
+        // La limitation par adresse RÉELLE, et le traitement des en-têtes
+        // transférés dont elle dépend. Les deux vont ensemble : l'une sans
+        // l'autre est soit inopérante, soit un seau unique pour tout le monde.
+        Limitation.Composer(constructeur);
+
         // L'horloge vient du conteneur. `DateTimeOffset.UtcNow` écrit en dur
         // rendrait toute épreuve d'expiration dépendante de l'heure de la
         // machine — trois épreuves du jeton l'ont déjà payé.
@@ -266,9 +271,19 @@ internal static class Composition
         // lignes, zéro dépendance ». Conséquence directe : l'exception de licence
         // que D13 renvoyait au lot 2 n'est PAS due, puisque le paquet n'est pas
         // installé.
-        // L'ordre est celui du pipeline : authentifier, puis autoriser, puis
-        // servir. Inversé, l'autorisation s'exécuterait sur un principal encore
-        // anonyme et refuserait tout.
+        // L'ORDRE COMPTE, et il est celui-ci.
+        //
+        // `UseForwardedHeaders` vient EN PREMIER : il corrige `RemoteIpAddress`,
+        // dont la limitation se sert pour partitionner. Placé après, la
+        // limitation compterait l'adresse du proxy — donc tout le monde dans le
+        // même seau, et cinq échecs de n'importe qui bloqueraient l'ensemble
+        // des utilisateurs.
+        application.UseForwardedHeaders();
+        application.UseRateLimiter();
+
+        // Puis authentifier, puis autoriser, puis servir. Inversé,
+        // l'autorisation s'exécuterait sur un principal encore anonyme et
+        // refuserait tout.
         application.UseAuthentication();
         application.UseAuthorization();
 

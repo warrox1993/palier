@@ -91,8 +91,8 @@ internal static class PointsDEntree
         // une politique de repli exigera un jeton par défaut, ces deux routes
         // deviendraient inaccessibles — et plus personne ne pourrait obtenir le
         // jeton qu'elles réclament.
-        groupe.MapPost("/inscription", InscrireAsync).AllowAnonymous();
-        groupe.MapPost("/connexion", ConnecterAsync).AllowAnonymous();
+        groupe.MapPost("/inscription", InscrireAsync).AllowAnonymous().RequireRateLimiting(Limitation.Politique);
+        groupe.MapPost("/connexion", ConnecterAsync).AllowAnonymous().RequireRateLimiting(Limitation.Politique);
 
         // Le rafraîchissement et la déconnexion sont ANONYMES, et ce n'est pas
         // un oubli : le cookie est leur seul justificatif, et le jeton d'accès
@@ -100,7 +100,11 @@ internal static class PointsDEntree
         // exiger authentifiés rendrait la déconnexion impossible passé un quart
         // d'heure d'inactivité — et la première réaction serait de fermer
         // l'onglet en laissant la session vivante.
-        groupe.MapPost("/rafraichir", RafraichirAsync).AllowAnonymous();
+        groupe.MapPost("/rafraichir", RafraichirAsync).AllowAnonymous().RequireRateLimiting(Limitation.Politique);
+
+        // La déconnexion n'est PAS limitée, délibérément. Un utilisateur qui a
+        // épuisé son seau doit pouvoir couper ses sessions — c'est justement le
+        // geste qu'on fait quand quelque chose ne va pas.
         groupe.MapPost("/deconnexion", DeconnecterAsync).AllowAnonymous();
 
         // Ces deux-là, en revanche, agissent sur TOUTES les sessions : il faut
