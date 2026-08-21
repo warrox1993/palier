@@ -753,6 +753,59 @@ public sealed class IsolationTests(BaseFixture baseDeDonnees)
         );
     }
 
+    [Fact]
+    public async Task La_cascade_NE_DEBORDE_PAS_sur_les_autres_comptes()
+    {
+        // L'autre moitié de la règle, et celle qu'on oublie. Une contrainte
+        // trop large — ou un `delete` sans clause — emporterait les sessions de
+        // tout le monde, et l'épreuve ci-dessus resterait parfaitement verte.
+        var vise = await Utilisateur();
+        var voisin = await Utilisateur();
+
+        await using (var connexion = await Ouvrir(baseDeDonnees.ChaineAuth))
+        {
+            foreach (var proprietaire in new[] { vise, voisin })
+            {
+                await using var insertion = new NpgsqlCommand(
+                    """
+                    insert into public.sessions_refresh
+                      (id, owner_id, token_hash, family_id, created_at, expires_at, last_seen_at)
+                    values (gen_random_uuid(), $1, $2, gen_random_uuid(), now(),
+                            now() + interval '14 days', now())
+                    """,
+                    connexion
+                );
+                insertion.Parameters.AddWithValue(proprietaire);
+                insertion.Parameters.AddWithValue(Guid.NewGuid().ToByteArray());
+                await insertion.ExecuteNonQueryAsync();
+            }
+        }
+
+        Assert.True(
+            await CompterSessionsDe(voisin) == 1,
+            "le harnais n'a pas créé la session du voisin : l'épreuve ne prouverait rien."
+        );
+
+        await using (var connexion = await Ouvrir(baseDeDonnees.ChaineAdministrateur))
+        {
+            await using var suppression = new NpgsqlCommand(
+                """delete from public."AspNetUsers" where "Id" = $1""",
+                connexion
+            );
+            suppression.Parameters.AddWithValue(vise);
+            await suppression.ExecuteNonQueryAsync();
+        }
+
+        Assert.True(
+            await CompterSessionsDe(vise) == 0,
+            "la cascade n'a pas emporté les sessions du compte supprimé."
+        );
+        Assert.True(
+            await CompterSessionsDe(voisin) == 1,
+            "la cascade a DÉBORDÉ : les sessions d'un autre compte ont disparu."
+        );
+    }
+
     private async Task<long> CompterSessionsDe(Guid utilisateur)
     {
         await using var connexion = await Ouvrir(baseDeDonnees.ChaineAdministrateur);

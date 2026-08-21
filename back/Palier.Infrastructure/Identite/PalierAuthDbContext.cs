@@ -53,6 +53,7 @@ public sealed class PalierAuthDbContext(DbContextOptions<PalierAuthDbContext> op
         {
             t.Property(x => x.DernierEchecLe).HasColumnName("DernierEchecLe");
             t.Property(x => x.VerrouillagesSubis).HasColumnName("VerrouillagesSubis").HasDefaultValue(0);
+            t.Property(x => x.ConsentementSanteLe).HasColumnName("ConsentementSanteLe");
         });
 
         // La même correspondance que dans PalierDbContext, sans les relations

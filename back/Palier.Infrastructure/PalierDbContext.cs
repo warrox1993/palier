@@ -53,6 +53,7 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
         {
             t.Property(x => x.DernierEchecLe).HasColumnName("DernierEchecLe");
             t.Property(x => x.VerrouillagesSubis).HasColumnName("VerrouillagesSubis").HasDefaultValue(0);
+            t.Property(x => x.ConsentementSanteLe).HasColumnName("ConsentementSanteLe");
         });
 
         builder.Entity<SessionRafraichissement>(t =>

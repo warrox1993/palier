@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Palier.Api;
 using Palier.Api.Auth;
 using Palier.Application.Pipeline;
@@ -45,7 +46,10 @@ internal static class HarnaisHttp
     /// développement remplacerait celle du conteneur, et les épreuves
     /// tourneraient sur une autre base que celle qu'elles croient interroger.
     /// </remarks>
-    public static WebApplication Hote(BaseFixture baseDeDonnees)
+    public static WebApplication Hote(
+        BaseFixture baseDeDonnees,
+        Action<IServiceCollection>? ajuster = null
+    )
     {
         ArgumentNullException.ThrowIfNull(baseDeDonnees);
 
@@ -61,6 +65,12 @@ internal static class HarnaisHttp
         );
 
         Composition.Composer(constructeur);
+
+        // L'ajustement vient APRÈS la composition réelle : il remplace un
+        // service précis sans recomposer l'application. Recomposer reviendrait
+        // à éprouver la copie.
+        ajuster?.Invoke(constructeur.Services);
+
         return constructeur.Build();
     }
 
@@ -160,4 +170,15 @@ internal sealed class HorlogeFixe(DateTimeOffset instant) : TimeProvider
 internal sealed class DemandeurFixe(Guid? identifiant) : IIdentiteDemandeur
 {
     public Guid? Identifiant => identifiant;
+}
+
+/// <summary>Un demandeur dont l'épreuve change l'identité en cours de route.</summary>
+/// <remarks>
+/// Il évite de reconstruire un hôte — et donc un pool de connexions — à chaque
+/// combinaison éprouvée. Enregistré en <b>singleton</b> : l'épreuve et le
+/// gestionnaire d'autorisation doivent voir le MÊME objet.
+/// </remarks>
+internal sealed class DemandeurMutable : IIdentiteDemandeur
+{
+    public Guid? Identifiant { get; set; }
 }

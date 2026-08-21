@@ -48,4 +48,29 @@ public sealed class Utilisateur : IdentityUser<Guid>
     /// récidive — voir <c>DecisionDeVerrouillage</c>, qui décide, pure.
     /// </remarks>
     public int VerrouillagesSubis { get; set; }
+
+    /// <summary>
+    /// Quand le consentement au traitement des données de santé a été donné, ou
+    /// <c>null</c> s'il ne l'a pas été.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Une DATE et non un booléen : l'article 7 § 1 du RGPD impose de pouvoir
+    /// démontrer que le consentement a été donné, et « oui » sans « quand » ne
+    /// démontre rien. C'est aussi ce que le registre de l'article 30 attend.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Ce n'est pas une donnée de santé</b>, c'est une donnée SUR un
+    /// consentement — elle peut donc être journalisée, contrairement à ce
+    /// qu'elle autorise.
+    /// </para>
+    ///
+    /// <para>
+    /// Le consentement est REFUSABLE : `docs/09-comptes.md` § 2 — « en cas de
+    /// refus : accès à l'entraînement, pas à la nutrition ». Ce champ nul est
+    /// donc un état normal du produit, pas un compte incomplet.
+    /// </para>
+    /// </remarks>
+    public DateTimeOffset? ConsentementSanteLe { get; set; }
 }

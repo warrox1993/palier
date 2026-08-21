@@ -254,7 +254,11 @@ internal static class Composition
                 options.SaveToken = false;
             });
 
-        constructeur.Services.AddAuthorization();
+        // Les deux politiques nommées : la nutrition à deux verrous,
+        // l'entraînement ouvert. `AddAuthorization` est appelé LÀ et une seule
+        // fois — deux appels laisseraient croire que les politiques sont
+        // enregistrées alors que le second écraserait les options du premier.
+        PolitiquesDAutorisation.Composer(constructeur);
 
         // La limitation par adresse RÉELLE, et le traitement des en-têtes
         // transférés dont elle dépend. Les deux vont ensemble : l'une sans
