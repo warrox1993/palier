@@ -20,4 +20,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+
+  <!-- La liste de l'étage local du validateur. Embarquée dans l'assemblage
+       plutôt que rangée en base : aucune requête, aucun contexte, donc aucune
+       exemption d'architecture supplémentaire — une porte de moins. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Identite\Ressources\mots-de-passe-frequents.txt" />
+  </ItemGroup>
+
 </Project>

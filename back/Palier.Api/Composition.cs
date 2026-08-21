@@ -107,9 +107,15 @@ internal static class Composition
         );
         constructeur.Services.AddScoped<MagasinDeSessions>();
 
+        // Le validateur à deux étages est enregistré AVEC son client : l'étage
+        // réseau est opportuniste, mais il a besoin d'un client géré par la
+        // fabrique — un HttpClient construit à la main épuise les sockets.
+        constructeur.Services.AddHttpClient<ValidateurDeMotDePasse>();
+
         constructeur
             .Services.AddIdentityCore<Utilisateur>()
-            .AddEntityFrameworkStores<PalierAuthDbContext>();
+            .AddEntityFrameworkStores<PalierAuthDbContext>()
+            .AddPasswordValidator<ValidateurDeMotDePasse>();
 
         // 210 000 itérations, là où Identity en applique 100 000 par défaut.
         //
