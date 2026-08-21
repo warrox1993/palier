@@ -753,3 +753,120 @@ photo (navigateur) → EXIF retiré → modèle → JSON structuré → validé 
 **Ce que cela n'est pas.** Le modèle ne calcule toujours rien : il **extrait**, ce que `06-ia.md` § 1 autorise explicitement (« extraire des doses d'une étiquette »). La frontière de `01-conformite.md` § 3 reste intacte — les seuils, les références et la comparaison restent dans le code déterministe.
 
 **Ce qui la rouvrirait :** rien. Un contrôle de plausibilité sur des données de santé ne se retire pas.
+
+---
+
+## D48 — Mifflin-St Jeor est conservée, malgré la méta-analyse qui la déconseille
+
+**Tranché le :** 21/08/2026, pendant le lot 3, après vérification des formules contre la littérature primaire.
+
+**Ce que la vérification a trouvé.** La méta-analyse de référence sur les sportifs (Sports Medicine, 2023) conclut que cinq équations satisfont les critères d'exactitude **sans différence significative** avec la mesure — Cunningham 1980 et 1991, Harris-Benedict, De Lorenzo, Ten-Haaf — tandis que **Mifflin-St Jeor sous-estime significativement** et figure parmi celles à éviter. Ten-Haaf 2014 place 80,2 % des sujets à ±10 % de la mesure, contre 40,7 à 63,7 % pour les autres.
+
+**Pourquoi elle est conservée quand même.** Trois faits l'emportent.
+
+**Ten-Haaf n'est validée que de 18 à 35 ans** — c'est le titre même de l'article, et aucune validation externe au-delà n'a été trouvée. La population du produit ne s'arrête pas à 35 ans ; l'y appliquer serait extrapoler hors du domaine où l'équation a été construite. Mifflin-St Jeor a été développée sur une population de 19 à 78 ans.
+
+**Le biais de Mifflin est systématique, donc documentable.** Celui qu'introduirait une donnée d'entrée fausse ne l'est pas.
+
+**Et le choix ne dure que trois semaines.** `04-nutrition.md` § 1 : « à la semaine 4, elle n'est plus utilisée du tout ». Optimiser une estimation qu'un TDEE mesuré remplace au bout de vingt et un jours revient à polir ce qu'on va jeter. Ce qui compte est que l'estimation sorte **avec sa fourchette**, et que le passage à la mesure se fasse vite.
+
+**Ce qui la rouvrirait :** une validation externe de Ten-Haaf au-delà de 35 ans.
+
+---
+
+## D49 — Katch-McArdle n'est retenue que sur une mesure fiable de masse grasse
+
+**Tranché le :** 21/08/2026, en conséquence de D48.
+
+**Le fait qui tranche.** Katch-McArdle — la révision 1991 de Cunningham, `370 + 21,6 × masse maigre` — est sans biais significatif chez le sportif. Mais elle n'est plus exacte que Mifflin-St Jeor **que si le pourcentage de masse grasse l'est**. Les balances à impédance domestiques mesurent en moyenne **4,4 points sous la DXA**, et l'erreur se propage à environ **16 kcal par point** : sur cinq points d'écart, 80 kcal, davantage que le biais qu'on cherchait à corriger.
+
+Une formule exacte nourrie d'une donnée fausse est moins fiable qu'une formule biaisée nourrie d'une donnée juste.
+
+**Ce que cela impose au produit.** La **provenance** de la mesure devient une donnée, au même titre que sa valeur : le type `PourcentageMasseGrasse` ne peut pas être construit sans elle. Trois provenances sont distinguées — mesure fiable (DXA, pesée hydrostatique, plis cutanés par un professionnel), impédancemétrie, déclaratif — et seule la première déclenche Katch-McArdle.
+
+**Ce que cela ouvre :** une colonne de provenance dans le profil utilisateur. Changement de schéma, donc décision du porteur du projet.
+
+**Ce qui la rouvrirait :** une génération de balances dont l'écart à la DXA descendrait sous un point.
+
+---
+
+## D50 — Le coût d'une séance se calcule par les METs, pas par un forfait
+
+**Tranché le :** 21/08/2026, pendant le lot 3.
+
+**La question posée était de calculer la dépense à partir de la charge, des répétitions et du RIR. La réponse de la littérature est négative.** La revue systématique de 2024 sur les méthodes d'estimation de la dépense en musculation recense la calorimétrie indirecte, le lactate sanguin, les moniteurs portables et les METs — **aucune formule fondée sur charge × déplacement × répétitions, ni sur le volume de charge**.
+
+**Ce qui remplace le forfait.** `1 MET = 1 kcal/kg/h`, donc `MET × masse × durée`. Le forfait de 5 kcal/min que portait `04-nutrition.md` § 1 ne distinguait ni le sexe ni la masse : pour une femme de 55 kg il sortait par le haut de la fourchette mesurée chez la femme, qui va de 2,3 à 5,2 kcal/min.
+
+**La valeur du MET ne vit pas dans le code.** Les sources publiées donnent de 3,5 à 9,0 selon la version du Compendium et le code d'activité retenu, et l'accès automatisé au Compendium 2024 est refusé (HTTP 403, trois tentatives). La valeur arrive en paramètre et vit en base avec son code, sa version et sa date — même traitement que les limites hautes, et pour la même raison.
+
+**Ce qui reste à faire :** relever à la main la valeur du code « resistance training, multiple exercises, 8-15 reps at varied resistance » du Compendium 2024, qui est le cas d'usage du produit.
+
+**Ce qui la rouvrirait :** la publication d'une formule validée reliant le volume de charge à une dépense.
+
+---
+
+## D51 — Les références sanitaires ont quatre statuts, et aucune valeur ne vit dans le code
+
+**Tranché le :** 21/08/2026, pendant le lot 3. C'est le résultat le plus structurant de la vérification.
+
+**L'EFSA ne produit pas une seule sorte de valeur.** Une _tolerable upper intake level_ autorise à parler de dépassement. Un _safe level of intake_ ne l'autorise pas : l'avis qui l'établit précise que « le niveau où le risque commence à augmenter n'est pas défini ». Et pour certains nutriments, aucune valeur n'est dérivable des données disponibles.
+
+Les confondre annoncerait un danger là où la science n'en définit aucun. La comparaison rend donc **quatre** issues : sous la référence, au-dessus, référence indicative, aucune référence.
+
+**Les valeurs bougent, et récemment.** Vérifié à la source primaire le 21/08/2026 :
+
+| Nutriment       | Valeur en vigueur            | Statut                    | Remplace                    |
+| --------------- | ---------------------------- | ------------------------- | --------------------------- |
+| Vitamine B6     | 12 mg/j (2023)               | UL                        | 25 mg/j (SCF, 2000)         |
+| Sélénium        | 255 µg/j (2023)              | UL                        | 300 µg/j (SCF, 2000)        |
+| Fer             | 40 mg/j (2024)               | **safe level**, aucune UL | 45 mg/j — valeur américaine |
+| Manganèse       | 8 mg/j (2023)                | **safe level**            | —                           |
+| DHA supplémenté | 1 g/j (adopté le 15/12/2025) | **safe level**            | —                           |
+| Vitamine C      | aucune                       | non dérivable             | —                           |
+
+Un produit qui aurait figé la vitamine B6 à 25 mg laisserait passer **sans rien dire** un apport de 20 mg, soit 167 % de la limite en vigueur.
+
+**Deux pièges que la valeur seule ne porte pas.** La **forme chimique** change la limite : la niacine vaut 10 mg en acide nicotinique et **900 mg en nicotinamide**, un facteur 90 sur la même ligne d'étiquette. La **source** change le périmètre : l'UL du magnésium ne vaut que pour les sels solubles des compléments.
+
+**Ce que le domaine en fait.** `Palier.Domain` ne connaît **aucune** valeur de limite haute. Il reçoit une référence portant sa valeur, son statut, sa source et sa date, et il compare. Une épreuve du harnais — `back/tests-harness/references-nutriments.test.mjs` — refuse qu'une constante de référence soit écrite dans le domaine.
+
+**Ce que cela ouvre :** deux colonnes dans `nutrient_refs`, pour la forme chimique et le périmètre. Changement de schéma, donc décision du porteur du projet.
+
+**Ce qui la rouvrirait :** rien. Une valeur de référence qui bouge n'a pas sa place dans du code compilé.
+
+---
+
+## D52 — Le volume par groupe musculaire a une cible, celle de l'ACSM 2026
+
+**Tranché le :** 21/08/2026, pendant le lot 3.
+
+**Ce qui manquait.** `05-entrainement.md` calcule un volume hebdomadaire par groupe musculaire **sans jamais dire à quoi le comparer**. Le trou était réel et personne ne l'avait signalé.
+
+**Ce qui le comble.** Le _Position Stand_ de l'ACSM sur l'entraînement en résistance, publié en 2026 — première mise à jour depuis dix-sept ans, bâtie sur **137 revues systématiques et plus de 30 000 participants**. Trois de ses conclusions concernent ce produit :
+
+- environ **dix séries hebdomadaires par groupe musculaire** pour l'hypertrophie, avec une relation dose-réponse au-delà, et **tous les groupes majeurs entraînés au moins deux fois par semaine** ;
+- de **30 à 100 % du 1RM**, les gains sont équivalents à volume égalisé, dès lors que chaque série est menée proche de l'échec ;
+- s'entraîner à **deux ou trois répétitions en réserve produit les mêmes gains** de masse et de force que l'échec absolu, **avec moins de fatigue accumulée et un risque de blessure moindre**.
+
+Ce dernier point valide la promesse du produit : la règle de progression de `05-entrainement.md` § 2, qui s'appuie sur un RIR cible, n'est pas une prudence commerciale mais la recommandation de référence.
+
+**Le ratio tirage/poussée de 1,3 est conservé mais déclassé.** La littérature ne soutient aucune valeur précise — les recommandations vont de 1:1 à 3:1, et la pertinence même d'un ratio fixe est débattue. Il devient un repère d'équilibre, jamais un seuil de santé, et le produit ne dira pas qu'un ratio inférieur expose à une blessure.
+
+**Ces trois références arrivent en paramètre**, comme les limites hautes.
+
+**Ce qui la rouvrirait :** la prochaine mise à jour du _Position Stand_.
+
+---
+
+## D53 — Le seuil de fiabilité du 1RM était juste, et la littérature le confirme
+
+**Tranché le :** 21/08/2026, pendant le lot 3. **Cette entrée corrige un signalement erroné de ma part.**
+
+`05-entrainement.md` § 3 signale une marge d'erreur au-delà de 12 répétitions effectives et refuse tout affichage au-delà de 15. J'avais d'abord signalé ce seuil comme plus permissif que la littérature, sur la foi d'une formulation générale — « les équations sont plus précises sous dix répétitions ».
+
+**La vérification donne raison au document.** L'erreur de prédiction reste sous 0,03 entre 3 et 8 répétitions, l'exactitude est maximale au 5RM, elle se dégrade au-delà de 10, et « beyond 12 reps, prediction error increases significantly » — précisément le seuil que porte le document.
+
+**Ce que le domaine en fait.** Trois paliers de fiabilité — bonne jusqu'à 8 répétitions effectives, moyenne jusqu'à 12, faible jusqu'à 15 — et **rien du tout au-delà**. `ForceEstimee.Epley` rend `null` plutôt qu'une charge : un nombre rendu quand même serait indiscernable d'une estimation valide.
+
+**Ce qui la rouvrirait :** rien de connu.

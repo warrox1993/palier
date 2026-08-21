@@ -249,7 +249,7 @@ Les **étapes** sont des jalons produit, avec leurs critères de sortie. Les **l
 | ---------- | -------------------------------------------------------------- | ---------- | ---------- | --------------- |
 | 1a         | **Lot 1 — harnais** (livré)                                    | 19/08/2026 | 20/08/2026 | 2 jours         |
 | 1b         | **Lot 2 — socle de données** + les 3 livrables D31             | 20/08/2026 | —          | —               |
-| 1b         | **Lot 3 — domaine**                                            | —          | —          | —               |
+| 1b         | **Lot 3 — domaine** (livré)                                    | 21/08/2026 | 21/08/2026 | 1 jour          |
 | 1b         | **Lot 4 — authentification**                                   | —          | —          | —               |
 | 1b · 2 · 3 | **Lot 5 — API** (le reste du schéma y arrive, table par table) | —          | —          | —               |
 | 1b · 2     | **Lot 6 — socle d'écran complet et PWA**                       | —          | —          | —               |
