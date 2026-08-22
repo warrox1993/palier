@@ -122,6 +122,24 @@ Les clés Stripe et celles des modèles n'y sont pas : elles n'existent pas enco
 
 L'enveloppe de la clé de données — le JWE — dans une table dédiée `cles_de_donnees` : identifiant, enveloppe, date de création.
 
+**Cette table tombe sous D37, et sa forme n'est pas libre.** `LecteurDeSocle` refuse le démarrage si une seule table de `public` n'a pas RLS _activée et forcée_ — `cles_de_donnees` comprise. Elle prend donc la forme **« référence publique »**, celle de `nutrient_refs` :
+
+```sql
+alter table public.cles_de_donnees enable row level security;
+alter table public.cles_de_donnees force row level security;
+
+create policy lecture_publique on public.cles_de_donnees
+  for select to palier_app
+  using (true);
+-- Aucune politique d'écriture : « If no policy exists for the table,
+-- a default-deny policy is used ». Et palier_app n'a pas le privilège
+-- INSERT — la barrière tombe deux fois, sur deux chemins différents.
+```
+
+`using (true)` en lecture ne concède rien : une enveloppe est illisible sans le coffre. C'est exactement l'argument des deux compromissions — l'enveloppe en base ne vaut que si l'on tient aussi le compte de service.
+
+La table appartient à `palier_migrations`, comme les autres. **`palier_app` peut la lire, jamais y écrire** : l'API ne crée aucune clé, elle n'en consomme (§ 7).
+
 **Et chaque secret TOTP chiffré porte l'identifiant de la clé qui l'a chiffré — non pas dans une colonne, mais dans la valeur elle-même** (§ 6). Le secret vit dans `AspNetUserTokens`, une table d'Identity : y ajouter une colonne obligerait à dériver le modèle d'Identity pour un besoin qui tient dans une chaîne. Le format `v1:{identifiant de clé}:…` porte l'information là où elle se lit.
 
 Elle ne sert à rien aujourd'hui, puisqu'il n'y a qu'une clé. Elle est écrite quand même, parce que c'est le seul moment où elle est gratuite : sans elle, changer de clé plus tard obligerait à déchiffrer et réécrire tous les secrets dans une migration unique qui ne peut pas échouer à moitié. C'est l'exception que `CLAUDE.md` autorise à YAGNI — pas un besoin supposé, une porte qu'on ne peut plus percer après coup.
@@ -136,9 +154,11 @@ Elle ne sert à rien aujourd'hui, puisqu'il n'y a qu'une clé. Elle est écrite 
 3. Lire palier/{env} → les six paires                      ~30 ms
 4. Ouvrir PostgreSQL avec la chaîne qui vient d'arriver
 5. Contrôles RLS existants (rôle, propriété, FORCE)
-6. Lire les enveloppes en base, ou en créer une si la table est vide
+6. Lire les enveloppes de `cles_de_donnees` — en lecture seule
 7. datakey/decrypt sur chacune → le trousseau, en mémoire   ~30 ms/clé
 ```
+
+**L'API ne crée aucune clé de données.** Elle lit ce qu'un acte d'exploitation a posé (§ 7). Une table vide est un refus de démarrer, pas une invitation à s'auto-réparer : une API qui fabrique sa propre clé au démarrage en fabriquerait une nouvelle chaque fois qu'elle démarre contre une base qu'elle ne peut pas lire — et rendrait illisibles, sans le dire, tous les secrets chiffrés par la précédente.
 
 Environ un quart de seconde ajouté à la mise en service. Rien de tout cela ne tombe dans une requête.
 
@@ -146,7 +166,7 @@ Environ un quart de seconde ajouté à la mise en service. Rien de tout cela ne 
 
 Les étapes 6 et 7 sont d'une autre nature : elles ne produisent pas de la configuration mais un service. Elles vivent dans un service hébergé qui s'exécute avant l'ouverture du port ; une exception y empêche le démarrage sans code particulier.
 
-### Cinq refus nouveaux
+### Six refus nouveaux
 
 Ils s'ajoutent aux cinq déjà en place (D37 pour RLS, longueur de `JWT_SIGNING_KEY`, propriété des tables, `palier_auth`).
 
@@ -157,6 +177,7 @@ Ils s'ajoutent aux cinq déjà en place (D37 pour RLS, longueur de `JWT_SIGNING_
 | `palier/{env}` introuvable    | le chemin demandé et l'environnement                                     |
 | Une des six clés manque       | **le nom de la clé manquante**, jamais la valeur des autres              |
 | `datakey/decrypt` échoue      | l'identifiant de l'enveloppe, pas son contenu                            |
+| `cles_de_donnees` est vide    | qu'aucune clé n'est posée, et la commande qui en pose une                |
 
 Aucune valeur de secret ne part au journal — ni entière, ni tronquée, ni hachée. Un secret tronqué reste un secret amputé, et sur une chaîne de connexion les huit premiers signes disent déjà l'hôte.
 
@@ -190,7 +211,7 @@ public override async Task<IdentityResult> ResetAuthenticatorKeyAsync(Utilisateu
 }
 ```
 
-C'est **exactement le motif déjà en place** dans `GestionnaireDUtilisateurs` pour les codes de récupération — mêmes constantes, même classe, même mécanisme. Aucune exemption d'architecture à ajouter : dériver le magasin aurait exigé une troisième entrée dans `_exemptionsNommees` d'`ArchitectureTests`. Et `AuthenticatorTokenProvider` continue de fonctionner sans rien savoir : il appelle `GetAuthenticatorKeyAsync`, que nous surchargeons pour déchiffrer.
+C'est **exactement le motif déjà en place** dans `GestionnaireDUtilisateurs` pour les codes de récupération — mêmes constantes, même classe, même mécanisme. Dériver le magasin aurait au contraire exigé une entrée de plus dans `_exemptionsNommees` d'`ArchitectureTests` (le chargement du trousseau en demande déjà une, § 8 — inutile d'en payer deux). Et `AuthenticatorTokenProvider` continue de fonctionner sans rien savoir : il appelle `GetAuthenticatorKeyAsync`, que nous surchargeons pour déchiffrer.
 
 ### Le format en base
 
@@ -216,23 +237,29 @@ Au premier `GetAuthenticatorKeyAsync`, une valeur sans préfixe `v1:` est du cla
 
 ---
 
-## 7. Le trousseau : amorçage, concurrence, rotation
+## 7. Le trousseau : d'où viennent les clés, et comment elles tournent
 
-### Amorçage
+### L'API ne crée jamais de clé
 
-Au démarrage, l'API lit **toutes** les lignes de `cles_de_donnees` et déballe chacune par `datakey/decrypt` — 30 ms par clé. Elle en garde un dictionnaire `identifiant → 32 octets` en mémoire. Si la table est vide, elle demande une clé par `datakey/create` et range l'enveloppe.
+Au démarrage, elle lit **toutes** les lignes de `cles_de_donnees` et déballe chacune par `datakey/decrypt` — 30 ms par clé. Elle en garde un dictionnaire `identifiant → 32 octets` en mémoire, et chiffre les nouveaux secrets avec la **plus récente**. N'importe quel secret se déchiffre, puisque chacun porte l'identifiant de sa clé.
 
-Les nouveaux secrets sont chiffrés avec la **plus récente** ; n'importe lequel se déchiffre, puisque chacun porte l'identifiant de sa clé.
+**Table vide : refus de démarrer.** L'auto-réparation paraît plus aimable, et c'est un piège. Une API qui fabrique sa clé quand elle n'en trouve pas en fabriquera une **chaque fois qu'elle démarre contre une base qu'elle ne lit pas** — mauvaise chaîne de connexion, politique RLS cassée, migration non jouée. Elle démarrera au vert, et tous les secrets chiffrés par la clé précédente seront devenus illisibles sans que rien ne le signale. Le refus dit le problème le jour où il apparaît.
 
-### La concurrence, et pourquoi on ne fait rien
+### Poser la première clé est un acte d'exploitation
 
-Deux instances démarrant simultanément sur une base vierge créeront deux clés. **Ce n'est pas un défaut.** Chaque secret porte l'identifiant de la clé qui l'a chiffré, les deux clés sont chargées par les deux instances, tout se déchiffre. Le pire cas est une clé de données inutilisée en base.
+Une commande dédiée, exécutée une fois :
 
-Aucun verrou consultatif, aucun index unique partiel, aucun `ON CONFLICT`. Le mécanisme qui rend la rotation possible rend la concurrence inoffensive — c'est la même propriété, et il serait absurde de payer un verrou pour un problème que le format a déjà résolu.
+```
+dotnet run --project back/Palier.Api -- poser-cle-de-donnees
+```
+
+Elle appelle `datakey/create`, insère l'enveloppe avec la chaîne `PalierMigrations` — celle du propriétaire des tables — et sort sans démarrer le serveur. Elle se range à côté de `db/amorcage/01-roles.sql` : la base ne se crée pas toute seule, les rôles non plus, la première clé non plus.
+
+Deux conséquences, et toutes deux simplifient le reste. **`palier_app` n'a jamais besoin du privilège `INSERT`** — la politique de lecture publique du § 4 suffit, et la table reste en écriture fermée pour l'API. Et **la concurrence disparaît** : deux instances qui démarrent ensemble lisent la même clé au lieu d'en créer deux, sans verrou consultatif ni index unique.
 
 ### Rotation
 
-Ajouter une ligne par `datakey/create`, redémarrer. Les nouveaux secrets utilisent la nouvelle clé, les anciens restent lisibles.
+Rejouer la même commande, redémarrer. Les nouveaux secrets utilisent la nouvelle clé, les anciens restent lisibles.
 
 **Le rechiffrement se fait en passant.** Au `GetAuthenticatorKeyAsync`, si le secret n'est pas chiffré avec la clé courante, on le rechiffre après l'avoir déchiffré. Le même code migre le clair hérité _et_ les anciennes clés — c'est trois lignes, et c'est ce qui rend la rotation réellement utilisable plutôt que théorique.
 
@@ -250,6 +277,9 @@ back/Palier.Infrastructure/Coffre/
 ├── TrousseauDeChiffrement.cs           les clés en mémoire, chiffrer et déchiffrer
 └── AmorcageDuTrousseau.cs              IHostedService, étapes 6 et 7
 
+back/Palier.Api/Outils/
+└── PoserUneCleDeDonnees.cs             la commande d'exploitation (§ 7)
+
 back/Palier.Infrastructure/Identite/
 └── GestionnaireDUtilisateurs.cs        + 2 surcharges
 
@@ -258,6 +288,14 @@ back/Palier.Infrastructure/Migrations/
 ```
 
 Le schéma d'Identity n'est pas touché : l'identifiant de clé voyage dans la valeur du jeton (§ 4).
+
+### Une troisième exemption d'architecture, et son motif
+
+`AmorcageDuTrousseau` lit `cles_de_donnees` **hors du pipeline de cas d'usage**, donc sans identité posée. `ArchitectureTests` refuse cela par défaut : seuls `LecteurDeSocle` et `MagasinDeSessions` y échappent, chacun avec son motif écrit. Il faut une troisième entrée dans `_exemptionsNommees`, et le motif doit tenir la même exigence — vérifiable ligne à ligne :
+
+> `AmorcageDuTrousseau` ne touche qu'une table, `cles_de_donnees`, qui ne porte **aucune donnée personnelle** — des enveloppes chiffrées, illisibles sans le coffre. Il lit, il n'écrit jamais : `palier_app` n'a pas le privilège `INSERT` sur cette table, et aucune politique d'écriture n'existe. Il s'exécute **avant que le serveur accepte une requête**, comme `LecteurDeSocle`, et n'a donc aucune identité à poser.
+
+Écrire l'exemption sans ce motif serait précisément ce que la règle interdit : _« il s'ajoute à `_exemptionsNommees` AVEC son motif — jamais autrement »_. Et l'épreuve `Chaque_exemption_nommee_designe_un_type_qui_EXISTE_ENCORE` refusera le dépôt le jour où ce type sera renommé.
 
 **`Palier.Domain` ne bouge pas, `Palier.Application` non plus.** La cryptographie n'est pas une connaissance du domaine, et il n'existe aucun cas d'usage qui chiffre — le chiffrement est un détail de la façon dont Identity range ses jetons. Y poser un port serait une abstraction sans second implémenteur, ce que KISS refuse.
 
