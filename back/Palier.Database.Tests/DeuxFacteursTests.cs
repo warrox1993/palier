@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Palier.Api;
 using Palier.Api.Auth;
+using Palier.Infrastructure.Coffre;
 using Palier.Infrastructure.Identite;
 
 namespace Palier.Database.Tests;
@@ -906,6 +907,159 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
     }
 
     /// <summary>Un compte dont la double authentification est ACTIVE.</summary>
+
+    // ================================================================
+    // Le chiffrement de la clé partagée — D59
+    // ================================================================
+
+    [Fact]
+    public async Task L_enrolement_n_ecrit_JAMAIS_la_cle_TOTP_en_clair()
+    {
+        // Ce que D58 avait laissé ouvert. On lit la ligne BRUTE, pas ce que le
+        // gestionnaire veut bien rendre : c'est la seule façon de voir ce qui
+        // touche le journal d'écriture anticipée.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        var compte = await ActiveAsync(hote.Services);
+
+        var brut = await CleTotpBruteAsync(compte);
+
+        Assert.StartsWith("v1:", brut, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            await CleTotpEnClairAsync(hote.Services, compte),
+            brut,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task Le_chiffrement_LIE_la_cle_TOTP_a_son_proprietaire()
+    {
+        // Le secret d'un compte, recopié dans un autre, ne doit pas ouvrir le
+        // second. Sans cette liaison, un accès en écriture à la base suffirait
+        // à se connecter comme n'importe qui.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        var premier = await ActiveAsync(hote.Services);
+        var second = await ActiveAsync(hote.Services);
+
+        await EcrireLaCleTotpAsync(second, await CleTotpBruteAsync(premier));
+
+        using var portee = Portee(hote.Services);
+        var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
+        var utilisateur = await utilisateurs.FindByIdAsync(
+            second.ToString("D", System.Globalization.CultureInfo.InvariantCulture)
+        );
+
+        await Assert.ThrowsAnyAsync<System.Security.Cryptography.CryptographicException>(
+            () => utilisateurs.GetAuthenticatorKeyAsync(utilisateur!)
+        );
+    }
+
+    [Fact]
+    public async Task Une_cle_TOTP_HERITEE_en_clair_est_migree_au_premier_contact()
+    {
+        // La reprise des comptes que D58 a laissés en clair. Elle est
+        // invisible : la connexion suivante est normale, et la migration ne se
+        // produit qu'une fois par utilisateur.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        var compte = await ActiveAsync(hote.Services);
+        const string heritee = "JBSWY3DPEHPK3PXP";
+        await EcrireLaCleTotpAsync(compte, heritee);
+
+        var rendue = await CleTotpEnClairAsync(hote.Services, compte);
+
+        Assert.Equal(heritee, rendue);
+        Assert.StartsWith("v1:", await CleTotpBruteAsync(compte), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Une_cle_TOTP_portee_par_une_ANCIENNE_cle_de_donnees_est_rechiffree()
+    {
+        // La rotation, du côté qui la rend utilisable : le même geste qui migre
+        // le clair remet à niveau ce qu'une clé plus ancienne portait.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        var compte = await ActiveAsync(hote.Services);
+
+        var ancienne = new Guid("44444444-4444-4444-4444-444444444444");
+        var vieux = new TrousseauDeChiffrement(
+            new Dictionary<Guid, byte[]> { [ancienne] = [.. Enumerable.Repeat((byte)9, 32)] },
+            ancienne
+        ).Chiffrer("JBSWY3DPEHPK3PXP", compte);
+        await EcrireLaCleTotpAsync(compte, vieux);
+
+        // Le porteur du harnais connaît les DEUX clés : l'ancienne déchiffre,
+        // la courante rechiffre.
+        hote.Services.GetRequiredService<PorteurDeTrousseau>()
+            .Poser(
+                new TrousseauDeChiffrement(
+                    new Dictionary<Guid, byte[]>
+                    {
+                        [ancienne] = [.. Enumerable.Repeat((byte)9, 32)],
+                        [HarnaisHttp.CleDeDonnees] = [.. Enumerable.Repeat((byte)7, 32)],
+                    },
+                    HarnaisHttp.CleDeDonnees
+                )
+            );
+
+        Assert.Equal("JBSWY3DPEHPK3PXP", await CleTotpEnClairAsync(hote.Services, compte));
+        Assert.Contains(
+            HarnaisHttp.CleDeDonnees.ToString("N"),
+            await CleTotpBruteAsync(compte),
+            StringComparison.Ordinal
+        );
+    }
+
+    private async Task<string> CleTotpBruteAsync(Guid compte)
+    {
+        var jetons = await JetonsAsync(compte);
+        var cle = jetons.Find(j =>
+            string.Equals(j.Nom, "AuthenticatorKey", StringComparison.Ordinal)
+        );
+
+        Assert.False(
+            string.IsNullOrEmpty(cle.Valeur),
+            "aucune clé d'authentificateur en base : l'épreuve ne prouverait rien."
+        );
+
+        return cle.Valeur;
+    }
+
+    /// <summary>
+    /// L'utilisateur est résolu DANS la portée qui lira sa clé. Le résoudre
+    /// ailleurs le fait suivre par un autre contexte, et EF refuse alors de
+    /// pister deux instances de même identifiant — mesuré : l'épreuve échoue
+    /// sur « another instance with the same key value is already being tracked »,
+    /// qui ne dit rien du chiffrement.
+    /// </summary>
+    private static async Task<string> CleTotpEnClairAsync(IServiceProvider services, Guid compte)
+    {
+        using var portee = Portee(services);
+        var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
+        var utilisateur = await utilisateurs.FindByIdAsync(
+            compte.ToString("D", System.Globalization.CultureInfo.InvariantCulture)
+        );
+
+        Assert.True(utilisateur is not null, $"le compte {compte} a disparu");
+
+        return (await utilisateurs.GetAuthenticatorKeyAsync(utilisateur))!;
+    }
+
+    private async Task EcrireLaCleTotpAsync(Guid compte, string valeur)
+    {
+        await using var connexion = new Npgsql.NpgsqlConnection(baseDeDonnees.ChaineAuth);
+        await connexion.OpenAsync();
+        await using var commande = new Npgsql.NpgsqlCommand(
+            """
+            update public."AspNetUserTokens" set "Value" = $2
+             where "UserId" = $1 and "Name" = 'AuthenticatorKey'
+            """,
+            connexion
+        );
+        commande.Parameters.AddWithValue(compte);
+        commande.Parameters.AddWithValue(valeur);
+
+        Assert.Equal(1, await commande.ExecuteNonQueryAsync());
+    }
+
     private static async Task<Guid> ActiveAsync(IServiceProvider services) =>
         (await ActiveAvecSecoursAsync(services)).Compte;
 

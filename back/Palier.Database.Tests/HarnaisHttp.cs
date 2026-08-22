@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Palier.Api;
 using Palier.Api.Auth;
 using Palier.Application.Pipeline;
+using Palier.Infrastructure.Coffre;
 
 namespace Palier.Database.Tests;
 
@@ -36,6 +37,15 @@ internal static class HarnaisHttp
     /// signification, qui ne ressemblent à aucun secret réel.
     /// </summary>
     public const string Cle = "cle-de-signature-des-epreuves-du-lot-quatre-";
+
+    /// <summary>La clé de données des épreuves. Fixe : rien ici ne protège.</summary>
+    public static readonly Guid CleDeDonnees = new("33333333-3333-3333-3333-333333333333");
+
+    public static readonly TrousseauDeChiffrement Trousseau =
+        new(
+            new Dictionary<Guid, byte[]> { [CleDeDonnees] = [.. Enumerable.Repeat((byte)7, 32)] },
+            CleDeDonnees
+        );
 
     /// <summary>
     /// L'API réelle, composée par <see cref="Composition.Composer" />.
@@ -71,7 +81,14 @@ internal static class HarnaisHttp
         // à éprouver la copie.
         ajuster?.Invoke(constructeur.Services);
 
-        return constructeur.Build();
+        var hote = constructeur.Build();
+
+        // Ce que `AmorcageDuTrousseau` ferait au démarrage réel. Sans lui, le
+        // porteur reste vide et toute lecture du secret TOTP lèverait — ce qui
+        // est exactement le refus qu'il doit produire hors des épreuves.
+        hote.Services.GetRequiredService<PorteurDeTrousseau>().Poser(Trousseau);
+
+        return hote;
     }
 
     /// <summary>

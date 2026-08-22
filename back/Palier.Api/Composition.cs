@@ -6,6 +6,7 @@ using Palier.Api.Auth;
 using Palier.Api.Socle;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure;
+using Palier.Infrastructure.Coffre;
 using Palier.Infrastructure.Identite;
 using Palier.Infrastructure.Pipeline;
 
@@ -275,6 +276,12 @@ internal static class Composition
         // L'horloge vient du conteneur. `DateTimeOffset.UtcNow` écrit en dur
         // rendrait toute épreuve d'expiration dépendante de l'heure de la
         // machine — trois épreuves du jeton l'ont déjà payé.
+        // Le porteur du trousseau — D59. Il est SINGLETON et vide au démarrage :
+        // `AmorcageDuTrousseau` le remplit avant que le port s'ouvre. Y mettre
+        // le trousseau lui-même obligerait le conteneur à parler au coffre
+        // pendant une requête d'utilisateur, ce que la conception écarte.
+        constructeur.Services.AddSingleton<PorteurDeTrousseau>();
+
         constructeur.Services.AddSingleton(TimeProvider.System);
 
         // Le SEUL objet qui détient la clé. Elle n'est relue nulle part

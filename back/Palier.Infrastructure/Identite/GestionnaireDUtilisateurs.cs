@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using Palier.Infrastructure.Coffre;
+
 namespace Palier.Infrastructure.Identite;
 
 /// <summary>
@@ -79,7 +81,8 @@ public sealed class GestionnaireDUtilisateurs(
     ILookupNormalizer normalisateur,
     IdentityErrorDescriber erreurs,
     IServiceProvider services,
-    ILogger<UserManager<Utilisateur>> journal
+    ILogger<UserManager<Utilisateur>> journal,
+    PorteurDeTrousseau porteur
 )
     : UserManager<Utilisateur>(
         magasin,
@@ -108,6 +111,13 @@ public sealed class GestionnaireDUtilisateurs(
     /// </summary>
     private const string _fournisseurDIdentity = "[AspNetUserStore]";
     private const string _nomDuJetonDIdentity = "RecoveryCodes";
+
+    /// <summary>
+    /// Le nom sous lequel Identity range la clé partagée du TOTP. Même
+    /// provenance, mêmes gardes : les épreuves la font écrire par le magasin
+    /// d'Identity, donc sous le VRAI nom, et rougissent s'il change.
+    /// </summary>
+    private const string _nomDuJetonAuthentificateur = "AuthenticatorKey";
 
     /// <summary>
     /// Le facteur de travail : <b>210 000 itérations</b>, la même valeur que
@@ -325,6 +335,91 @@ public sealed class GestionnaireDUtilisateurs(
     /// échoue alors comme sur un code faux. Attraper plus large avalerait la
     /// panne du magasin, qui, elle, doit remonter.
     /// </remarks>
+
+    /// <summary>Engendre une clé TOTP neuve et la range CHIFFRÉE — D59.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Elle n'appelle PAS <c>base</c>, et c'est le point.</b>
+    /// <c>base.ResetAuthenticatorKeyAsync</c> engendre la clé <i>et l'écrit en
+    /// clair</i> avant de rendre la main. La chiffrer après coup laisserait sa
+    /// trace en clair dans le journal d'écriture anticipée de PostgreSQL —
+    /// donc dans la réplication et les sauvegardes physiques — et elle y
+    /// resterait bien après l'écrasement de la ligne, jusqu'au passage du
+    /// <c>VACUUM</c>.
+    /// </para>
+    ///
+    /// <para>
+    /// <c>UserManager</c> n'expose aucun <c>SetAuthenticatorKeyAsync</c> —
+    /// vérifié à la source, seul le magasin le porte. Le chemin passe donc par
+    /// <c>SetAuthenticationTokenAsync</c>, exactement comme le lot haché de
+    /// codes de récupération juste au-dessus.
+    /// </para>
+    /// </remarks>
+    public override async Task<IdentityResult> ResetAuthenticatorKeyAsync(Utilisateur utilisateur)
+    {
+        ArgumentNullException.ThrowIfNull(utilisateur);
+
+        var cle = GenerateNewAuthenticatorKey();
+
+        await SetAuthenticationTokenAsync(
+                utilisateur,
+                _fournisseurDIdentity,
+                _nomDuJetonAuthentificateur,
+                porteur.Trousseau.Chiffrer(cle, utilisateur.Id)
+            )
+            .ConfigureAwait(false);
+
+        return await UpdateSecurityStampAsync(utilisateur).ConfigureAwait(false);
+    }
+
+    /// <summary>Rend la clé TOTP en clair, et remet à niveau ce qui ne l'est pas.</summary>
+    /// <remarks>
+    /// <para>
+    /// <c>AuthenticatorTokenProvider</c> appelle cette méthode à CHAQUE
+    /// vérification de code : c'est elle, et elle seule, qui rend le
+    /// chiffrement transparent pour tout le reste d'Identity.
+    /// </para>
+    ///
+    /// <para>
+    /// Le même geste couvre DEUX reprises. Une valeur sans préfixe est du clair
+    /// hérité — celui que D58 avait laissé — et une valeur chiffrée par une clé
+    /// de données plus ancienne est le cas de la rotation. Les deux se
+    /// réécrivent ici, une fois par utilisateur, sans que personne ne le voie.
+    /// </para>
+    /// </remarks>
+    public override async Task<string?> GetAuthenticatorKeyAsync(Utilisateur utilisateur)
+    {
+        ArgumentNullException.ThrowIfNull(utilisateur);
+
+        var valeur = await GetAuthenticationTokenAsync(
+                utilisateur,
+                _fournisseurDIdentity,
+                _nomDuJetonAuthentificateur
+            )
+            .ConfigureAwait(false);
+
+        if (string.IsNullOrEmpty(valeur))
+        {
+            return valeur;
+        }
+
+        var enClair = TrousseauDeChiffrement.EstEnClair(valeur);
+        var cle = enClair ? valeur : porteur.Trousseau.Dechiffrer(valeur, utilisateur.Id);
+
+        if (enClair || !porteur.Trousseau.EstAJour(valeur))
+        {
+            await SetAuthenticationTokenAsync(
+                    utilisateur,
+                    _fournisseurDIdentity,
+                    _nomDuJetonAuthentificateur,
+                    porteur.Trousseau.Chiffrer(cle, utilisateur.Id)
+                )
+                .ConfigureAwait(false);
+        }
+
+        return cle;
+    }
+
     private static (byte[] Sel, IReadOnlyList<byte[]> Empreintes) Lire(string? valeur)
     {
         var champs = (valeur ?? string.Empty).Split(_separateur);
