@@ -320,7 +320,25 @@ internal static class Composition
         application.UseAuthentication();
         application.UseAuthorization();
 
-        application.MapGet(CheminDeSante, RepondreAsync);
+        // D41 : « au lot 4 il passe derrière l'authentification et un rôle
+        // d'administration ». Le lot 4 est livré et la route était restée
+        // anonyme — un audit de sécurité l'a relevé.
+        //
+        // CE QU'ELLE LIVRAIT À UN APPELANT ANONYME : l'identifiant EXACT de la
+        // dernière migration appliquée. Rapproché de l'historique public de ce
+        // dépôt, il dit précisément quelles migrations — donc quelles
+        // politiques RLS et quelles fonctions d'authentification — l'instance
+        // qui tourne possède ou non, avant qu'un attaquant ne choisisse son
+        // angle. Plus une sonde gratuite et illimitée de l'accessibilité de la
+        // base.
+        //
+        // CE QUI RESTE DE D41 : le rôle d'administration. Aucun rôle n'existe
+        // dans ce produit — `PolitiquesDAutorisation` n'en porte que deux, qui
+        // sont des DOMAINES, pas des rôles. Exiger ici une politique
+        // inexistante fermerait la route à tout le monde, y compris au
+        // diététicien que `09-comptes.md` § 6 prévoit. La moitié réalisable est
+        // donc livrée, et la seconde attend le lot qui introduira les rôles.
+        application.MapGet(CheminDeSante, RepondreAsync).RequireAuthorization();
 
         PointsDEntree.Router(application);
     }

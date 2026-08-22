@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
@@ -235,6 +236,27 @@ public sealed class LimitationTests
     }
 
     [Fact]
+    public void La_route_de_SANTE_n_est_plus_ANONYME()
+    {
+        // D41 : « au lot 4 il passe derrière l'authentification et un rôle
+        // d'administration ». Le lot 4 avait livré la route ouverte, et elle
+        // rendait l'identifiant EXACT de la dernière migration appliquée —
+        // rapproché de l'historique public de ce dépôt, il dit quelles
+        // politiques RLS l'instance possède ou non.
+        //
+        // On interroge le système, pas la ligne d'enregistrement : une route
+        // qui perdrait sa métadonnée d'autorisation serait un trou parfaitement
+        // invisible.
+        var route = RouteDe("/api/v1/sante");
+
+        Assert.True(
+            route.Metadata.GetMetadata<IAuthorizeData>() is not null,
+            "la route de santé est de nouveau anonyme : elle publie l'identifiant de "
+                + "migration à qui le demande."
+        );
+    }
+
+    [Fact]
     public void La_DECONNEXION_n_est_pas_limitee()
     {
         // Délibéré, et donc éprouvé : un utilisateur qui a épuisé son seau doit
@@ -247,7 +269,30 @@ public sealed class LimitationTests
     // Le harnais
     // ================================================================
 
-    private static string? PolitiqueDe(string chemin)
+    /// <summary>La route enregistrée sous ce chemin, ou l'épreuve échoue.</summary>
+    private static RouteEndpoint RouteDe(string chemin)
+    {
+        var routes = Endpoints();
+        var route = routes.Find(e => Chemin(e) == chemin);
+
+        Assert.True(
+            route is not null,
+            $"la route {chemin} est introuvable : l'épreuve ne regarde rien. Vues : "
+                + string.Join(" | ", routes.Select(Chemin))
+        );
+
+        return route;
+    }
+
+    private static string Chemin(RouteEndpoint e) => "/" + e.RoutePattern.RawText?.TrimStart('/');
+
+    /// <summary>
+    /// Les endpoints se lisent sur le <c>WebApplication</c> LUI-MÊME. Le
+    /// <c>EndpointDataSource</c> du conteneur est vide tant que le pipeline n'a
+    /// pas démarré — mesuré : « Vues : » ne listait rien, et l'épreuve n'aurait
+    /// rien regardé si l'assertion ne l'avait pas dit.
+    /// </summary>
+    private static List<RouteEndpoint> Endpoints()
     {
         var constructeur = WebApplication.CreateBuilder();
         constructeur.Configuration.Sources.Clear();
@@ -264,32 +309,15 @@ public sealed class LimitationTests
         var application = constructeur.Build();
         Palier.Api.Composition.Router(application);
 
-        // Les endpoints se lisent sur le `WebApplication` LUI-MÊME. Le
-        // `EndpointDataSource` du conteneur est vide tant que le pipeline n'a
-        // pas démarré — mesuré : « Vues : » ne listait rien, et l'épreuve
-        // n'aurait rien regardé si l'assertion ne l'avait pas dit.
-        var routes = ((IEndpointRouteBuilder)application)
-            .DataSources.SelectMany(d => d.Endpoints)
-            .OfType<RouteEndpoint>()
-            .ToList();
-
-        var route = routes
-            .FirstOrDefault(e =>
-                string.Equals(
-                    "/" + e.RoutePattern.RawText?.TrimStart('/'),
-                    chemin,
-                    StringComparison.Ordinal
-                )
-            );
-
-        Assert.True(
-            route is not null,
-            $"la route {chemin} est introuvable : l'épreuve ne regarde rien. Vues : "
-                + string.Join(" | ", routes.Select(e => e.RoutePattern.RawText))
-        );
-
-        return route.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
+        return [
+            .. ((IEndpointRouteBuilder)application)
+                .DataSources.SelectMany(d => d.Endpoints)
+                .OfType<RouteEndpoint>(),
+        ];
     }
+
+    private static string? PolitiqueDe(string chemin) =>
+        RouteDe(chemin).Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName;
 
     /// <summary>Applique l'intergiciel RÉEL des en-têtes transférés.</summary>
     private static async Task TransfererAsync(HttpContext contexte, string? proxysDeConfiance)
