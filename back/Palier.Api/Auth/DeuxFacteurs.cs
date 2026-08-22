@@ -46,6 +46,18 @@ internal sealed record CodesDeRecuperation(IReadOnlyList<string> Codes);
 /// </para>
 ///
 /// <para>
+/// <b>Ce qui est haché en base, et ce qui ne l'est pas.</b> Les codes de
+/// récupération le sont — <see cref="GestionnaireDUtilisateurs" /> redéfinit
+/// les trois méthodes qu'Identity range en clair. LA CLÉ PARTAGÉE, elle, reste
+/// EN CLAIR dans <c>AspNetUserTokens</c> : elle doit être relue à chaque
+/// vérification, un haché ne conviendrait donc pas, et la chiffrer demande de
+/// décider où vit la clé de chiffrement — une décision d'exploitation, pas une
+/// ligne de code. Qui lit la base d'identité peut donc encore engendrer les
+/// codes à six chiffres d'un compte ; il ne peut plus lire ses codes de
+/// récupération.
+/// </para>
+///
+/// <para>
 /// <b>Le code TOTP ne se journalise jamais.</b> La documentation Microsoft en
 /// fait une règle, et pour une raison précise : un code reste valable
 /// <i>plusieurs</i> authentifications avant d'expirer — la fenêtre de
@@ -237,9 +249,11 @@ internal static class DeuxFacteurs
             .GenerateNewTwoFactorRecoveryCodesAsync(utilisateur, NombreDeCodesDeRecuperation)
             .ConfigureAwait(false);
 
-        // UNE SEULE FOIS. Identity ne conserve que des hachés : ni ce serveur ni
-        // le support ne pourront les redonner. C'est le point, et c'est à
-        // l'écran de le dire clairement avant que l'utilisateur ne ferme.
+        // UNE SEULE FOIS. Ce n'est pas Identity qui l'assure — son magasin les
+        // range EN CLAIR — mais `GestionnaireDUtilisateurs`, qui n'en conserve
+        // que des hachés : ni ce serveur ni le support ne pourront les
+        // redonner. C'est le point, et c'est à l'écran de le dire clairement
+        // avant que l'utilisateur ne ferme.
         return Results.Ok(new CodesDeRecuperation(codes?.ToArray() ?? []));
     }
 

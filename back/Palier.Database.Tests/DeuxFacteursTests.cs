@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Palier.Api;
 using Palier.Api.Auth;
 using Palier.Infrastructure.Identite;
@@ -423,6 +424,210 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
     }
 
     // ================================================================
+    // Ce que la base retient, et ce qu'elle ne retient plus
+    // ================================================================
+
+    [Fact]
+    public async Task Les_codes_de_recuperation_ne_sont_JAMAIS_ranges_en_clair()
+    {
+        // Le magasin d'Identity colle les dix codes bout à bout et les écrit
+        // TELS QUELS dans `AspNetUserTokens.Value` — aucun protecteur de
+        // données personnelles n'est enregistré, donc rien ne chiffre la
+        // colonne. Qui lit la base tient alors dix seconds facteurs
+        // UTILISABLES, pour chaque compte protégé.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var compte = await InscritAsync(portee.ServiceProvider);
+        await PreparerAsync(portee.ServiceProvider, compte);
+
+        var (code, corps) = await ActiverAsync(
+            portee.ServiceProvider,
+            compte,
+            await CodeValideAsync(portee.ServiceProvider, compte)
+        );
+        Assert.Equal(StatusCodes.Status200OK, code);
+
+        var codes = System
+            .Text.Json.JsonDocument.Parse(corps)
+            .RootElement.GetProperty("codes")
+            .EnumerateArray()
+            .Select(e => e.GetString() ?? string.Empty)
+            .ToList();
+
+        var jetons = await JetonsAsync(compte);
+
+        foreach (var secours in codes)
+        {
+            Assert.DoesNotContain(
+                jetons,
+                jeton => jeton.Valeur.Contains(secours, StringComparison.Ordinal)
+            );
+        }
+
+        // Et AUCUNE ligne ne subsiste sous les noms d'Identity. L'assertion
+        // porte sur la LIGNE, et pas seulement sur les codes qu'on vient de
+        // rendre : un lot plus ancien y survivrait sans qu'aucune comparaison
+        // sur ceux-là ne le voie.
+        Assert.DoesNotContain(jetons, EstLeLotDIdentity);
+        Assert.Contains(
+            jetons,
+            jeton =>
+                string.Equals(
+                    jeton.Fournisseur,
+                    GestionnaireDUtilisateurs.Fournisseur,
+                    StringComparison.Ordinal
+                )
+                && string.Equals(
+                    jeton.Nom,
+                    GestionnaireDUtilisateurs.NomDuJeton,
+                    StringComparison.Ordinal
+                )
+        );
+
+        // Le compte, lui, sait toujours combien de codes il lui reste : le
+        // décompte lit le lot haché, et non celui qu'Identity ne tient plus.
+        Assert.Equal(
+            DeuxFacteurs.NombreDeCodesDeRecuperation,
+            await CompterAsync(portee.ServiceProvider, compte)
+        );
+    }
+
+    [Fact]
+    public async Task Une_REACTIVATION_efface_le_lot_reste_EN_CLAIR()
+    {
+        // Écrire les hachés À CÔTÉ du clair ne fermerait rien : les anciens
+        // codes resteraient lisibles dans la base — inutilisables, mais
+        // toujours là, et indéfiniment.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var compte = await ActiveAsync(portee.ServiceProvider);
+
+        await RangerEnClairAsync(portee.ServiceProvider, compte, ["ancien-un", "ancien-deux"]);
+        Assert.Contains(await JetonsAsync(compte), PorteLAncienLot);
+
+        var (code, _) = await ActiverAsync(
+            portee.ServiceProvider,
+            compte,
+            await CodeValideAsync(portee.ServiceProvider, compte)
+        );
+        Assert.Equal(StatusCodes.Status200OK, code);
+
+        var jetons = await JetonsAsync(compte);
+        Assert.DoesNotContain(jetons, EstLeLotDIdentity);
+        Assert.DoesNotContain(jetons, PorteLAncienLot);
+    }
+
+    [Fact]
+    public async Task Un_ANCIEN_code_EN_CLAIR_ouvre_encore_la_session_et_le_clair_DISPARAIT()
+    {
+        // Refuser les lots d'avant le correctif enfermerait dehors qui a perdu
+        // son téléphone AVANT lui : `/2fa/activer` et `/2fa/desactiver` exigent
+        // l'un et l'autre un code d'authentificateur, et les codes de
+        // récupération sont donc le seul chemin qui lui reste. Le lot est
+        // repris — haché tel quel — et le clair s'en va dans le même geste.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var compte = await ActiveAsync(portee.ServiceProvider);
+
+        await RangerEnClairAsync(portee.ServiceProvider, compte, ["ancien-un", "ancien-deux"]);
+
+        var premier = await ConnecterAsync(portee.ServiceProvider, compte, "ancien-un");
+        Assert.Equal(StatusCodes.Status200OK, premier.Code);
+
+        var jetons = await JetonsAsync(compte);
+        Assert.DoesNotContain(jetons, EstLeLotDIdentity);
+        Assert.DoesNotContain(jetons, PorteLAncienLot);
+
+        // Le code consommé ne ressert pas ; son voisin, lui, ouvre encore.
+        var second = await ConnecterAsync(portee.ServiceProvider, compte, "ancien-un");
+        Assert.Equal(StatusCodes.Status401Unauthorized, second.Code);
+
+        var voisin = await ConnecterAsync(portee.ServiceProvider, compte, "ancien-deux");
+        Assert.Equal(StatusCodes.Status200OK, voisin.Code);
+    }
+
+    [Fact]
+    public async Task Une_tentative_RATEE_efface_quand_meme_le_lot_EN_CLAIR()
+    {
+        // La reprise ne dépend PAS du code présenté. Sans cela, un lot resté en
+        // clair attendrait qu'un code juste soit un jour saisi pour disparaître
+        // — c'est-à-dire, sur un compte dormant, jamais.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var compte = await ActiveAsync(portee.ServiceProvider);
+
+        await RangerEnClairAsync(portee.ServiceProvider, compte, ["ancien-un", "ancien-deux"]);
+
+        var refus = await ConnecterAsync(portee.ServiceProvider, compte, "code-inconnu");
+        Assert.Equal(StatusCodes.Status401Unauthorized, refus.Code);
+
+        var jetons = await JetonsAsync(compte);
+        Assert.DoesNotContain(jetons, EstLeLotDIdentity);
+        Assert.DoesNotContain(jetons, PorteLAncienLot);
+
+        // Et les deux codes que l'utilisateur détient restent valables.
+        var ouverture = await ConnecterAsync(portee.ServiceProvider, compte, "ancien-deux");
+        Assert.Equal(StatusCodes.Status200OK, ouverture.Code);
+    }
+
+    [Fact]
+    public async Task Un_lot_EN_CLAIR_qui_DOUBLE_le_lot_hache_disparait_sans_le_remplacer()
+    {
+        // L'état que laisserait un effacement qui n'a pas abouti : les deux
+        // lots côte à côte. Le haché est le plus récent, il fait foi — et le
+        // clair s'en va sans rien remplacer. Reprendre le clair ici écraserait
+        // le lot du jour par un lot périmé.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var compte = await InscritAsync(portee.ServiceProvider);
+        await PreparerAsync(portee.ServiceProvider, compte);
+
+        var (_, corps) = await ActiverAsync(
+            portee.ServiceProvider,
+            compte,
+            await CodeValideAsync(portee.ServiceProvider, compte)
+        );
+        var secours = System
+            .Text.Json.JsonDocument.Parse(corps)
+            .RootElement.GetProperty("codes")[0]
+            .GetString();
+
+        await RangerEnClairAsync(
+            portee.ServiceProvider,
+            compte,
+            ["ancien-un"],
+            retirerLeHache: false
+        );
+
+        var ouverture = await ConnecterAsync(portee.ServiceProvider, compte, secours);
+        Assert.Equal(StatusCodes.Status200OK, ouverture.Code);
+
+        var jetons = await JetonsAsync(compte);
+        Assert.DoesNotContain(jetons, EstLeLotDIdentity);
+        Assert.DoesNotContain(jetons, PorteLAncienLot);
+
+        var refus = await ConnecterAsync(portee.ServiceProvider, compte, "ancien-un");
+        Assert.Equal(StatusCodes.Status401Unauthorized, refus.Code);
+    }
+
+    [Fact]
+    public async Task Un_lot_ILLISIBLE_ne_valide_aucun_code()
+    {
+        // Une valeur qui n'est pas celle qu'on a écrite — colonne modifiée à la
+        // main, format d'une autre version — se comporte comme un code faux, et
+        // jamais comme une exception qui remonterait au client.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var compte = await ActiveAsync(portee.ServiceProvider);
+
+        await EcraserLeLotAsync(portee.ServiceProvider, compte, "ceci-n-est-pas-du-base64");
+
+        var refus = await ConnecterAsync(portee.ServiceProvider, compte, "peu-importe");
+        Assert.Equal(StatusCodes.Status401Unauthorized, refus.Code);
+        Assert.Equal(0, await CompterAsync(portee.ServiceProvider, compte));
+    }
+
+    // ================================================================
     // Le harnais
     // ================================================================
 
@@ -772,4 +977,161 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
     /// </summary>
     private static IServiceScope Portee(IServiceProvider services) =>
         services.GetRequiredService<IServiceScopeFactory>().CreateScope();
+
+    /// <summary>Les jetons rangés pour ce compte, lus DANS LA BASE.</summary>
+    /// <remarks>
+    /// Par Npgsql et non par Identity : ce qui est en cause est l'état RÉEL de
+    /// la colonne, pas ce que la bibliothèque veut bien en rendre.
+    /// </remarks>
+    private async Task<List<(string Fournisseur, string Nom, string Valeur)>> JetonsAsync(
+        Guid compte
+    )
+    {
+        await using var connexion = new NpgsqlConnection(baseDeDonnees.ChaineAuth);
+        await connexion.OpenAsync();
+
+        await using var commande = new NpgsqlCommand(
+            """
+            select "LoginProvider", "Name", coalesce("Value", '')
+            from public."AspNetUserTokens"
+            where "UserId" = $1
+            """,
+            connexion
+        );
+        commande.Parameters.AddWithValue(compte);
+
+        var jetons = new List<(string Fournisseur, string Nom, string Valeur)>();
+        await using var lecteur = await commande.ExecuteReaderAsync();
+        while (await lecteur.ReadAsync())
+        {
+            jetons.Add((lecteur.GetString(0), lecteur.GetString(1), lecteur.GetString(2)));
+        }
+
+        return jetons;
+    }
+
+    /// <summary>Le jeton est-il celui qu'Identity range EN CLAIR ?</summary>
+    /// <remarks>
+    /// Les deux noms sont écrits ICI, en toutes lettres, et ne sont PAS lus
+    /// dans le produit : une constante fausse là-bas ferait chercher cette
+    /// assertion ailleurs, et la ligne survivrait sous les yeux d'une épreuve
+    /// verte. Ce qui les accorde est le magasin d'Identity, qui écrit le lot de
+    /// <see cref="RangerEnClairAsync" /> sous ses propres noms.
+    /// </remarks>
+    private static bool EstLeLotDIdentity((string Fournisseur, string Nom, string Valeur) jeton) =>
+        string.Equals(jeton.Fournisseur, "[AspNetUserStore]", StringComparison.Ordinal)
+        && string.Equals(jeton.Nom, "RecoveryCodes", StringComparison.Ordinal);
+
+    /// <summary>Le jeton porte-t-il un code du lot d'épreuve ?</summary>
+    /// <remarks>
+    /// Le tiret suffit à trancher : ce que le correctif range est du base64
+    /// séparé par des points-virgules, et le base64 n'a pas de tiret.
+    /// </remarks>
+    private static bool PorteLAncienLot((string Fournisseur, string Nom, string Valeur) jeton) =>
+        jeton.Valeur.Contains("ancien-", StringComparison.Ordinal);
+
+    /// <summary>Combien de codes de récupération le compte a-t-il encore.</summary>
+    private static async Task<int> CompterAsync(IServiceProvider services, Guid compte)
+    {
+        using var portee = Portee(services);
+        var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
+
+        return await utilisateurs.CountRecoveryCodesAsync(
+            await CompteSuiviAsync(utilisateurs, compte)
+        );
+    }
+
+    /// <summary>
+    /// Range un lot de codes EN CLAIR, comme Identity le faisait avant le
+    /// correctif.
+    /// </summary>
+    /// <remarks>
+    /// L'écriture passe par le MAGASIN d'Identity, donc sous SES noms de
+    /// fournisseur et de jeton — deux constantes privées que le produit ne peut
+    /// que recopier. Le jour où elles changent, la reprise ne trouve plus rien
+    /// et ces épreuves rougissent : c'est ce qui tient la recopie.
+    /// </remarks>
+    private static async Task RangerEnClairAsync(
+        IServiceProvider services,
+        Guid compte,
+        string[] codes,
+        bool retirerLeHache = true
+    )
+    {
+        using var portee = Portee(services);
+        var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
+        var utilisateur = await CompteSuiviAsync(utilisateurs, compte);
+
+        if (retirerLeHache)
+        {
+            // Le compte doit ressembler EXACTEMENT à un compte d'avant le
+            // correctif : le clair présent, le haché absent.
+            var retire = await utilisateurs.RemoveAuthenticationTokenAsync(
+                utilisateur,
+                GestionnaireDUtilisateurs.Fournisseur,
+                GestionnaireDUtilisateurs.NomDuJeton
+            );
+
+            Assert.True(
+                retire.Succeeded,
+                "le harnais n'a pas pu retirer le lot haché : "
+                    + string.Join(", ", retire.Errors.Select(e => e.Code))
+            );
+        }
+
+        var magasin = Assert.IsAssignableFrom<IUserTwoFactorRecoveryCodeStore<Utilisateur>>(
+            portee.ServiceProvider.GetRequiredService<IUserStore<Utilisateur>>()
+        );
+
+        await magasin.ReplaceCodesAsync(utilisateur, codes, CancellationToken.None);
+
+        var ecrit = await utilisateurs.UpdateAsync(utilisateur);
+        Assert.True(
+            ecrit.Succeeded,
+            "le harnais n'a pas pu ranger le lot en clair : "
+                + string.Join(", ", ecrit.Errors.Select(e => e.Code))
+        );
+    }
+
+    /// <summary>Écrase le lot haché par une valeur qui n'en est pas un.</summary>
+    private static async Task EcraserLeLotAsync(
+        IServiceProvider services,
+        Guid compte,
+        string valeur
+    )
+    {
+        using var portee = Portee(services);
+        var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
+
+        var pose = await utilisateurs.SetAuthenticationTokenAsync(
+            await CompteSuiviAsync(utilisateurs, compte),
+            GestionnaireDUtilisateurs.Fournisseur,
+            GestionnaireDUtilisateurs.NomDuJeton,
+            valeur
+        );
+
+        Assert.True(
+            pose.Succeeded,
+            "le harnais n'a pas pu écraser le lot haché : "
+                + string.Join(", ", pose.Errors.Select(e => e.Code))
+        );
+    }
+
+    /// <summary>
+    /// Le compte, chargé PAR CE gestionnaire : ce qu'il écrit ensuite passe par
+    /// le contexte qui suit déjà l'entité. Un utilisateur chargé dans une autre
+    /// portée en serait détaché.
+    /// </summary>
+    private static async Task<Utilisateur> CompteSuiviAsync(
+        UserManager<Utilisateur> utilisateurs,
+        Guid compte
+    )
+    {
+        var utilisateur = await utilisateurs.FindByIdAsync(
+            compte.ToString("D", System.Globalization.CultureInfo.InvariantCulture)
+        );
+
+        Assert.True(utilisateur is not null, $"le compte {compte} a disparu");
+        return utilisateur;
+    }
 }

@@ -130,6 +130,13 @@ internal static class Composition
             .Services.AddIdentityCore<Utilisateur>()
             .AddEntityFrameworkStores<PalierAuthDbContext>()
             .AddPasswordValidator<ValidateurDeMotDePasse>()
+            // Le gestionnaire du produit, et non celui d'Identity. Sans cette
+            // ligne, les codes de récupération repartent EN CLAIR dans
+            // `AspNetUserTokens.Value` : le magasin par défaut les colle bout à
+            // bout et les écrit tels quels, sans qu'aucun `IPersonalDataProtector`
+            // ne chiffre la colonne. Les épreuves de `DeuxFacteursTests` qui
+            // lisent la table rougissent le jour où elle disparaît.
+            .AddUserManager<GestionnaireDUtilisateurs>()
             // Sans cette ligne, `GetAuthenticatorKeyAsync` rend une clé VIDE et
             // `VerifyTwoFactorTokenAsync` refuse tout : la double
             // authentification afficherait un QR code qui n'enrôle rien.
