@@ -131,9 +131,25 @@ alter table public.cles_de_donnees force row level security;
 create policy lecture_publique on public.cles_de_donnees
   for select to palier_app
   using (true);
--- Aucune politique d'écriture : « If no policy exists for the table,
--- a default-deny policy is used ». Et palier_app n'a pas le privilège
--- INSERT — la barrière tombe deux fois, sur deux chemins différents.
+grant select on public.cles_de_donnees to palier_app;
+-- Aucune politique d'écriture POUR palier_app : « If no policy exists
+-- for the table, a default-deny policy is used ». Et le privilège INSERT
+-- manque — la barrière tombe deux fois, sur deux chemins différents.
+
+-- Le rôle propriétaire, lui, doit pouvoir poser une clé. Sous FORCE il
+-- est LUI AUSSI soumis aux politiques — mesuré : sans cette ligne, son
+-- INSERT échoue en 42501. Les deux corrections réflexes (BYPASSRLS,
+-- retirer FORCE) éteindraient RLS sans que rien ne le signale.
+create policy migrations_referentiel on public.cles_de_donnees
+  for all to palier_migrations
+  using (true) with check (true);
+
+-- Et la sauvegarde. `grant select on ALL TABLES` du socle initial ne
+-- vaut que pour les tables existantes au moment du grant : toute table
+-- née après lui échappe, et trois épreuves de SauvegardeTests l'ont
+-- refusé — un pg_dump incomplet restaure sans erreur en ayant perdu
+-- une table.
+grant select on public.cles_de_donnees to palier_sauvegarde;
 ```
 
 `using (true)` en lecture ne concède rien : une enveloppe est illisible sans le coffre. C'est exactement l'argument des deux compromissions — l'enveloppe en base ne vaut que si l'on tient aussi le compte de service.

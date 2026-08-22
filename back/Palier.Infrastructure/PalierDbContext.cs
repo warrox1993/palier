@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Palier.Infrastructure.Coffre;
 using Palier.Infrastructure.Entites;
 using Palier.Infrastructure.Identite;
 
@@ -37,6 +38,13 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
     /// <c>PalierAuthDbContext</c> qui les LIT, sous le rôle qui en a le droit.
     /// </summary>
     public DbSet<SessionRafraichissement> Sessions => Set<SessionRafraichissement>();
+
+    /// <summary>
+    /// Les enveloppes des clés de données — D59. L'API les LIT au démarrage et
+    /// n'en écrit jamais : <c>palier_app</c> n'a que <c>select</c> sur cette
+    /// table, et c'est une commande d'exploitation qui pose la première.
+    /// </summary>
+    public DbSet<CleDeDonnees> ClesDeDonnees => Set<CleDeDonnees>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -84,6 +92,15 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
                 .WithMany()
                 .HasForeignKey(x => x.OwnerId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CleDeDonnees>(t =>
+        {
+            t.ToTable("cles_de_donnees");
+            t.HasKey(x => x.Id);
+            t.Property(x => x.Id).HasColumnName("id");
+            t.Property(x => x.Enveloppe).HasColumnName("enveloppe").IsRequired();
+            t.Property(x => x.CreeeLe).HasColumnName("creee_le").IsRequired();
         });
 
         builder.Entity<NutrientRef>(t =>
