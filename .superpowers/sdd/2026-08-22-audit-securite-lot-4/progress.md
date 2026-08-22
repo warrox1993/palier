@@ -98,6 +98,36 @@ amont de sa cible ne prouve rien.
 
 ---
 
+## Un défaut de harnais, trouvé en poussant
+
+**`git push` échouait en code 141, trois fois de suite, et ce n'était ni le
+réseau ni le shell.**
+
+Git ouvre la connexion SSH **puis** lance le hook `pre-push`. Ce hook est
+`npm run verify`, qui dure désormais plus de sept minutes. Pendant ce temps la
+connexion reste inactive, GitHub la ferme, et quand git veut enfin envoyer il
+écrit dans un tube mort — SIGPIPE, 128 + 13 = 141.
+
+Le diagnostic s'est fait par élimination, pas par supposition : `ssh -T
+git@github.com` authentifie, `git ls-remote` répond, `npm run verify` sort en
+code **0**, et PowerShell donne le même 141 que Git Bash — donc ni le réseau, ni
+le hook, ni le shell.
+
+La parade tient en une variable :
+
+```bash
+GIT_SSH_COMMAND="ssh -o ServerAliveInterval=20 -o ServerAliveCountMax=60" git push …
+```
+
+**Ce n'est qu'un pansement.** Le push du lot 4, à 320 s, passait de justesse ;
+celui-ci, à 423 s, ne passait plus. Le seuil se rapproche à chaque lot. La vraie
+correction est celle que `verify` réclame lui-même à chaque exécution — « une
+boucle de rétroaction lente est un défaut à traiter » — et elle appartient au
+porteur du projet : soit `ServerAliveInterval` entre dans la configuration SSH ou
+dans `.husky/pre-push`, soit `verify` redescend sous le délai d'inactivité.
+
+---
+
 ## Le franchissement
 
 Chaque garde-fou écrit cette nuit a été vu rouge sur la violation qu'il refuse.
