@@ -27,6 +27,22 @@ public sealed class ClientOkms(HttpClient http, ReglagesDuCoffre reglages)
     private string? _jeton;
 
     /// <summary>Les paires d'un chemin du Secret Manager, en un seul appel.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>L'URL et la forme du corps ont été MESURÉES le 22/08/2026</b>, contre
+    /// le domaine réel, et toutes deux démentaient ce que la spécification
+    /// laissait supposer. <c>/secret/{chemin}/data</c> rend un 404 ;
+    /// <c>/secret/data/{chemin}</c> rend 200 — c'est la forme de HashiCorp
+    /// Vault KV v2, dont OKMS reprend le moteur.
+    /// </para>
+    ///
+    /// <para>
+    /// Le corps est doublement imbriqué : <c>{ data: { data, metadata } }</c>.
+    /// Lire le premier <c>data</c> seul rapporterait deux clés nommées
+    /// « data » et « metadata », et l'API refuserait de démarrer en annonçant
+    /// que les secrets manquent — alors qu'ils sont là.
+    /// </para>
+    /// </remarks>
     public async Task<IReadOnlyDictionary<string, string>> LireLeSecretAsync(
         string chemin,
         CancellationToken jeton
@@ -34,7 +50,7 @@ public sealed class ClientOkms(HttpClient http, ReglagesDuCoffre reglages)
     {
         using var requete = new HttpRequestMessage(
             HttpMethod.Get,
-            $"{reglages.Racine}/secret/{chemin}/data"
+            $"{reglages.Racine}/secret/data/{chemin}"
         );
         using var reponse = await EnvoyerAsync(requete, $"la lecture de « {chemin} »", jeton)
             .ConfigureAwait(false);
@@ -42,8 +58,13 @@ public sealed class ClientOkms(HttpClient http, ReglagesDuCoffre reglages)
         using var doc = await LireAsync(reponse, jeton).ConfigureAwait(false);
         return doc
             .RootElement.GetProperty("data")
+            .GetProperty("data")
             .EnumerateObject()
-            .ToDictionary(p => p.Name, p => p.Value.GetString() ?? string.Empty, StringComparer.Ordinal);
+            .ToDictionary(
+                p => p.Name,
+                p => p.Value.GetString() ?? string.Empty,
+                StringComparer.Ordinal
+            );
     }
 
     /// <summary>

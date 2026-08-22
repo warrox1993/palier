@@ -130,14 +130,41 @@ public sealed class CoffreTests
         // C'est ce qui permet de lire les six secrets en un aller-retour.
         using var messager = new MessagerFactice(
             Jeton(),
-            Json("""{"data":{"JWT_SIGNING_KEY":"aaa","GOOGLE_OAUTH_CLIENT_SECRET":"bbb"}}""")
+            Json(
+                """
+                {"data":{"data":{"JWT_SIGNING_KEY":"aaa","ConnectionStrings__Palier":"bbb"},
+                "metadata":{"version":1}},"request_id":"x"}
+                """
+            )
         );
         using var http = new HttpClient(messager);
 
         var paires = await Client(http).LireLeSecretAsync("palier/dev", CancellationToken.None);
 
+        // Deux assertions, et la seconde vaut pour elle-même : `metadata` ne
+        // doit PAS remonter comme un secret. Lire le premier `data` seul
+        // rapporterait deux clés nommées « data » et « metadata », et le
+        // démarrage refuserait en annonçant que les secrets manquent.
         Assert.Equal(2, paires.Count);
         Assert.Equal("aaa", paires["JWT_SIGNING_KEY"]);
+        Assert.DoesNotContain("metadata", paires.Keys, StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task L_URL_de_lecture_est_celle_MESUREE_contre_le_coffre_reel()
+    {
+        // Mesurée le 22/08/2026 : `/secret/{chemin}/data` rend 404,
+        // `/secret/data/{chemin}` rend 200. C'est la forme de Vault KV v2.
+        // Cette épreuve fige ce que la spécification ne disait pas.
+        using var messager = new MessagerFactice(
+            Jeton(),
+            Json("""{"data":{"data":{"a":"b"},"metadata":{}}}""")
+        );
+        using var http = new HttpClient(messager);
+
+        await Client(http).LireLeSecretAsync("palier/dev", CancellationToken.None);
+
+        Assert.EndsWith("/v1/secret/data/palier/dev", messager.Urls[^1], StringComparison.Ordinal);
     }
 
     // ================================================================

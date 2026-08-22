@@ -47,6 +47,15 @@ Un jeton y vit **3 599 secondes**, soit 59 minutes.
 
 **Ce `x-key-ver` décide de la rotation.** OVH versionne la clé maîtresse et fait voyager le numéro de version _dans_ l'enveloppe. Une rotation côté OVH produira des enveloppes en version 1 pendant que les anciennes resteront en version 0, et le coffre saura déchiffrer les deux. La rotation de la clé maîtresse ne demande donc aucun code de notre part — le format la porte. Ce que nous devons écrire, c'est la rotation de la **clé de données**, qui est un autre problème (§ 7).
 
+**L'URL de lecture d'un secret dément aussi la lecture qu'on en fait.** Mesurée le 22/08/2026, après création du chemin `palier/dev` :
+
+```
+[404] GET /secret/palier/dev/data     ← ce que la spécification laissait supposer
+[200] GET /secret/data/palier/dev     ← ce qui répond
+```
+
+Et le corps est **doublement imbriqué** — `{ data: { data, metadata }, request_id }`, la forme de HashiCorp Vault KV v2, dont OKMS reprend le moteur. Lire le premier `data` seul rapporterait deux clés nommées « data » et « metadata » : l'API refuserait de démarrer en annonçant que les secrets manquent, alors qu'ils sont là. Deux épreuves figent l'URL et la forme.
+
 **Le coût du déchiffrement**, dix mesures après deux tours de chauffe :
 
 |         |           |

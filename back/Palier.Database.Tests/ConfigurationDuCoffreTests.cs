@@ -180,7 +180,8 @@ public sealed class ConfigurationDuCoffreTests
             new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(
-                    "{\"data\":{" + corps + "}}",
+                    // La forme MESURÉE : Vault KV v2 imbrique data.data.
+                    "{\"data\":{\"data\":{" + corps + "},\"metadata\":{}}}",
                     Encoding.UTF8,
                     "application/json"
                 ),
