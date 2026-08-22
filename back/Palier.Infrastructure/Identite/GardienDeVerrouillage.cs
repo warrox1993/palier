@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Identity;
 using Palier.Application.Sessions;
 
 namespace Palier.Infrastructure.Identite;
@@ -24,8 +23,18 @@ namespace Palier.Infrastructure.Identite;
 /// fait : le jour où le support lit <c>LockoutEnd</c> dans la base, il lit la
 /// bonne valeur.
 /// </para>
+///
+/// <para>
+/// <b>Les DEUX écritures passent par le même chemin sérialisé</b> —
+/// <see cref="MagasinDeSessions.AppliquerLeVerrouillageAsync" />, qui verrouille
+/// la ligne du compte et RELIT son état avant d'appeler la décision. Le lire ici
+/// puis l'écrire là faisait de N tentatives simultanées une seule tentative
+/// comptée. Et faire emprunter à la réussite un chemin d'écriture différent de
+/// celui de l'échec laisserait leur ordre au hasard : deux écritures sur les
+/// mêmes quatre colonnes doivent se ranger derrière le même verrou.
+/// </para>
 /// </remarks>
-public sealed class GardienDeVerrouillage(UserManager<Utilisateur> utilisateurs)
+public sealed class GardienDeVerrouillage(MagasinDeSessions magasin)
 {
     /// <summary>L'état du compte, tel que la décision l'attend.</summary>
     public static EtatDeVerrouillage Etat(Utilisateur utilisateur)
@@ -45,6 +54,11 @@ public sealed class GardienDeVerrouillage(UserManager<Utilisateur> utilisateurs)
         DecisionDeVerrouillage.EstVerrouille(Etat(utilisateur), maintenant);
 
     /// <summary>Enregistre une tentative ratée et rend ce qui a été décidé.</summary>
+    /// <remarks>
+    /// Seul l'IDENTIFIANT de <paramref name="utilisateur" /> sert : la décision
+    /// s'applique à l'état relu sous verrou, et l'exemplaire reçu — chargé au
+    /// début de la connexion — n'est ni lu ni modifié.
+    /// </remarks>
     public async Task<ResultatDeVerrouillage> EnregistrerUnEchecAsync(
         Utilisateur utilisateur,
         DateTimeOffset maintenant
@@ -52,29 +66,36 @@ public sealed class GardienDeVerrouillage(UserManager<Utilisateur> utilisateurs)
     {
         ArgumentNullException.ThrowIfNull(utilisateur);
 
-        var decide = DecisionDeVerrouillage.ApresUnEchec(Etat(utilisateur), maintenant);
-
-        utilisateur.AccessFailedCount = decide.EchecsConsecutifs;
-        utilisateur.VerrouillagesSubis = decide.VerrouillagesSubis;
-        utilisateur.LockoutEnd = decide.Jusqua;
-
         // La date du dernier échec est écrite À CHAQUE échec, y compris celui
         // qui verrouille. Sans elle, la fenêtre n'aurait pas de point de départ
         // et le compteur redeviendrait cumulatif — le défaut d'Identity qu'on
         // vient de corriger.
-        utilisateur.DernierEchecLe = maintenant;
-
-        await EcrireAsync(utilisateur).ConfigureAwait(false);
-        return decide;
+        return await EcrireAsync(
+                utilisateur.Id,
+                relu => DecisionDeVerrouillage.ApresUnEchec(Etat(relu), maintenant),
+                dernierEchec: maintenant
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>Efface tout après une connexion réussie.</summary>
+    /// <remarks>
+    /// Elle emprunte le même chemin verrouillé que l'échec, et décide donc sur
+    /// l'état RELU. Des échecs peuvent avoir verrouillé le compte depuis que la
+    /// connexion a chargé son exemplaire : ils sont alors effacés, ce que
+    /// <see cref="DecisionDeVerrouillage.ApresUneReussite" /> assume en toutes
+    /// lettres. Ce qui compte est que l'ordre soit décidé par le verrou, et non
+    /// par le hasard d'un jeton de concurrence.
+    /// </remarks>
     public async Task EnregistrerUneReussiteAsync(Utilisateur utilisateur)
     {
         ArgumentNullException.ThrowIfNull(utilisateur);
 
         // Rien à écrire si rien n'a bougé : une écriture par connexion réussie
         // coûterait un aller-retour à chaque ouverture de session, pour rien.
+        // Le raccourci lit l'exemplaire déjà chargé, et c'est suffisant — un
+        // compte propre à la lecture n'a RIEN à effacer, et ouvrir une
+        // transaction pour n'écrire aucun changement ne protégerait personne.
         if (
             utilisateur.AccessFailedCount == 0
             && utilisateur.VerrouillagesSubis == 0
@@ -85,31 +106,33 @@ public sealed class GardienDeVerrouillage(UserManager<Utilisateur> utilisateurs)
             return;
         }
 
-        var decide = DecisionDeVerrouillage.ApresUneReussite(Etat(utilisateur));
-
-        utilisateur.AccessFailedCount = decide.EchecsConsecutifs;
-        utilisateur.VerrouillagesSubis = decide.VerrouillagesSubis;
-        utilisateur.LockoutEnd = decide.Jusqua;
-        utilisateur.DernierEchecLe = null;
-
-        await EcrireAsync(utilisateur).ConfigureAwait(false);
+        await EcrireAsync(
+                utilisateur.Id,
+                relu => DecisionDeVerrouillage.ApresUneReussite(Etat(relu)),
+                dernierEchec: null
+            )
+            .ConfigureAwait(false);
     }
 
-    private async Task EcrireAsync(Utilisateur utilisateur)
+    private async Task<ResultatDeVerrouillage> EcrireAsync(
+        Guid compte,
+        Func<Utilisateur, ResultatDeVerrouillage> decider,
+        DateTimeOffset? dernierEchec
+    )
     {
-        var ecrit = await utilisateurs.UpdateAsync(utilisateur).ConfigureAwait(false);
+        var ecrit = await magasin
+            .AppliquerLeVerrouillageAsync(compte, decider, dernierEchec)
+            .ConfigureAwait(false);
 
-        if (!ecrit.Succeeded)
-        {
-            // Quatrième question du franchissement : un contrôle qui n'a pas
-            // pris effet doit CRIER. Un verrouillage qu'on croit posé et qui ne
-            // l'est pas laisse la porte ouverte, en silence — et le compteur
-            // repartirait de zéro à chaque tentative.
-            throw new InvalidOperationException(
-                "Le verrouillage n'a pas pu être enregistré : "
-                    + string.Join(", ", ecrit.Errors.Select(e => e.Code))
-                    + ". Le compte n'est PAS protégé et le compteur d'échecs ne progresse pas."
+        // Quatrième question du franchissement : un contrôle qui n'a pas pris
+        // effet doit CRIER. Un verrouillage qu'on croit posé et qui ne l'est pas
+        // laisse la porte ouverte, en silence — et le compteur repartirait de
+        // zéro à chaque tentative.
+        return ecrit
+            ?? throw new InvalidOperationException(
+                "Le verrouillage n'a pas pu être enregistré : le compte a disparu entre la "
+                    + "lecture et l'écriture. Le compte n'est PAS protégé et le compteur "
+                    + "d'échecs ne progresse pas."
             );
-        }
     }
 }

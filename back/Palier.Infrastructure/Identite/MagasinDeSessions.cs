@@ -230,6 +230,130 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
             .ConfigureAwait(false);
 
     /// <summary>
+    /// Applique une décision de verrouillage au compte, <b>sous verrou de
+    /// ligne</b>. Rend ce que la décision a produit, ou <c>null</c> si le compte
+    /// a disparu entre la lecture et l'écriture.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Le verrou est le sujet.</b> Le compteur d'échecs est un
+    /// lire-modifier-écrire : sans verrou, N tentatives simultanées lisent
+    /// toutes le même compteur, une seule écriture atterrit, et le
+    /// verrouillage — seule défense que la conception nomme contre un bourrage
+    /// d'identifiants distribué — se contourne en tirant les essais en
+    /// parallèle. Le <c>select … for update</c> dans une transaction sérialise
+    /// les tentatives portant sur un même compte, exactement comme
+    /// <see cref="FaireTournerAsync" /> le fait déjà pour la rotation.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Pourquoi le verrouillage d'un compte vit dans le magasin des
+    /// sessions.</b> Il lui faut <see cref="PalierAuthDbContext" />, et
+    /// <c>ArchitectureTests</c> ne l'accorde qu'à ce type. Ajouter une seconde
+    /// exemption pour un second type ouvrirait une seconde porte : la liste des
+    /// exemptions nommées est ce qui tient la garantie, et elle ne grandit pas
+    /// pour une commodité de rangement.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>La décision n'est pas prise ici.</b> Elle arrive en paramètre, et
+    /// reçoit l'état <b>relu sous verrou</b> — jamais celui qu'un appelant
+    /// aurait chargé plus tôt. <c>DecisionDeVerrouillage</c> reste ainsi pure
+    /// et couverte à 100 %.
+    /// </para>
+    ///
+    /// <para>
+    /// <c>AsNoTracking</c> n'est pas une optimisation, et <c>ExecuteUpdate</c>
+    /// non plus. Le compte a <b>déjà</b> été chargé dans ce contexte par
+    /// <c>UserManager</c> au début de la connexion : sans elle, le suivi d'EF
+    /// répondrait avec cet exemplaire périmé À LA PLACE de la ligne qu'on vient
+    /// de verrouiller, et le verrou ne protégerait rien.
+    /// </para>
+    /// </remarks>
+    public async Task<ResultatDeVerrouillage?> AppliquerLeVerrouillageAsync(
+        Guid utilisateur,
+        Func<Utilisateur, ResultatDeVerrouillage> decider,
+        DateTimeOffset? dernierEchec,
+        CancellationToken jeton = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(decider);
+
+        var strategie = contexte.Database.CreateExecutionStrategy();
+        return await strategie
+            .ExecuteAsync<ResultatDeVerrouillage?>(async () =>
+            {
+                var transaction = await contexte
+                    .Database.BeginTransactionAsync(jeton)
+                    .ConfigureAwait(false);
+                await using (transaction.ConfigureAwait(false))
+                {
+                    var compte = await contexte
+                        .Users.FromSql(
+                            $"""
+                            select * from public."AspNetUsers"
+                             where "Id" = {utilisateur}
+                             for update
+                            """
+                        )
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(jeton)
+                        .ConfigureAwait(false);
+
+                    if (compte is null)
+                    {
+                        return null;
+                    }
+
+                    var decide = decider(compte);
+
+                    // ⚠ LE JETON DE CONCURRENCE EST RENOUVELÉ ICI, ET CE N'EST PAS
+                    // UNE FORMALITÉ.
+                    //
+                    // `UserManager.UpdateAsync` le renouvelait à chaque écriture ;
+                    // `ExecuteUpdateAsync` ne le fait pas. Le remplacer sans
+                    // reprendre ce geste RETIRE une protection au lieu d'en
+                    // ajouter une : toute autre écriture d'Identity partie d'un
+                    // exemplaire périmé — et `UserStore.UpdateAsync` marque
+                    // TOUTES les colonnes modifiées — réécrirait alors sa copie
+                    // par-dessus le verrouillage.
+                    //
+                    // Mesuré : sans cette ligne, une requête des routes 2FA —
+                    // qui n'exigent AUCUN mot de passe — chargée avant qu'un
+                    // verrouillage ne tombe l'efface en écrivant, remettant
+                    // `LockoutEnd` à nul ET `VerrouillagesSubis` à zéro, ce qui
+                    // ramène l'escalade à son premier palier pour toujours.
+                    //
+                    // La course que ce verrou ferme n'est pas rouverte pour
+                    // autant : les écritures concurrentes du verrouillage sont
+                    // sérialisées par `for update`, et `ExecuteUpdate` ne
+                    // contrôle aucun jeton de concurrence — il le pose.
+                    var jetonDeConcurrence = Guid.NewGuid().ToString();
+
+                    await contexte
+                        .Users.Where(u => u.Id == utilisateur)
+                        .ExecuteUpdateAsync(
+                            u =>
+                                u.SetProperty(x => x.AccessFailedCount, decide.EchecsConsecutifs)
+                                    .SetProperty(
+                                        x => x.VerrouillagesSubis,
+                                        decide.VerrouillagesSubis
+                                    )
+                                    .SetProperty(x => x.LockoutEnd, decide.Jusqua)
+                                    .SetProperty(x => x.DernierEchecLe, dernierEchec)
+                                    .SetProperty(x => x.ConcurrencyStamp, jetonDeConcurrence),
+                            jeton
+                        )
+                        .ConfigureAwait(false);
+
+                    await transaction.CommitAsync(jeton).ConfigureAwait(false);
+                    return decide;
+                }
+            })
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Supprime les sessions éteintes. Idempotente : un second passage rend zéro.
     /// </summary>
     /// <remarks>
