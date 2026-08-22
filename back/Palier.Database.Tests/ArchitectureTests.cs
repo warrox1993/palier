@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure;
@@ -56,11 +57,38 @@ public sealed class ArchitectureTests
     /// `AspNetUsers` par email AVANT qu'aucune identité n'existe, et il n'atteint
     /// aucune table de donnée de santé — `palier_auth` n'y a aucun privilège, ce
     /// que trois épreuves de `RolesTests` exigent en code 42501.
+    /// <c>Palier.Infrastructure.Coffre.AmorcageDuTrousseau</c> — D59. Il lit
+    /// <c>cles_de_donnees</c> AVANT que le serveur accepte une requête, donc
+    /// sans identité à poser, exactement comme <c>LecteurDeSocle</c>. Motif
+    /// vérifiable ligne à ligne : il ne touche que cette table, qui ne porte
+    /// AUCUNE donnée personnelle — des enveloppes chiffrées, illisibles sans le
+    /// coffre. Il LIT et n'écrit jamais : `palier_app` n'a que <c>select</c> sur
+    /// cette table, aucune politique d'écriture n'existe, et deux épreuves de
+    /// <see cref="CleDeDonneesTests" /> l'exigent en code 42501.
     private static readonly string[] _exemptionsNommees =
     [
         "Palier.Api.Socle.LecteurDeSocle",
         "Palier.Infrastructure.Identite.MagasinDeSessions",
+        "Palier.Infrastructure.Coffre.AmorcageDuTrousseau",
     ];
+
+    [Fact]
+    public void Une_FABRIQUE_de_contexte_est_une_voie_vers_le_contexte()
+    {
+        // La quatrième question du franchissement, appliquée à la branche que
+        // D59 a ajoutée. Sans elle, un type prenant
+        // `IDbContextFactory<PalierDbContext>` atteindrait les mêmes tables
+        // sans identité et passerait le contrôle sans être vu — mesuré : c'est
+        // exactement ce qui se produisait avant qu'on la ferme.
+        //
+        // Cette épreuve rougit le jour où la branche disparaît, et c'est sa
+        // seule raison d'être : une exemption qui ne protège plus rien est pire
+        // qu'une absence d'exemption, parce qu'elle rassure.
+        var voies = Voies(typeof(Palier.Infrastructure.Coffre.AmorcageDuTrousseau)).ToArray();
+
+        Assert.NotEmpty(voies);
+        Assert.Contains(voies, v => v.Contains("fabrique", StringComparison.Ordinal));
+    }
 
     [Fact]
     public void Les_trois_assemblages_du_produit_sont_bien_charges()
@@ -221,5 +249,16 @@ public sealed class ArchitectureTests
         // seconde branche, un contexte neuf échapperait au contrôle par
         // construction : on aurait ouvert une seconde porte en croyant n'en
         // surveiller qu'une.
-        || typeof(PalierAuthDbContext).IsAssignableFrom(type);
+        || typeof(PalierAuthDbContext).IsAssignableFrom(type)
+        // D59 : une FABRIQUE de contexte est une voie vers le contexte, et
+        // c'était un trou. Un type qui prend `IDbContextFactory<PalierDbContext>`
+        // atteint exactement les mêmes tables, sans identité, et passait ce
+        // contrôle sans être vu. Le trou n'était pas théorique : le chargement
+        // du trousseau en a besoin, et une fabrique est justement ce qu'un
+        // service singleton emploie pour tenir un contexte à durée de requête.
+        || (
+            type.IsGenericType
+            && type.GetGenericTypeDefinition() == typeof(IDbContextFactory<>)
+            && EstLeContexte(type.GetGenericArguments()[0])
+        );
 }
