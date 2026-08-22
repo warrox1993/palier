@@ -14,14 +14,12 @@ namespace Palier.Database.Tests;
 /// </summary>
 public sealed class ConfigurationDuCoffreTests
 {
-    private static readonly string[] _sixClefs =
+    /// <summary>Ce que l'API exige — pas ce que le chemin peut porter.</summary>
+    private static readonly string[] _exigees =
     [
         "ConnectionStrings__Palier",
         "ConnectionStrings__PalierAuth",
-        "ConnectionStrings__PalierMigrations",
-        "ConnectionStrings__PalierSauvegarde",
         "JWT_SIGNING_KEY",
-        "GOOGLE_OAUTH_CLIENT_SECRET",
     ];
 
     // ================================================================
@@ -29,7 +27,7 @@ public sealed class ConfigurationDuCoffreTests
     // ================================================================
 
     [Fact]
-    public void Les_six_paires_du_coffre_alimentent_la_configuration()
+    public void Les_paires_du_coffre_alimentent_la_configuration()
     {
         using var messager = MessagerAvec(Toutes());
         using var http = new HttpClient(messager);
@@ -61,6 +59,22 @@ public sealed class ConfigurationDuCoffreTests
         // les cinq autres valeurs dans le journal de démarrage.
         Assert.Contains("JWT_SIGNING_KEY", faute.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Host=palier", faute.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Une_clef_SURNUMERAIRE_au_coffre_ne_gene_pas()
+    {
+        // Le chemin porte aussi les chaînes de migration et de sauvegarde, que
+        // `dotnet ef` et `pg_dump` liront. L'API ne les exige pas ; elle ne doit
+        // pas non plus s'en offusquer.
+        var avecEnPlus = Toutes();
+        avecEnPlus["ConnectionStrings__PalierMigrations"] = "Host=migrations";
+        using var messager = MessagerAvec(avecEnPlus);
+        using var http = new HttpClient(messager);
+
+        var configuration = Construire(http);
+
+        Assert.Equal("Host=migrations", configuration.GetConnectionString("PalierMigrations"));
     }
 
     // ================================================================
@@ -142,7 +156,7 @@ public sealed class ConfigurationDuCoffreTests
             .Build();
 
     private static Dictionary<string, string> Toutes() =>
-        _sixClefs.ToDictionary(
+        _exigees.ToDictionary(
             c => c,
             c =>
                 c switch

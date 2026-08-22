@@ -102,21 +102,24 @@ Plus ce qui n'est pas secret : `TRUSTED_PROXIES`, `GOOGLE_OAUTH_CLIENT_ID` (publ
 
 ### Ce qui va au Secret Manager
 
-L'action s'appelle _« Read KV engine configuration »_ : OKMS est un moteur clé-valeur, un chemin porte **plusieurs paires**. On l'exploite — deux chemins, six paires chacun :
+L'action s'appelle _« Read KV engine configuration »_ : OKMS est un moteur clé-valeur, un chemin porte **plusieurs paires**. On l'exploite — deux chemins, cinq paires chacun :
 
 ```
 palier/dev                              palier/prod
-├── ConnectionStrings__Palier           └── les six mêmes clés,
-├── ConnectionStrings__PalierAuth           valeurs de production
+├── ConnectionStrings__Palier      ⟵ exigée
+├── ConnectionStrings__PalierAuth  ⟵ exigée      └── les cinq mêmes clés,
+├── JWT_SIGNING_KEY                ⟵ exigée          valeurs de production
 ├── ConnectionStrings__PalierMigrations
-├── ConnectionStrings__PalierSauvegarde
-├── JWT_SIGNING_KEY
-└── GOOGLE_OAUTH_CLIENT_SECRET
+└── ConnectionStrings__PalierSauvegarde
 ```
 
-Un seul appel `secret/version/getData` rapporte les six. Le changement de configuration devient **atomique** : une nouvelle version porte l'ensemble cohérent, jamais un état intermédiaire où deux chaînes se contredisent.
+Un seul appel `secret/version/getData` les rapporte toutes. Le changement de configuration devient **atomique** : une nouvelle version porte l'ensemble cohérent, jamais un état intermédiaire où deux chaînes se contredisent.
 
-Les clés Stripe et celles des modèles n'y sont pas : elles n'existent pas encore. Elles y entreront le jour où elles serviront.
+**Trois sont EXIGÉES, deux seulement rangées, et la distinction n'est pas cosmétique.** L'API refuse de démarrer sans les trois qu'elle lit. Les chaînes de migration et de sauvegarde servent à `dotnet ef` et à `pg_dump` : les exiger au démarrage de l'API empêcherait de démarrer sans rien protéger — un faux garde-fou, exactement ce que le lot 1 a appris à ne pas écrire.
+
+**`GOOGLE_OAUTH_CLIENT_SECRET` n'y est pas non plus**, et c'est le même raisonnement : l'exigence 1 de l'AIPD est reportée, aucune ligne du produit ne lit ce secret. Il entrera au coffre le jour où le code l'emploiera.
+
+Les clés Stripe et celles des modèles n'y sont pas davantage : elles n'existent pas encore.
 
 ### Ce qui va en base
 

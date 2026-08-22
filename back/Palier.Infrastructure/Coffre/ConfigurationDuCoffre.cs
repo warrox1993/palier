@@ -17,18 +17,32 @@ namespace Palier.Infrastructure.Coffre;
 public static class ConfigurationDuCoffre
 {
     /// <summary>
-    /// Les six secrets attendus, énumérés ici et nulle part ailleurs. Une liste
-    /// blanche : ce qui n'y est pas ne vient pas du coffre, et ce qui y est
-    /// manque bruyamment.
+    /// Les secrets EXIGÉS au démarrage — exactement ceux que l'API lit, ni plus
+    /// ni moins. Une liste blanche : ce qui n'y est pas ne vient pas du coffre,
+    /// et ce qui y est manque bruyamment.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Elle en portait six, et c'était un faux garde-fou.</b> Y figuraient
+    /// <c>GOOGLE_OAUTH_CLIENT_SECRET</c> — qu'aucune ligne du produit ne lit,
+    /// l'exigence 1 de l'AIPD étant reportée — ainsi que les chaînes de
+    /// migration et de sauvegarde, qui servent à <c>dotnet ef</c> et à
+    /// <c>pg_dump</c>, jamais à l'API. Exiger au démarrage ce qu'on ne lit pas
+    /// ne protège rien : cela empêche seulement de démarrer.
+    /// </para>
+    ///
+    /// <para>
+    /// Le chemin du coffre peut en porter davantage, et il le fera : les
+    /// chaînes de migration et de sauvegarde y ont leur place, et les outils
+    /// qui les emploient les y liront. Ce qui est exigé ici est ce qui manque à
+    /// l'API pour servir une requête.
+    /// </para>
+    /// </remarks>
     public static readonly string[] ClefsAttendues =
     [
         "ConnectionStrings__Palier",
         "ConnectionStrings__PalierAuth",
-        "ConnectionStrings__PalierMigrations",
-        "ConnectionStrings__PalierSauvegarde",
         "JWT_SIGNING_KEY",
-        "GOOGLE_OAUTH_CLIENT_SECRET",
     ];
 
     /// <summary>
