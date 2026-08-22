@@ -144,11 +144,20 @@ divergent.
 
 **Ce qui reste ouvert, et doit figurer au registre comme tel :**
 
-- **Le secret TOTP demeure en clair** dans `AspNetUserTokens`. Il ne peut pas
-  être haché — le serveur le relit à chaque vérification — et le chiffrer
-  demande une décision de gestion de clé qui n'est pas prise. Quiconque obtient
-  une lecture de la base peut donc encore forger un second facteur, à condition
-  de disposer par ailleurs du mot de passe.
+- ~~**Le secret TOTP demeure en clair**~~ — **fermé le 22/08/2026 par D59.** La
+  décision de gestion de clé a été prise : coffre OVHcloud KMS, chiffrement
+  AES-GCM-256 sous une clé de données dont l'enveloppe seule vit en base. Le
+  secret est **lié à son propriétaire** par les données associées : recopié d'un
+  compte vers un autre, il ne se déchiffre plus. Les secrets hérités en clair
+  sont migrés au premier contact.
+
+  **Deux compromissions indépendantes** sont désormais nécessaires : la lecture
+  de la base ne donne que des chiffrés, et le compte de service du coffre ne
+  donne rien sans elle. Reste au registre un point d'exploitation : les secrets
+  écrits en clair avant le 22/08 ont laissé leur trace dans le journal
+  d'écriture anticipée de PostgreSQL. Aucun code ne peut l'effacer — la
+  réparation est une rotation du WAL et une sauvegarde neuve après migration.
+
 - **`GET /api/v1/sante` est passée derrière l'authentification**, comme D41
   l'exigeait depuis le lot 4 — elle publiait l'identifiant exact de la dernière
   migration appliquée. Le **rôle d'administration** que D41 demande également

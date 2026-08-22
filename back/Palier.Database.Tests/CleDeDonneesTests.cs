@@ -26,7 +26,7 @@ public sealed class CleDeDonneesTests(BaseFixture baseDeDonnees)
     // ================================================================
 
     [Fact]
-    public async Task palier_app_LIT_les_cles_de_donnees()
+    public async Task Le_role_palier_app_LIT_les_cles_de_donnees()
     {
         var id = await PoserUneEnveloppeAsync();
 
@@ -53,7 +53,7 @@ public sealed class CleDeDonneesTests(BaseFixture baseDeDonnees)
     // ================================================================
 
     [Fact]
-    public async Task palier_app_NE_PEUT_PAS_ecrire_une_cle_de_donnees()
+    public async Task Le_role_palier_app_NE_PEUT_PAS_ecrire_une_cle_de_donnees()
     {
         var refus = await Assert.ThrowsAsync<PostgresException>(async () =>
         {

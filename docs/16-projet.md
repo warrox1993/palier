@@ -163,13 +163,20 @@ VITE_STRIPE_PUBLISHABLE_KEY=
 `back/.env.example` — **rien de tout cela n'atteint le navigateur** :
 
 ```bash
-# Base de données PostgreSQL, hébergée chez OVHcloud (D15)
-ConnectionStrings__Palier=
+# Le coffre OVHcloud KMS (D59). CES CINQ VARIABLES SONT L'AMORÇAGE : elles ne
+# peuvent pas aller au coffre, ce sont elles qui l'ouvrent. Tout le reste des
+# SECRETS y a migré — les quatre chaînes de connexion, JWT_SIGNING_KEY et
+# GOOGLE_OAUTH_CLIENT_SECRET —, et ce qui n'est pas secret reste ici.
+OKMS_ENDPOINT=
+OKMS_ID=
+OKMS_KEY_ID=
+OKMS_CLIENT_ID=
+OKMS_CLIENT_SECRET=
 
-# Authentification (D17) — ASP.NET Identity
-JWT_SIGNING_KEY=
+# Ce qui n'est PAS secret et reste donc dans l'environnement : l'identifiant
+# client Google est public par construction — il apparaît dans l'URL de
+# redirection OAuth.
 GOOGLE_OAUTH_CLIENT_ID=
-GOOGLE_OAUTH_CLIENT_SECRET=
 
 # Modèles — serveur uniquement
 ANTHROPIC_API_KEY=
@@ -187,6 +194,18 @@ OPENFOODFACTS_USER_AGENT=
 # Observabilité
 SENTRY_DSN=
 ```
+
+**Poser la première clé de données** — une fois, avant le premier démarrage, et
+de nouveau à chaque rotation :
+
+```bash
+dotnet run --project back/Palier.Api -- poser-cle-de-donnees
+```
+
+L'API n'en crée jamais : une table `cles_de_donnees` vide **refuse le
+démarrage**. Une API qui fabriquerait sa clé quand elle n'en trouve pas en
+fabriquerait une chaque fois qu'elle démarre contre une base qu'elle ne lit pas,
+et rendrait illisibles, en silence, tous les secrets chiffrés par la précédente.
 
 **Aucune clé de modèle ni de service ne doit être accessible côté client.** Tout
 appel aux modèles passe par le backend, jamais par le navigateur. Ce n'est pas

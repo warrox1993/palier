@@ -11,6 +11,7 @@
 // ne l'enlève, et celui-ci répondait en clair sur la racine du domaine.
 using Palier.Api;
 using Palier.Api.Outils;
+using Palier.Infrastructure.Coffre;
 
 // La commande d'exploitation passe AVANT la construction de l'hôte : elle pose
 // la première clé de données, et le démarrage normal en dépend. Elle lit sa
@@ -23,11 +24,24 @@ if (args is [PoserUneCleDeDonnees.Nom, ..])
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Le coffre, AVANT la composition : les chaînes de connexion et la clé de
+// signature en viennent, et `Composer` les lit. L'API refuse de démarrer si le
+// coffre est injoignable, si un secret manque ou si l'environnement n'a pas de
+// chemin — c'est délibéré, un démarrage sans coffre serait un démarrage sans
+// configuration.
+builder.Configuration.AjouterLeCoffre(builder.Environment.EnvironmentName);
+
 Composition.Composer(builder);
 
 var app = builder.Build();
 
 Composition.Router(app);
+
+// Étapes 6 et 7 : le trousseau, chargé avant que le port s'ouvre. Une table de
+// clés vide, ou une enveloppe que le coffre refuse, arrêtent ici.
+await app.Services.GetRequiredService<AmorcageDuTrousseau>()
+    .ChargerAsync(CancellationToken.None)
+    .ConfigureAwait(false);
 
 await app.RunAsync().ConfigureAwait(false);
 

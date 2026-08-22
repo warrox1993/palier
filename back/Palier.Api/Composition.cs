@@ -282,6 +282,34 @@ internal static class Composition
         // pendant une requête d'utilisateur, ce que la conception écarte.
         constructeur.Services.AddSingleton<PorteurDeTrousseau>();
 
+        // Les trois services du coffre. Tous PARESSEUX : le conteneur ne les
+        // construit qu'à la première résolution, et seul `Program` la demande.
+        // Les épreuves composent donc l'application réelle sans jamais parler
+        // au coffre — et sans que ces lignes soient une branche morte, puisque
+        // le démarrage réel les emprunte toutes.
+        constructeur.Services.AddSingleton(fournisseur =>
+            ReglagesDuCoffre.Depuis(
+                fournisseur.GetRequiredService<IConfiguration>()
+            )
+        );
+
+        constructeur.Services.AddSingleton(fournisseur => new ClientOkms(
+            new HttpClient { Timeout = TimeSpan.FromSeconds(10) },
+            fournisseur.GetRequiredService<ReglagesDuCoffre>()
+        ));
+
+        // Une fabrique explicite plutôt que `AddDbContextFactory` : celui-ci
+        // entre en conflit avec le `AddDbContext` déjà posé plus haut sur la
+        // durée de vie de `DbContextOptions<PalierDbContext>`. Trois lignes
+        // valent mieux qu'un réglage dont l'effet se découvre au démarrage.
+        constructeur.Services.AddSingleton<IDbContextFactory<PalierDbContext>>(
+            _ => new FabriqueDeContextePalier(
+                new DbContextOptionsBuilder<PalierDbContext>().UseNpgsql(chaine).Options
+            )
+        );
+
+        constructeur.Services.AddSingleton<AmorcageDuTrousseau>();
+
         constructeur.Services.AddSingleton(TimeProvider.System);
 
         // Le SEUL objet qui détient la clé. Elle n'est relue nulle part
