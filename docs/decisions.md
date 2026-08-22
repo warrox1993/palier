@@ -966,3 +966,27 @@ Un scan de sécurité a rendu 14 pistes vérifiées sur `back` et `db` — 82 ca
 - **Le budget de 400 ms** est calé sur une machine de développement. À revoir sur l'instance OVHcloud, où le PBKDF2 sera plus lent.
 
 **Ce qui la rouvrirait :** un audit ultérieur, que ces corrections n'exemptent de rien — un scan est non déterministe, et le relancer construit la couverture dans le temps.
+
+---
+
+## D59 — Le coffre des secrets est OVHcloud KMS, et non Azure Key Vault
+
+**Tranché le :** 22/08/2026. **Choisi par le porteur du projet**, qui avait d'abord nommé Azure Key Vault et a retenu OVHcloud après que la contradiction lui eut été signalée.
+
+D58 laissait ouverte la seule chose qui manquait au chiffrement du secret TOTP : où vit la clé. La demande initiale était Azure Key Vault. **Elle contredisait D15**, et pas à la marge : D15 pose OVHcloud parce qu'un fournisseur européen est hors portée du CLOUD Act, ce qui compte pour des données de santé relevant de l'article 9. Confier à Microsoft la clé qui ouvre ces données aurait laissé la donnée en Europe et fait basculer la clé sous une autre juridiction — un déplacement qui vide D15 de son sens sans jamais déplacer un octet.
+
+**Ce qui a été mesuré, et non supposé.** Une sonde jetable exécutée le 22/08 contre le domaine réel a établi que l'URL du jeton OAuth2 est `https://www.ovh.com/auth/oauth2/token` — aucune des trois adresses en `ovhcloud.com` ne répond autre chose qu'une page marketing en `404` —, que `datakey` rend une clé de 32 octets et une enveloppe au format JWE compact portant `x-key-ver`, et que `datakey/decrypt` coûte **30 ms de médiane** (27 min, 33 max). Le coffre injoignable échoue en 91 ms.
+
+**Ce que `x-key-ver` a changé au design.** OVH versionne la clé maîtresse et fait voyager le numéro _dans_ l'enveloppe. La rotation de la clé maîtresse ne demande donc aucun code : le format la porte. Seule la rotation de la clé de données restait à concevoir, et elle l'est.
+
+**Ce que la politique IAM accorde :** sept actions sur cinquante-neuf, une ressource, une identité. Aucune suppression, aucune modification, aucune signature — un compte de service volé permet de lire et d'écrire, jamais de rendre les données illisibles.
+
+**Les voies écartées.**
+
+- **Azure Key Vault, AWS KMS, Google Cloud KMS** — trois fournisseurs sous CLOUD Act. Écartés par D15, pas par leurs mérites techniques.
+- **Un secret simple pour la clé du TOTP, sans enveloppe** — plus simple, et strictement plus faible : une seule compromission suffirait. L'enveloppe stockée en base exige **deux compromissions indépendantes**, le serveur _et_ la base.
+- **Déchiffrer au coffre à chaque vérification TOTP** — 30 ms le permettraient. C'est la disponibilité qui l'interdit : chaque connexion à deux facteurs dépendrait alors de la joignabilité d'un service tiers.
+
+**Ce qui la rouvrirait :** un modèle de menace où le vidage mémoire du processus devient crédible — l'alternative serait alors l'appel par vérification, dont le coût est mesuré. Ou une rupture de service OKMS répétée, qui remettrait en cause le refus de démarrer.
+
+**Conception détaillée :** `docs/superpowers/specs/2026-08-22-coffre-des-secrets-design.md`.
