@@ -375,6 +375,119 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         );
     }
 
+    [Fact]
+    public async Task Une_adresse_INCONNUE_et_un_MAUVAIS_mot_de_passe_mettent_le_MEME_TEMPS()
+    {
+        // L'égalité des messages ne suffit pas : le temps parle aussi. Une
+        // adresse connue dont le mot de passe est faux paie en plus
+        // l'enregistrement de l'échec — une transaction avec verrou de ligne
+        // depuis que le compteur est sérialisé. Chronométrer séparait les deux
+        // populations et rendait l'annuaire interrogeable malgré des corps
+        // identiques à l'octet près.
+        //
+        // Cette épreuve MESURE, elle ne relit pas : un canal temporel ne se
+        // ferme pas par lecture de code.
+        await using var hote = Hote();
+        using var portee = hote.Services.CreateScope();
+        var connue = await InscritAsync(portee.ServiceProvider);
+
+        // Un tour à blanc : la première connexion paie la mise en route d'EF et
+        // du pool, et fausserait la comparaison.
+        await MesurerAsync(portee.ServiceProvider, connue, "un-tout-autre-mot-de-passe-42");
+
+        var inconnue = new List<double>();
+        var mauvaise = new List<double>();
+        for (var i = 0; i < 3; i++)
+        {
+            inconnue.Add(
+                await MesurerAsync(portee.ServiceProvider, EmailNeuf(), _motDePasseSolide)
+            );
+            mauvaise.Add(
+                await MesurerAsync(portee.ServiceProvider, connue, "un-tout-autre-mot-de-passe-42")
+            );
+        }
+
+        var ecart = Math.Abs(inconnue.Average() - mauvaise.Average());
+
+        // LE SEUIL EST LITTÉRAL, et l'assertion qui suit dit pourquoi.
+        //
+        // Le dériver du budget rendrait cette épreuve vraie par construction :
+        // réduire le budget réduirait la tolérance dans la même proportion, et
+        // l'épreuve rougirait pour la mauvaise raison. C'est exactement le
+        // défaut trouvé sur la fenêtre de verrouillage du lot 4 — une épreuve
+        // dont l'entrée dérive du réglage qu'elle éprouve ne mord jamais où il
+        // faut.
+        const double toleranceEnMs = 30;
+
+        Assert.True(
+            PointsDEntree.BudgetDeRefus.TotalMilliseconds > toleranceEnMs * 3,
+            $"le budget vaut {PointsDEntree.BudgetDeRefus.TotalMilliseconds:F0} ms pour une "
+                + $"tolérance de {toleranceEnMs:F0} ms : il n'a plus de marge pour masquer quoi "
+                + "que ce soit, et cette épreuve ne prouve plus rien."
+        );
+
+        // Mesuré sans égalisation, sur cette machine : 164 ms pour une adresse
+        // inconnue contre 159 ms pour un mot de passe faux — cinq millisecondes
+        // d'écart sur cent soixante. Petit, mais stable et moyennable, donc
+        // exploitable par qui sonde en masse.
+        Assert.True(
+            ecart < toleranceEnMs,
+            $"adresse inconnue {inconnue.Average():F0} ms contre mauvais mot de passe "
+                + $"{mauvaise.Average():F0} ms — écart de {ecart:F0} ms. Le temps de réponse "
+                + "distingue une adresse qui a un compte d'une adresse qui n'en a pas."
+        );
+
+        // ET LE BUDGET EST TENU SUR LES DEUX BRANCHES. C'est cette assertion
+        // qui porte l'épreuve, pas celle de l'écart.
+        //
+        // Mesuré : sans égalisation, l'écart naturel n'est que de cinq
+        // millisecondes — déjà sous la tolérance ci-dessus. Une épreuve qui ne
+        // regarderait que l'écart resterait donc VERTE sans égalisation, et ne
+        // garderait rien. Ce qui distingue « égalisé » de « non égalisé », c'est
+        // que les deux branches reviennent au budget et non à leur coût propre.
+        foreach (var (nom, mesures) in new[] { ("inconnue", inconnue), ("mauvaise", mauvaise) })
+        {
+            Assert.True(
+                mesures.Average() >= PointsDEntree.BudgetDeRefus.TotalMilliseconds * 0.9,
+                $"la branche « {nom} » revient en {mesures.Average():F0} ms, sous le budget de "
+                    + $"{PointsDEntree.BudgetDeRefus.TotalMilliseconds:F0} ms : l'égalisation "
+                    + "n'est pas appliquée, et chaque branche paie son coût propre — donc le "
+                    + "temps la trahit."
+            );
+        }
+    }
+
+    /// <summary>Le temps qu'une connexion refusée met à revenir, en millisecondes.</summary>
+    private static async Task<double> MesurerAsync(
+        IServiceProvider services,
+        string email,
+        string motDePasse
+    )
+    {
+        using var portee = services.GetRequiredService<IServiceScopeFactory>().CreateScope();
+        var contexte = HarnaisHttp.Contexte(portee.ServiceProvider);
+
+        var depart = System.Diagnostics.Stopwatch.GetTimestamp();
+        var (code, _) = await HarnaisHttp.ExecuterAsync(
+            portee.ServiceProvider,
+            PointsDEntree.ConnecterAsync(
+                new DemandeDIdentifiants(email, motDePasse),
+                portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
+                portee.ServiceProvider.GetRequiredService<MagasinDeSessions>(),
+                portee.ServiceProvider.GetRequiredService<SignataireDeJetons>(),
+                portee.ServiceProvider.GetRequiredService<GardienDeVerrouillage>(),
+                portee.ServiceProvider.GetRequiredService<IPasswordHasher<Utilisateur>>(),
+                TimeProvider.System,
+                contexte,
+                CancellationToken.None
+            ),
+            contexte
+        );
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, code);
+        return System.Diagnostics.Stopwatch.GetElapsedTime(depart).TotalMilliseconds;
+    }
+
     // ================================================================
     // Le harnais
     // ================================================================

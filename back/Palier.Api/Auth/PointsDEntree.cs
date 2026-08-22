@@ -77,6 +77,42 @@ internal static class PointsDEntree
         "DuplicateEmail",
     ];
 
+    /// <summary>
+    /// Le temps minimum qu'un refus de connexion met à revenir.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Le message identique ne suffit pas : le temps parle aussi.</b> Les
+    /// branches de refus ne coûtent pas la même chose. Une adresse inconnue ne
+    /// paie qu'un PBKDF2 ; une adresse CONNUE dont le mot de passe est faux paie
+    /// en plus l'enregistrement de l'échec — une transaction avec verrou de
+    /// ligne depuis que le compteur est sérialisé. Chronométrer la réponse
+    /// séparait donc les deux populations, et rendait l'annuaire interrogeable
+    /// malgré des corps de réponse identiques à l'octet près.
+    /// </para>
+    ///
+    /// <para>
+    /// Sur un produit de santé, l'annuaire EST la donnée sensible : savoir que
+    /// quelqu'un a un compte ici, c'est savoir qu'il suit un entraînement.
+    /// </para>
+    ///
+    /// <para>
+    /// Toutes les branches de refus attendent donc le même budget : adresse
+    /// inconnue, compte verrouillé, mot de passe faux, second facteur absent ou
+    /// faux. La valeur couvre le pire chemin — PBKDF2 à 210 000 itérations plus
+    /// la transaction d'échec — avec de la marge pour une base lente. Trop
+    /// courte, elle ne masquerait rien ; démesurée, elle offrirait un levier
+    /// d'épuisement à qui ouvre mille connexions.
+    /// </para>
+    ///
+    /// <para>
+    /// Le chemin de RÉUSSITE n'est pas égalisé, délibérément : il rend un jeton,
+    /// donc il se distingue déjà par son corps. L'égaliser ne coûterait que de
+    /// la latence à l'utilisateur légitime.
+    /// </para>
+    /// </remarks>
+    public static TimeSpan BudgetDeRefus => TimeSpan.FromMilliseconds(400);
+
     /// <summary>La longueur au-delà de laquelle l'appareil déclaré est coupé.</summary>
     /// <remarks>
     /// Un <c>User-Agent</c> est entièrement sous le contrôle du client : rien
@@ -194,6 +230,11 @@ internal static class PointsDEntree
 
         var email = corps.Email?.Trim() ?? string.Empty;
         var maintenant = horloge.GetUtcNow();
+
+        // Le chronomètre part ICI, avant toute lecture : c'est ce qui permet à
+        // chaque branche de refus de revenir au même instant.
+        var depart = horloge.GetTimestamp();
+
         var utilisateur = string.IsNullOrEmpty(email)
             ? null
             : await utilisateurs.FindByEmailAsync(email).ConfigureAwait(false);
@@ -208,7 +249,7 @@ internal static class PointsDEntree
         if (utilisateur is null)
         {
             _ = hacheur.HashPassword(new Utilisateur(), corps.MotDePasse ?? string.Empty);
-            return Refus();
+            return await RefusEgaliseAsync(horloge, depart, jeton).ConfigureAwait(false);
         }
 
         // ⚠ LE VERROU SE CONTRÔLE AVANT LA VÉRIFICATION DU MOT DE PASSE, ET
@@ -227,14 +268,14 @@ internal static class PointsDEntree
         if (GardienDeVerrouillage.EstVerrouille(utilisateur, maintenant))
         {
             _ = hacheur.HashPassword(new Utilisateur(), corps.MotDePasse ?? string.Empty);
-            return Refus();
+            return await RefusEgaliseAsync(horloge, depart, jeton).ConfigureAwait(false);
         }
 
         var motDePasse = corps.MotDePasse ?? string.Empty;
         if (!await utilisateurs.CheckPasswordAsync(utilisateur, motDePasse).ConfigureAwait(false))
         {
             await gardien.EnregistrerUnEchecAsync(utilisateur, maintenant).ConfigureAwait(false);
-            return Refus();
+            return await RefusEgaliseAsync(horloge, depart, jeton).ConfigureAwait(false);
         }
 
         // La double authentification, si elle est active. Le mot de passe vient
@@ -247,10 +288,16 @@ internal static class PointsDEntree
 
             if (string.IsNullOrWhiteSpace(code))
             {
-                return Results.Json(
-                    new Reponse("DeuxFacteursRequis"),
-                    statusCode: StatusCodes.Status401Unauthorized
-                );
+                return await EgaliserAsync(
+                        horloge,
+                        depart,
+                        Results.Json(
+                            new Reponse("DeuxFacteursRequis"),
+                            statusCode: StatusCodes.Status401Unauthorized
+                        ),
+                        jeton
+                    )
+                    .ConfigureAwait(false);
             }
 
             if (
@@ -265,10 +312,16 @@ internal static class PointsDEntree
                 // verrouiller.
                 await gardien.EnregistrerUnEchecAsync(utilisateur, maintenant).ConfigureAwait(false);
 
-                return Results.Json(
-                    new Reponse("DeuxFacteursRequis"),
-                    statusCode: StatusCodes.Status401Unauthorized
-                );
+                return await EgaliserAsync(
+                        horloge,
+                        depart,
+                        Results.Json(
+                            new Reponse("DeuxFacteursRequis"),
+                            statusCode: StatusCodes.Status401Unauthorized
+                        ),
+                        jeton
+                    )
+                    .ConfigureAwait(false);
             }
         }
 
@@ -448,6 +501,36 @@ internal static class PointsDEntree
 
     private static IResult Enregistree() =>
         Results.Json(new Reponse("InscriptionEnregistree"), statusCode: StatusCodes.Status202Accepted);
+
+    /// <summary>Rend le refus générique, pas avant le budget.</summary>
+    private static Task<IResult> RefusEgaliseAsync(
+        TimeProvider horloge,
+        long depart,
+        CancellationToken jeton
+    ) => EgaliserAsync(horloge, depart, Refus(), jeton);
+
+    /// <summary>Attend que le budget soit écoulé, puis rend la réponse.</summary>
+    /// <remarks>
+    /// L'attente est calculée sur le temps DÉJÀ passé, jamais ajoutée en bloc :
+    /// une branche lente n'attend rien, une branche rapide comble l'écart, et
+    /// les deux reviennent au même instant. Ajouter un délai fixe à toutes
+    /// laisserait l'écart intact, simplement décalé.
+    /// </remarks>
+    private static async Task<IResult> EgaliserAsync(
+        TimeProvider horloge,
+        long depart,
+        IResult reponse,
+        CancellationToken jeton
+    )
+    {
+        var reste = BudgetDeRefus - horloge.GetElapsedTime(depart);
+        if (reste > TimeSpan.Zero)
+        {
+            await Task.Delay(reste, horloge, jeton).ConfigureAwait(false);
+        }
+
+        return reponse;
+    }
 
     private static IResult Refus() =>
         Results.Json(
