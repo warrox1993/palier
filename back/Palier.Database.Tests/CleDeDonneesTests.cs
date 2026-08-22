@@ -1,4 +1,6 @@
 using Npgsql;
+using Palier.Api.Outils;
+using Palier.Infrastructure.Coffre;
 
 namespace Palier.Database.Tests;
 
@@ -132,6 +134,112 @@ public sealed class CleDeDonneesTests(BaseFixture baseDeDonnees)
             1L,
             await commande.ExecuteScalarAsync()
         );
+    }
+
+
+    // ================================================================
+    // Épreuve 5 — la commande d'exploitation pose la première clé
+    // ================================================================
+
+    [Fact]
+    public async Task La_commande_pose_une_cle_SANS_demarrer_le_serveur()
+    {
+        await ViderAsync();
+        using var messager = new MessagerFactice(Jeton(), DataKey("enveloppe-posee"));
+        using var http = new HttpClient(messager);
+
+        var code = await PoserUneCleDeDonnees.ExecuterAsync(
+            baseDeDonnees.ChaineMigrations,
+            new ClientOkms(http, ReglagesDeLEpreuve()),
+            CancellationToken.None
+        );
+
+        Assert.Equal(0, code);
+        Assert.Equal(1, await CompterAsync());
+    }
+
+    // ================================================================
+    // Épreuve 6 — rejouée, elle AJOUTE : c'est la rotation
+    // ================================================================
+
+    [Fact]
+    public async Task Rejouer_la_commande_AJOUTE_une_cle_sans_toucher_a_la_precedente()
+    {
+        // Sans cette propriété, la rotation effacerait les anciens secrets au
+        // lieu de les laisser lisibles — et personne ne le verrait avant la
+        // prochaine connexion à deux facteurs.
+        await ViderAsync();
+        await ExecuterAsync("premiere");
+        await ExecuterAsync("seconde");
+
+        await using var connexion = await OuvrirAsync(baseDeDonnees.ChaineApp);
+        await using var commande = new NpgsqlCommand(
+            "select enveloppe from public.cles_de_donnees order by creee_le",
+            connexion
+        );
+        await using var lecteur = await commande.ExecuteReaderAsync();
+
+        var enveloppes = new List<string>();
+        while (await lecteur.ReadAsync())
+        {
+            enveloppes.Add(lecteur.GetString(0));
+        }
+
+        Assert.Equal(2, enveloppes.Count);
+        Assert.Contains("premiere", enveloppes);
+        Assert.Contains("seconde", enveloppes);
+    }
+
+    // ================================================================
+
+    private async Task ExecuterAsync(string enveloppe)
+    {
+        using var messager = new MessagerFactice(Jeton(), DataKey(enveloppe));
+        using var http = new HttpClient(messager);
+        await PoserUneCleDeDonnees.ExecuterAsync(
+            baseDeDonnees.ChaineMigrations,
+            new ClientOkms(http, ReglagesDeLEpreuve()),
+            CancellationToken.None
+        );
+    }
+
+    private static ReglagesDuCoffre ReglagesDeLEpreuve() =>
+        new("https://coffre.invalid", "domaine", "cle", "EU.client", "secret");
+
+    private static HttpResponseMessage Jeton() =>
+        Json("""{"access_token":"jeton","expires_in":3599}""");
+
+    private static HttpResponseMessage DataKey(string enveloppe) =>
+        Json(
+            $$"""
+            {"key":"{{enveloppe}}","plaintext":"HcLxC2yurpdz4UFS8mNHVmxwNx6RaiLI5ultaBqfTJc="}
+            """
+        );
+
+    private static HttpResponseMessage Json(string corps) =>
+        new(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(corps, System.Text.Encoding.UTF8, "application/json"),
+        };
+
+    private async Task ViderAsync()
+    {
+        await using var connexion = await OuvrirAsync(baseDeDonnees.ChaineMigrations);
+        await using var commande = new NpgsqlCommand(
+            "delete from public.cles_de_donnees",
+            connexion
+        );
+        await commande.ExecuteNonQueryAsync();
+    }
+
+    private async Task<long> CompterAsync()
+    {
+        await using var connexion = await OuvrirAsync(baseDeDonnees.ChaineApp);
+        await using var commande = new NpgsqlCommand(
+            "select count(*) from public.cles_de_donnees",
+            connexion
+        );
+        return (long)(await commande.ExecuteScalarAsync())!;
     }
 
     // ================================================================
