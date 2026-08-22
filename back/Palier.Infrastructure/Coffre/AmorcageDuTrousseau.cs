@@ -56,7 +56,20 @@ public sealed class AmorcageDuTrousseau(
                     .DeballerAsync(enveloppe.Enveloppe, jeton)
                     .ConfigureAwait(false);
             }
-            catch (Exception faute) when (faute is InvalidOperationException or HttpRequestException)
+            // `OperationCanceledException` n'est PAS un oubli comblé au hasard :
+            // depuis .NET 5, un dépassement de `HttpClient.Timeout` lève un
+            // `TaskCanceledException`, qui n'hérite PAS de
+            // `HttpRequestException`. Sans cette branche, le cas que le délai
+            // de dix secondes existe justement pour attraper — un coffre LENT —
+            // remonterait brut, sans l'identifiant de l'enveloppe, et sur une
+            // base ayant subi une rotation l'exploitant ne saurait pas laquelle
+            // accuser. Trouvé en revue le 22/08/2026.
+            catch (Exception faute)
+                when (faute
+                    is InvalidOperationException
+                        or HttpRequestException
+                        or OperationCanceledException
+                )
             {
                 // L'identifiant, jamais l'enveloppe : elle n'est pas secrète,
                 // mais un journal qui la recopie apprend à la relire.

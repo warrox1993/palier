@@ -22,6 +22,10 @@
     "erreur": {
       "titre": "The data layer is not responding",
       "aide": "The database is stopped or unreachable. In development, start it again with the db:up command, then refresh."
+    },
+    "authentification": {
+      "titre": "This status requires a session",
+      "aide": "The route that publishes it is restricted to authenticated accounts. The database itself is responding normally: nothing to restart."
     }
   }
 }

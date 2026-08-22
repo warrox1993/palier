@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { lireEtatDuSocle, SocleInjoignableError } from './etat'
+import { AuthentificationRequiseError, lireEtatDuSocle, SocleInjoignableError } from './etat'
 
 /**
  * Le module d'accès, éprouvé SANS React. Les trois formes de réponse qui ne
@@ -63,5 +63,31 @@ describe("lecture de l'état du socle", () => {
     vi.mocked(fetch).mockResolvedValue(reponse({ schema: 'S1' }))
 
     await expect(lireEtatDuSocle()).rejects.toBeInstanceOf(SocleInjoignableError)
+  })
+
+  it("distingue un REFUS D'AUTHENTIFICATION d'une base injoignable", async () => {
+    // D41 a ferme `/api/v1/sante` derriere l'authentification. Sans cette
+    // distinction, l'ecran envoie le developpeur relancer un conteneur qui
+    // tourne deja -- mesure le 22/08/2026, message a l'appui.
+    vi.mocked(fetch).mockResolvedValue(reponse({}, 401))
+
+    await expect(lireEtatDuSocle()).rejects.toBeInstanceOf(AuthentificationRequiseError)
+  })
+
+  it('traite un 403 comme le meme refus : le droit manque, pas la base', async () => {
+    vi.mocked(fetch).mockResolvedValue(reponse({}, 403))
+
+    await expect(lireEtatDuSocle()).rejects.toBeInstanceOf(AuthentificationRequiseError)
+  })
+
+  it("garde un 503 du cote de la base : c'est bien elle qui ne repond pas", async () => {
+    // La borne. Sans elle, faire de TOUT echec un refus d'authentification
+    // passerait les deux epreuves ci-dessus sans rien distinguer.
+    vi.mocked(fetch).mockResolvedValue(reponse({}, 503))
+
+    const faute = await lireEtatDuSocle().catch((raison: unknown) => raison)
+
+    expect(faute).toBeInstanceOf(SocleInjoignableError)
+    expect(faute).not.toBeInstanceOf(AuthentificationRequiseError)
   })
 })

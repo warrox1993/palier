@@ -101,4 +101,19 @@ describe("l'écran d'état", () => {
     })
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2)
   })
+
+  it("montre l'etat AUTHENTIFICATION sur un 401, et NON une base arretee", async () => {
+    vi.mocked(fetch).mockResolvedValue(reponse({}, 401))
+
+    render(<EcranEtat />)
+
+    await waitFor(() => {
+      expect(screen.getByText(i18next.t('etat.authentification.titre'))).toBeInTheDocument()
+    })
+
+    // La seconde assertion est celle qui protege : avec l'ancien
+    // comportement, l'ecran affichait « relancer la base » alors que la base
+    // tournait. Elle rougit si les deux causes se reconfondent.
+    expect(screen.queryByText(i18next.t('etat.erreur.titre'))).not.toBeInTheDocument()
+  })
 })

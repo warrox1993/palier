@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { lireEtatDuSocle, type EtatDuSocle } from './etat'
+import { AuthentificationRequiseError, lireEtatDuSocle, type EtatDuSocle } from './etat'
 import './etat.css'
 
 /**
@@ -29,6 +29,7 @@ import './etat.css'
 type Phase =
   | { readonly nom: 'chargement' }
   | { readonly nom: 'erreur' }
+  | { readonly nom: 'authentification' }
   | { readonly nom: 'vide'; readonly etat: EtatDuSocle }
   | { readonly nom: 'contenu'; readonly etat: EtatDuSocle }
 
@@ -59,10 +60,15 @@ export function EcranEtat() {
           etat.referentielNutriments === 0 ? { nom: 'vide', etat } : { nom: 'contenu', etat },
         )
       })
-      .catch(() => {
+      .catch((raison: unknown) => {
         // Le motif technique n'est NI affiché NI journalisé : `01-conformite.md`
-        // § 4, et un message d'erreur d'API n'a aucune clé de traduction.
-        if (!abandon.signal.aborted) setPhase({ nom: 'erreur' })
+        // § 4, et un message d'erreur d'API n'a aucune clé de traduction. SEUL
+        // le TYPE de l'échec décide de l'état — un refus d'authentification et
+        // une base arrêtée n'appellent pas la même conduite.
+        if (abandon.signal.aborted) return
+        setPhase({
+          nom: raison instanceof AuthentificationRequiseError ? 'authentification' : 'erreur',
+        })
       })
 
     return () => {
@@ -89,6 +95,16 @@ export function EcranEtat() {
         <div className="etat__bloc" data-etat="erreur" role="alert">
           <p>{t('etat.erreur.titre')}</p>
           <p className="etat__aide">{t('etat.erreur.aide')}</p>
+        </div>
+      )}
+
+      {/* Même apparence que l'erreur — `data-etat` les distingue pour le style
+          et pour les épreuves — mais un message qui dit la VRAIE cause. Le
+          précédent envoyait relancer une base qui tournait. */}
+      {phase.nom === 'authentification' && (
+        <div className="etat__bloc" data-etat="authentification" role="alert">
+          <p>{t('etat.authentification.titre')}</p>
+          <p className="etat__aide">{t('etat.authentification.aide')}</p>
         </div>
       )}
 

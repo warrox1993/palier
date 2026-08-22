@@ -107,6 +107,35 @@ public sealed class AmorcageDuTrousseauTests(BaseFixture baseDeDonnees)
         Assert.Contains("AmorcageDuTrousseau", faute.Message, StringComparison.Ordinal);
     }
 
+
+    // ================================================================
+    // Épreuve 5 — un coffre LENT nomme quand même l'enveloppe
+    // ================================================================
+
+    [Fact]
+    public async Task Un_coffre_qui_DEPASSE_le_delai_nomme_encore_l_enveloppe()
+    {
+        // Le délai de dix secondes existe pour ce cas précis, et depuis .NET 5
+        // un dépassement de `HttpClient.Timeout` lève `TaskCanceledException` —
+        // qui n'hérite pas de `HttpRequestException`. Sans la branche
+        // correspondante, l'exception remontait brute : sur une base ayant subi
+        // une rotation, l'exploitant ne saurait pas quelle enveloppe accuser.
+        // La table est vidée d'abord : l'amorçage bute sur la PREMIÈRE
+        // enveloppe, et sans cela l'épreuve accuserait celle qu'un autre cas
+        // a laissée derrière lui.
+        await ViderLesClesAsync();
+        var id = await PoserAsync("enveloppe-lente", DateTimeOffset.UtcNow);
+        using var messager = new MessagerQuiExpire();
+        using var http = new HttpClient(messager);
+
+        var faute = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Amorcage(http).ChargerAsync(CancellationToken.None)
+        );
+
+        Assert.Contains("enveloppe", faute.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(id.ToString("N"), faute.Message, StringComparison.Ordinal);
+    }
+
     // ================================================================
 
     private AmorcageDuTrousseau Amorcage(HttpClient http, PorteurDeTrousseau? porteur = null) =>
@@ -167,4 +196,42 @@ internal sealed class FabriqueDeContexteDEpreuve(string chaine) : IDbContextFact
 {
     public PalierDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<PalierDbContext>().UseNpgsql(chaine).Options);
+}
+
+/// <summary>
+/// Il rend le jeton, puis se comporte comme un <c>HttpClient</c> dont le délai
+/// expire — <c>TaskCanceledException</c>, et non <c>HttpRequestException</c>.
+/// </summary>
+internal sealed class MessagerQuiExpire : HttpMessageHandler
+{
+    private bool _premier = true;
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage requete,
+        CancellationToken annulation
+    )
+    {
+        if (_premier)
+        {
+            _premier = false;
+
+            // Le jeton est fabriqué ICI et non passé au constructeur : le
+            // gestionnaire dispose ce qu'il rend, et l'analyseur n'a plus
+            // d'objet orphelin à signaler.
+            return Task.FromResult(
+                new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        """{"access_token":"jeton","expires_in":3599}""",
+                        System.Text.Encoding.UTF8,
+                        "application/json"
+                    ),
+                }
+            );
+        }
+
+        return Task.FromException<HttpResponseMessage>(
+            new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout")
+        );
+    }
 }
