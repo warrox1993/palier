@@ -69,6 +69,7 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.Property(x => x.ConsumedAt).HasColumnName("consumed_at");
             t.Property(x => x.RevokedAt).HasColumnName("revoked_at");
             t.Property(x => x.ReplacedById).HasColumnName("replaced_by_id");
+            t.Property(x => x.SuccessorSealed).HasColumnName("successor_sealed");
             t.Property(x => x.Device).HasColumnName("device");
             t.Property(x => x.LastSeenAt).HasColumnName("last_seen_at");
 

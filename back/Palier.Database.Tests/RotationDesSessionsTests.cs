@@ -179,6 +179,13 @@ public sealed class RotationDesSessionsTests(BaseFixture baseDeDonnees)
         // Et le successeur du premier appel vit toujours : rien n'a été révoqué.
         var successeur = HarnaisHttp.CookieRendu(premier);
         Assert.NotNull(successeur);
+
+        // C'est LE MÊME cookie qui est reposé : les deux requêtes croisées
+        // repartent sur une seule chaîne. Deux cookies vivants dans une même
+        // famille ne se recroiseraient jamais, et plus aucun réemploi ne serait
+        // détecté pour ce compte.
+        Assert.Equal(successeur, HarnaisHttp.CookieRendu(croise));
+
         var suite = HarnaisHttp.ContexteAvecCookie(portee.ServiceProvider, successeur);
         var (encore, _) = await HarnaisHttp.ExecuterAsync(
             portee.ServiceProvider,

@@ -135,6 +135,7 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
 
                     var resultat = await AppliquerAsync(
                             decision,
+                            jetonPresente,
                             session,
                             appareil,
                             maintenant,
@@ -362,14 +363,35 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
     /// Aucune tâche de fond ici : la commande est appelée par le déploiement,
     /// qui sait déjà lancer des migrations.
     /// </remarks>
-    public async Task<int> PurgerAsync(DateTimeOffset maintenant, CancellationToken jeton) =>
+    public async Task<int> PurgerAsync(DateTimeOffset maintenant, CancellationToken jeton)
+    {
+        // Les sceaux périmés partent AVANT la suppression des lignes éteintes.
+        //
+        // La rotation efface déjà ceux de la famille qu'elle traverse, mais une
+        // famille qui ne tourne plus — l'utilisateur ne revient pas — garderait
+        // les siens jusqu'à l'expiration de ses lignes, quatorze jours pendant
+        // lesquels ils restent déchiffrables pour qui lit la table. Ce balayage
+        // ferme ce reste.
+        //
+        // Il porte sur des lignes qui SURVIVENT à la purge : c'est bien un
+        // effacement de champ, pas un effet de bord de la suppression.
+        var perimeAvant = maintenant - ParametresDeSession.FenetreDeGrace;
         await contexte
+            .Sessions.Where(s =>
+                s.SuccessorSealed != null && s.ConsumedAt != null && s.ConsumedAt < perimeAvant
+            )
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.SuccessorSealed, (byte[]?)null), jeton)
+            .ConfigureAwait(false);
+
+        return await contexte
             .Sessions.Where(s => s.ExpiresAt <= maintenant || s.RevokedAt != null)
             .ExecuteDeleteAsync(jeton)
             .ConfigureAwait(false);
+    }
 
     private async Task<RotationDeSession> AppliquerAsync(
         ResultatDeRotation decision,
+        string jetonPresente,
         SessionRafraichissement? session,
         string? appareil,
         DateTimeOffset maintenant,
@@ -378,29 +400,31 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
     {
         if (decision.Issue == IssueDeRotation.RejeuDansLaGrace && session is not null)
         {
-            // La première requête a déjà obtenu le successeur : on le rend, sans
-            // rien consommer de plus. C'est ce qui évite de déconnecter un
+            // La première requête a déjà obtenu le successeur : on rend LE MÊME,
+            // sans rien consommer de plus. C'est ce qui évite de déconnecter un
             // utilisateur dont deux requêtes se sont croisées.
             var suivante = await contexte
                 .Sessions.AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == decision.SessionARendre, jeton)
                 .ConfigureAwait(false);
 
-            // Le successeur porte son empreinte, pas son jeton : on ne peut pas
-            // le reconstruire. La rotation en émet donc un neuf DANS LA MÊME
-            // famille, et la précédente reste consommée.
-            return suivante is null
+            // Le successeur porte son empreinte, pas son jeton — mais la ligne
+            // présentée porte, elle, ce jeton SCELLÉ SOUS ELLE-MÊME, et le
+            // présenter suffit à l'ouvrir. Émettre ici un jeton neuf, ce que ce
+            // chemin faisait, laissait deux jetons vivants dans la même
+            // famille : chacun tournait de son côté, aucun jeton consommé
+            // n'était jamais représenté, et la détection de réemploi de la
+            // RFC 9700 s'éteignait pour cette famille — définitivement.
+            var successeur = ScellementDuSuccesseur.Ouvrir(jetonPresente, session.SuccessorSealed);
+
+            // Sceau absent — une ligne consommée avant que cette colonne existe
+            // — ou illisible : on REFUSE. Rendre un jeton neuf ici rouvrirait
+            // exactement le trou que le sceau ferme.
+            return suivante is null || successeur is null
                 ? new RotationDeSession(IssueDeRotation.ReemploiDetecte, null, null)
                 : new RotationDeSession(
                     IssueDeRotation.RejeuDansLaGrace,
-                    await InscrireAsync(
-                            suivante.OwnerId,
-                            suivante.FamilyId,
-                            appareil,
-                            maintenant,
-                            jeton
-                        )
-                        .ConfigureAwait(false),
+                    successeur,
                     suivante.FamilyId,
                     suivante.OwnerId
                 );
@@ -440,6 +464,13 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
             .FirstOrDefaultAsync(jeton)
             .ConfigureAwait(false);
 
+        // Le successeur est scellé sous le jeton qui vient d'être présenté :
+        // c'est ce qui permettra à un rejeu dans la grâce de rendre CE
+        // jeton-là, au lieu d'ouvrir une seconde chaîne dans la famille. Le
+        // sceau est calculé ici, hors de l'arbre d'expression : EF ne sait pas
+        // traduire un appel de méthode, il en paramètre le résultat.
+        var scelle = ScellementDuSuccesseur.Sceller(jetonPresente, neuf);
+
         // La consommation passe par ExecuteUpdate et non par le suivi : la
         // session a été lue sans tracking, et une écriture qui dépendrait du
         // cache d'EF ne serait pas visible pour la lecture suivante.
@@ -450,9 +481,40 @@ public sealed class MagasinDeSessions(PalierAuthDbContext contexte)
                 s =>
                     s.SetProperty(x => x.ConsumedAt, maintenant)
                         .SetProperty(x => x.LastSeenAt, maintenant)
-                        .SetProperty(x => x.ReplacedById, identifiantNeuf),
+                        .SetProperty(x => x.ReplacedById, identifiantNeuf)
+                        .SetProperty(x => x.SuccessorSealed, scelle),
                 jeton
             )
+            .ConfigureAwait(false);
+
+        // ⚠ LES SCEAUX PÉRIMÉS SONT EFFACÉS ICI, ET C'EST CE QUI BORNE LEUR
+        // PORTÉE.
+        //
+        // Un sceau ne sert QUE pendant la fenêtre de grâce de la ligne qui le
+        // porte : passé ce délai, la décision ne rend plus `RejeuDansLaGrace` et
+        // plus personne ne l'ouvrira jamais. Le laisser en base le rendrait
+        // pourtant déchiffrable pendant les quatorze jours de la ligne.
+        //
+        // Ce n'est pas théorique. Mesuré : à partir du texte clair d'un jeton
+        // consommé SIX HEURES plus tôt et d'une lecture de `sessions_refresh`,
+        // on remonte de sceau en sceau — chacun ouvrant le suivant — jusqu'au
+        // jeton VIVANT, qu'on fait alors tourner sans que la famille soit
+        // révoquée. Une prise de contrôle complète et silencieuse, et une
+        // capacité que le code d'avant ce commit ne donnait pas : sans sceau, le
+        // texte clair d'un jeton consommé ne valait plus rien passé trente
+        // secondes.
+        //
+        // L'effacement rétablit cette propriété. `palier_sauvegarde` lisant
+        // cette table, il vaut aussi pour les sauvegardes.
+        var perimeAvant = maintenant - ParametresDeSession.FenetreDeGrace;
+        await contexte
+            .Sessions.Where(s =>
+                s.FamilyId == session.FamilyId
+                && s.SuccessorSealed != null
+                && s.ConsumedAt != null
+                && s.ConsumedAt < perimeAvant
+            )
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.SuccessorSealed, (byte[]?)null), jeton)
             .ConfigureAwait(false);
 
         return new RotationDeSession(

@@ -64,6 +64,20 @@ public sealed class SessionRafraichissement
     /// </summary>
     public Guid? ReplacedById { get; set; }
 
+    /// <summary>
+    /// Le jeton du successeur, scellé sous le jeton de CETTE ligne — voir
+    /// <see cref="ScellementDuSuccesseur" />. Posé à la rotation, en même temps
+    /// que <see cref="ReplacedById" />.
+    /// </summary>
+    /// <remarks>
+    /// Il existe pour que la fenêtre de grâce rende le successeur DÉJÀ ÉMIS au
+    /// lieu d'en émettre un second : deux jetons vivants dans la même famille ne
+    /// se recroisent jamais, et la détection de réemploi s'éteindrait. La valeur
+    /// n'est lisible qu'avec le jeton de cette ligne, qui n'est stocké nulle
+    /// part — la colonne seule ne rend donc aucun jeton utilisable.
+    /// </remarks>
+    public byte[]? SuccessorSealed { get; set; }
+
     /// <summary>Le user-agent, pour la liste des sessions actives.</summary>
     public string? Device { get; set; }
 
