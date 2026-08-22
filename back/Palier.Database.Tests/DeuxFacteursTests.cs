@@ -1,6 +1,10 @@
+using System.Net;
+using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Palier.Api;
 using Palier.Api.Auth;
 using Palier.Infrastructure.Identite;
 
@@ -80,6 +84,7 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
         var (code, _) = await HarnaisHttp.ExecuterAsync(
             portee.ServiceProvider,
             DeuxFacteurs.PreparerAsync(
+                null,
                 new DemandeurFixe(null),
                 portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
                 CancellationToken.None
@@ -103,6 +108,70 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
         var seconde = await PreparerAsync(portee.ServiceProvider, compte);
 
         Assert.NotEqual(premiere.Cle, seconde.Cle);
+    }
+
+    [Fact]
+    public async Task Preparer_avec_la_2FA_ACTIVE_et_SANS_preuve_est_REFUSE_et_la_cle_NE_BOUGE_PAS()
+    {
+        // Préparer REMPLACE la clé : sur un compte déjà protégé, c'est le geste
+        // qui DÉTRUIT l'authentificateur de l'utilisateur. Sans preuve de
+        // possession, un jeton d'accès volé suffisait à en poser un autre, puis
+        // à faire regénérer les dix codes de récupération — ce qui invalide
+        // ceux de la victime. Elle ne passait plus sa propre porte.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var compte = await ActiveAsync(portee.ServiceProvider);
+        var avant = await CleAsync(portee.ServiceProvider, compte);
+
+        var (code, corps) = await PreparerBrutAsync(portee.ServiceProvider, compte, null);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, code);
+        Assert.Equal("CodeInvalide", HarnaisHttp.Code(corps));
+        Assert.Equal(avant, await CleAsync(portee.ServiceProvider, compte));
+    }
+
+    [Fact]
+    public async Task Preparer_avec_le_code_de_l_AUTHENTIFICATEUR_rend_une_cle_neuve()
+    {
+        // L'autre bord de la même porte : elle se ferme sur le voleur, pas sur
+        // qui tient encore son téléphone et change d'appareil.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var compte = await ActiveAsync(portee.ServiceProvider);
+        var avant = await CleAsync(portee.ServiceProvider, compte);
+
+        var (code, _) = await PreparerBrutAsync(
+            portee.ServiceProvider,
+            compte,
+            await CodeValideAsync(portee.ServiceProvider, compte)
+        );
+
+        Assert.Equal(StatusCodes.Status200OK, code);
+        Assert.NotEqual(avant, await CleAsync(portee.ServiceProvider, compte));
+    }
+
+    [Fact]
+    public async Task Preparer_accepte_un_CODE_DE_RECUPERATION_et_le_CONSOMME()
+    {
+        // Le jour du téléphone perdu, et c'est le seul jour où ces codes
+        // comptent. N'accepter que l'authentificateur laisserait l'utilisateur
+        // se connecter en brûlant un code de secours à chaque fois, sans jamais
+        // pouvoir réenrôler : au dixième, le compte serait injoignable — ce
+        // dépôt n'a ni réinitialisation ni route de support.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var (compte, secours) = await ActiveAvecSecoursAsync(portee.ServiceProvider);
+        var avant = await CleAsync(portee.ServiceProvider, compte);
+
+        var (code, _) = await PreparerBrutAsync(portee.ServiceProvider, compte, secours[0]);
+
+        Assert.Equal(StatusCodes.Status200OK, code);
+        Assert.NotEqual(avant, await CleAsync(portee.ServiceProvider, compte));
+
+        // Et il est CONSOMMÉ : un code de secours qui resterait valable ne
+        // serait qu'un second mot de passe, plus court.
+        var rejoue = await ConnecterAsync(portee.ServiceProvider, compte, secours[0]);
+        Assert.Equal(StatusCodes.Status401Unauthorized, rejoue.Code);
     }
 
     // ================================================================
@@ -215,6 +284,65 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
         Assert.False((await CompteAsync(portee.ServiceProvider, compte)).TwoFactorEnabled);
     }
 
+    [Fact]
+    public async Task Desactiver_accepte_lui_aussi_un_CODE_DE_RECUPERATION()
+    {
+        // Même preuve, même porte : `SecondFacteurValideAsync` est une
+        // connaissance, et elle vit à un seul endroit. Sans cette voie, le
+        // téléphone perdu n'aurait aucune sortie — ni retirer, ni refaire.
+        await using var hote = HarnaisHttp.Hote(baseDeDonnees);
+        using var portee = hote.Services.CreateScope();
+        var (compte, secours) = await ActiveAvecSecoursAsync(portee.ServiceProvider);
+
+        var (code, _) = await DesactiverAsync(portee.ServiceProvider, compte, secours[0]);
+
+        Assert.Equal(StatusCodes.Status204NoContent, code);
+        Assert.False((await CompteAsync(portee.ServiceProvider, compte)).TwoFactorEnabled);
+    }
+
+    // ================================================================
+    // La VRAIE route — ce que la LIAISON accepte
+    // ================================================================
+
+    [Fact]
+    public async Task Par_la_ROUTE_le_PREMIER_enrolement_passe_sans_aucun_corps()
+    {
+        // AUCUNE épreuve appelant `PreparerAsync` à la main ne peut voir ceci.
+        // La liaison des API minimales rend un corps NON-NULLABLE obligatoire :
+        // déclaré ainsi, ce premier enrôlement — qui n'a rien à prouver et
+        // n'envoie donc rien — recevrait 400 avant même d'atteindre le
+        // gestionnaire, avec un corps VIDE et aucun code.
+        await using var hote = await EnEcouteAsync(baseDeDonnees);
+        using var client = Client(hote);
+        var compte = await InscritAsync(hote.Services);
+
+        using var reponse = await PreparerParLaRouteAsync(client, compte);
+
+        Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
+        Assert.Contains(
+            "otpauth://totp/",
+            await reponse.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task Par_la_ROUTE_le_refus_d_un_REENROLEMENT_porte_un_CODE()
+    {
+        // Un refus de ce dépôt porte un CODE, jamais rien : le front n'a que
+        // cela à traduire. Celui de la couche de liaison rendrait un corps vide
+        // — et rien, dans cette composition, ne le remplit : ni
+        // `AddProblemDetails`, ni `UseStatusCodePages`, ni `UseExceptionHandler`.
+        await using var hote = await EnEcouteAsync(baseDeDonnees);
+        using var client = Client(hote);
+        var compte = await ActiveAsync(hote.Services);
+
+        using var reponse = await PreparerParLaRouteAsync(client, compte);
+
+        Assert.Equal(HttpStatusCode.BadRequest, reponse.StatusCode);
+        Assert.Equal("CodeInvalide", HarnaisHttp.Code(await reponse.Content.ReadAsStringAsync()));
+    }
+
     // ================================================================
     // La connexion
     // ================================================================
@@ -300,18 +428,11 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
 
     private static async Task<PreparationDeDeuxFacteurs> PreparerAsync(
         IServiceProvider services,
-        Guid compte
+        Guid compte,
+        string? preuve = null
     )
     {
-        using var portee = Portee(services);
-        var (code, corps) = await HarnaisHttp.ExecuterAsync(
-            portee.ServiceProvider,
-            DeuxFacteurs.PreparerAsync(
-                new DemandeurFixe(compte),
-                portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
-                CancellationToken.None
-            )
-        );
+        var (code, corps) = await PreparerBrutAsync(services, compte, preuve);
 
         Assert.Equal(StatusCodes.Status200OK, code);
         var racine = System.Text.Json.JsonDocument.Parse(corps).RootElement;
@@ -320,6 +441,95 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
             racine.GetProperty("uri").GetString() ?? string.Empty,
             racine.GetProperty("cle").GetString() ?? string.Empty
         );
+    }
+
+    /// <summary>
+    /// Préparer sans rien présumer du statut. <paramref name="preuve" /> à
+    /// <c>null</c> vaut <b>aucun corps</b> — la requête du premier enrôlement,
+    /// qui n'a rien à envoyer.
+    /// </summary>
+    private static async Task<(int Code, string Corps)> PreparerBrutAsync(
+        IServiceProvider services,
+        Guid compte,
+        string? preuve
+    )
+    {
+        using var portee = Portee(services);
+        return await HarnaisHttp.ExecuterAsync(
+            portee.ServiceProvider,
+            DeuxFacteurs.PreparerAsync(
+                preuve is null ? null : new DemandeDeCode(preuve),
+                new DemandeurFixe(compte),
+                portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
+                CancellationToken.None
+            )
+        );
+    }
+
+    /// <summary>
+    /// L'API RÉELLE, routée et à l'écoute — le seul niveau où la LIAISON d'un
+    /// corps de requête est observable.
+    /// </summary>
+    /// <remarks>
+    /// Port <b>0</b> : le système en choisit un libre, et l'adresse effective se
+    /// relit dans <c>Urls</c> après le démarrage. Un port écrit en dur ferait
+    /// rougir la suite le jour où quelque chose d'autre l'occupe.
+    /// </remarks>
+    private static async Task<WebApplication> EnEcouteAsync(BaseFixture baseDeDonnees)
+    {
+        var hote = HarnaisHttp.Hote(baseDeDonnees);
+        hote.Urls.Add("http://127.0.0.1:0");
+        Composition.Router(hote);
+        await hote.StartAsync();
+
+        return hote;
+    }
+
+    private static HttpClient Client(WebApplication hote) =>
+        new()
+        {
+            BaseAddress = new Uri(
+                hote.Urls.FirstOrDefault()
+                    ?? throw new InvalidOperationException(
+                        "L'hôte n'annonce aucune adresse après son démarrage : la requête "
+                            + "partirait dans le vide, et l'épreuve rougirait sans rien montrer."
+                    ),
+                UriKind.Absolute
+            ),
+        };
+
+    /// <summary>
+    /// Un POST sur la route réelle, avec un jeton d'accès réel et <b>aucun
+    /// corps</b> — la requête exacte du premier enrôlement.
+    /// </summary>
+    private static async Task<HttpResponseMessage> PreparerParLaRouteAsync(
+        HttpClient client,
+        Guid compte
+    )
+    {
+        using var requete = new HttpRequestMessage(
+            HttpMethod.Post,
+            PointsDEntree.Prefixe + "/2fa/preparer"
+        );
+        requete.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            JetonDAcces.Emettre(compte, HarnaisHttp.Cle, DateTimeOffset.UtcNow)
+        );
+
+        return await client.SendAsync(requete);
+    }
+
+    /// <summary>La clé d'authentificateur ENREGISTRÉE, telle que la base la porte.</summary>
+    private static async Task<string?> CleAsync(IServiceProvider services, Guid compte)
+    {
+        using var portee = Portee(services);
+        var utilisateurs = portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>();
+        var utilisateur = await utilisateurs.FindByIdAsync(
+            compte.ToString("D", System.Globalization.CultureInfo.InvariantCulture)
+        );
+
+        Assert.True(utilisateur is not null, $"le compte {compte} a disparu");
+        return await utilisateurs.GetAuthenticatorKeyAsync(utilisateur);
     }
 
     private static async Task<(int Code, string Corps)> ActiverAsync(
@@ -491,19 +701,36 @@ public sealed class DeuxFacteursTests(BaseFixture baseDeDonnees)
     }
 
     /// <summary>Un compte dont la double authentification est ACTIVE.</summary>
-    private static async Task<Guid> ActiveAsync(IServiceProvider services)
+    private static async Task<Guid> ActiveAsync(IServiceProvider services) =>
+        (await ActiveAvecSecoursAsync(services)).Compte;
+
+    /// <summary>
+    /// Le même compte, et les dix codes de récupération rendus à l'activation —
+    /// les seuls justificatifs qui restent le jour où le téléphone est perdu.
+    /// </summary>
+    private static async Task<(Guid Compte, IReadOnlyList<string> Secours)> ActiveAvecSecoursAsync(
+        IServiceProvider services
+    )
     {
         var compte = await InscritAsync(services);
         await PreparerAsync(services, compte);
 
-        var (code, _) = await ActiverAsync(
+        var (code, corps) = await ActiverAsync(
             services,
             compte,
             await CodeValideAsync(services, compte)
         );
         Assert.Equal(StatusCodes.Status200OK, code);
 
-        return compte;
+        var secours = System
+            .Text.Json.JsonDocument.Parse(corps)
+            .RootElement.GetProperty("codes")
+            .EnumerateArray()
+            .Select(e => e.GetString() ?? string.Empty)
+            .ToArray();
+
+        Assert.Equal(DeuxFacteurs.NombreDeCodesDeRecuperation, secours.Length);
+        return (compte, secours);
     }
 
     private static async Task<Utilisateur> CompteAsync(IServiceProvider services, Guid compte)

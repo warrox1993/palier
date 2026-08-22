@@ -117,11 +117,33 @@ internal static class DeuxFacteurs
     /// double authentification n'est <b>pas</b> activée par cet appel.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// La clé est RÉINITIALISÉE à chaque préparation. Réutiliser une clé
     /// existante ferait qu'une préparation abandonnée — l'écran fermé, le QR
     /// jamais scanné — laisserait la clé connue de qui l'a vue passer.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Et c'est exactement pourquoi une protection DÉJÀ active exige ici une
+    /// preuve.</b> Remplacer la clé, c'est détruire celle du téléphone de
+    /// l'utilisateur : sans preuve de possession, un jeton d'accès volé
+    /// suffirait à enrôler un authentificateur à soi, puis à faire regénérer
+    /// les dix codes de récupération — qui invalide ceux de la victime. Elle ne
+    /// passerait plus sa propre porte. Une protection ne se remplace pas avec
+    /// la seule chose contre laquelle elle protège.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Le corps est NULLABLE, et il le restera.</b> Au premier enrôlement il
+    /// n'y a rien à prouver — <c>TwoFactorEnabled</c> est faux — et la requête
+    /// part sans corps du tout. Un paramètre non-nullable est REQUIS pour la
+    /// liaison des API minimales : ce premier enrôlement recevrait 400, et ce
+    /// 400-là viendrait de la couche de liaison, donc SANS code, contrairement
+    /// à tous les refus de ce dépôt.
+    /// </para>
     /// </remarks>
     public static async Task<IResult> PreparerAsync(
+        DemandeDeCode? corps,
         IIdentiteDemandeur demandeur,
         UserManager<Utilisateur> utilisateurs,
         CancellationToken jeton
@@ -134,6 +156,19 @@ internal static class DeuxFacteurs
         if (await CompteAsync(demandeur, utilisateurs).ConfigureAwait(false) is not { } utilisateur)
         {
             return Results.Unauthorized();
+        }
+
+        // La preuve n'est réclamée que s'il y a quelque chose à détruire. Corps
+        // absent vaut code absent : au premier enrôlement il n'existe ni
+        // authentificateur ni code de récupération, et l'exiger fermerait la
+        // porte d'entrée.
+        if (
+            utilisateur.TwoFactorEnabled
+            && !await SecondFacteurValideAsync(utilisateurs, utilisateur, corps?.Code)
+                .ConfigureAwait(false)
+        )
+        {
+            return Refus();
         }
 
         var pose = await utilisateurs.ResetAuthenticatorKeyAsync(utilisateur).ConfigureAwait(false);
@@ -210,10 +245,20 @@ internal static class DeuxFacteurs
 
     /// <summary>Désactive la double authentification, contre un code valide.</summary>
     /// <remarks>
+    /// <para>
     /// <b>Le code est exigé, et ce n'est pas une formalité.</b> Sans lui, un
     /// jeton d'accès volé suffirait à retirer la double authentification — puis
     /// à s'installer. La protection ne doit pas se démonter avec la seule chose
     /// contre laquelle elle protège.
+    /// </para>
+    ///
+    /// <para>
+    /// Un code de RÉCUPÉRATION vaut preuve, comme à la connexion. Ne prendre
+    /// que le code d'authentificateur laisserait le téléphone perdu sans issue :
+    /// l'utilisateur pourrait encore se connecter en brûlant un code de secours
+    /// à chaque fois, sans jamais pouvoir retirer ni refaire sa double
+    /// authentification — et au dixième, le compte deviendrait injoignable.
+    /// </para>
     /// </remarks>
     public static async Task<IResult> DesactiverAsync(
         DemandeDeCode corps,
@@ -232,7 +277,10 @@ internal static class DeuxFacteurs
             return Results.Unauthorized();
         }
 
-        if (!await CodeValideAsync(utilisateurs, utilisateur, corps.Code).ConfigureAwait(false))
+        if (
+            !await SecondFacteurValideAsync(utilisateurs, utilisateur, corps.Code)
+                .ConfigureAwait(false)
+        )
         {
             return Refus();
         }
@@ -245,6 +293,58 @@ internal static class DeuxFacteurs
         await utilisateurs.ResetAuthenticatorKeyAsync(utilisateur).ConfigureAwait(false);
 
         return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Un code d'authentificateur, ou un code de RÉCUPÉRATION.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Les deux, et dans cet ordre. Ne vérifier que le code d'authentificateur
+    /// rendrait les codes de récupération décoratifs — ils ne serviraient
+    /// jamais, c'est-à-dire jamais le jour où le téléphone est perdu, qui est
+    /// le seul jour où ils comptent.
+    /// </para>
+    ///
+    /// <para>
+    /// Un code de récupération est CONSOMMÉ par cette vérification : Identity
+    /// le retire de la liste. C'est voulu — un code de secours qui resterait
+    /// valable ne serait qu'un second mot de passe, plus court.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Elle vit ici, et à un seul endroit.</b> Trois portes demandent la
+    /// même chose — la connexion, la préparation d'une clé neuve et la
+    /// désactivation — et « ce qui prouve le second facteur » est UNE
+    /// connaissance. Deux copies divergeraient, et celle qu'on oublierait de
+    /// corriger serait celle qui laisse passer.
+    /// </para>
+    /// </remarks>
+    public static async Task<bool> SecondFacteurValideAsync(
+        UserManager<Utilisateur> utilisateurs,
+        Utilisateur utilisateur,
+        string? code
+    )
+    {
+        ArgumentNullException.ThrowIfNull(utilisateurs);
+
+        if (await CodeValideAsync(utilisateurs, utilisateur, code).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        // Le code absent s'arrête ICI : `RedeemTwoFactorRecoveryCodeAsync` LÈVE
+        // sur un code nul — le magasin d'Identity le refuse avant de regarder
+        // quoi que ce soit. Un code absent doit rendre faux, comme un code faux,
+        // jamais une erreur 500.
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return false;
+        }
+
+        return await utilisateurs
+            .RedeemTwoFactorRecoveryCodeAsync(utilisateur, code)
+            .ConfigureAwait(false) is { Succeeded: true };
     }
 
     /// <summary>

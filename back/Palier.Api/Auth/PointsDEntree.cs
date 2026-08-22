@@ -253,7 +253,11 @@ internal static class PointsDEntree
                 );
             }
 
-            if (!await SecondFacteurValideAsync(utilisateurs, utilisateur, code).ConfigureAwait(false))
+            if (
+                !await DeuxFacteurs
+                    .SecondFacteurValideAsync(utilisateurs, utilisateur, code)
+                    .ConfigureAwait(false)
+            )
             {
                 // Un code faux COMPTE comme un échec. Sans cela, la limitation
                 // par compte s'arrêterait au mot de passe, et six chiffres
@@ -423,37 +427,6 @@ internal static class PointsDEntree
         return Results.Ok(
             await sessions.ListerAsync(utilisateur, horloge.GetUtcNow(), jeton).ConfigureAwait(false)
         );
-    }
-
-    /// <summary>
-    /// Un code d'authentificateur, ou un code de RÉCUPÉRATION.
-    /// </summary>
-    /// <remarks>
-    /// Les deux, et dans cet ordre. Ne vérifier que le code d'authentificateur
-    /// rendrait les codes de récupération décoratifs — ils ne serviraient
-    /// jamais, c'est-à-dire jamais le jour où le téléphone est perdu, qui est
-    /// le seul jour où ils comptent.
-    ///
-    /// <para>
-    /// Un code de récupération est CONSOMMÉ par cette vérification : Identity
-    /// le retire de la liste. C'est voulu — un code de secours qui resterait
-    /// valable ne serait qu'un second mot de passe, plus court.
-    /// </para>
-    /// </remarks>
-    private static async Task<bool> SecondFacteurValideAsync(
-        UserManager<Utilisateur> utilisateurs,
-        Utilisateur utilisateur,
-        string code
-    )
-    {
-        if (await DeuxFacteurs.CodeValideAsync(utilisateurs, utilisateur, code).ConfigureAwait(false))
-        {
-            return true;
-        }
-
-        return await utilisateurs
-            .RedeemTwoFactorRecoveryCodeAsync(utilisateur, code)
-            .ConfigureAwait(false) is { Succeeded: true };
     }
 
     /// <summary>
