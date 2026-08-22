@@ -937,3 +937,32 @@ RFC 9700 (janvier 2025) impose de révoquer la famille entière au réemploi d'u
 Le chiffre des méthodes est plombé par le code **généré** : migrations EF, `Designer.cs`, `ModelSnapshot`. Les exclure demanderait une décision datée avec son échéance (`CLAUDE.md` § 4) ; elle n'a **pas** été prise, et le seuil vit donc avec eux.
 
 **Ce qui la rouvrirait :** chaque montée réelle de la couverture doit relever le seuil dans le même geste — sans quoi le cliquet ne cliquette pas. Et une décision d'exclure le code généré, si le chiffre des méthodes devient un obstacle plutôt qu'une mesure.
+
+---
+
+## D58 — Les six défauts de l'audit de sécurité sont corrigés, et trois d'entre eux ont révélé pire qu'eux-mêmes
+
+**Tranché le :** 22/08/2026, après l'audit multi-agents de la branche `feat/lot-4-socle-session`.
+
+Un scan de sécurité a rendu 14 pistes vérifiées sur `back` et `db` — 82 candidats, 31 après déduplication, 93 votes d'un panel à trois voix. Les 14 pistes sont **six défauts** : plusieurs chercheurs avaient trouvé le même problème par des chemins différents.
+
+**Ce qui est corrigé, et ce que la correction a coûté d'apprendre :**
+
+| Défaut                                                   | Correction                                                                   | Ce que la relecture adversariale a trouvé EN PLUS                                                                                                 |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/2fa/preparer` réenrôlait le second facteur sans preuve | Code d'authentificateur **ou de récupération** exigé quand la 2FA est active | Un paramètre de corps non nullable cassait le **premier enrôlement** ; une garde limitée à l'authentificateur enfermait qui a perdu son téléphone |
+| Codes de récupération en clair en base                   | Hachés par PBKDF2 à 210 000 itérations                                       | Le premier jet **laissait la ligne en clair** à côté, indéfiniment, et invalidait silencieusement les codes existants                             |
+| Compteur d'échecs non atomique                           | `select … for update` dans une transaction, pour les deux écritures          | Passer à `ExecuteUpdateAsync` **retirait le jeton de concurrence** : une route 2FA sans mot de passe effaçait alors un verrouillage               |
+| La grâce fourchait la famille de jetons                  | Successeur scellé sous une clé dérivée du jeton présenté                     | Le sceau vivait **quatorze jours** pour un usage de trente secondes, et les sceaux s'enchaînaient jusqu'au jeton vivant                           |
+| `/api/v1/sante` anonyme                                  | `RequireAuthorization()` — D41 l'exigeait depuis le lot 4                    | Le rôle d'administration que D41 demande aussi n'existe pas encore dans le produit                                                                |
+| Le temps des refus trahissait l'existence d'un compte    | Budget constant de 400 ms sur toutes les branches de refus                   | L'épreuve dérivait sa tolérance du budget qu'elle éprouvait, et l'écart naturel (5 ms) était déjà sous toute tolérance stable                     |
+
+**La leçon qui vaut au-delà de ces six.** Dans trois cas sur six, **la correction introduisait un défaut plus grave que celui qu'elle fermait**, et aucun n'aurait été vu par relecture : il a fallu une sonde qui mesure. Un correctif de sécurité n'est pas terminé quand il ferme la faille nommée — il l'est quand on a demandé ce qu'il **arrête** de faire, et pas seulement ce qu'il commence.
+
+**Ce qui reste ouvert, et qui appartient au porteur du projet :**
+
+- **Le secret TOTP reste en clair.** Il est relu à chaque vérification, donc il se chiffre — il ne se hache pas — et cela demande une décision de gestion de clé : où elle vit, comment elle tourne, ce qui se passe au redéploiement. Aucun trousseau n'a été fabriqué pour faire semblant.
+- **Le rôle d'administration de D41.** `PolitiquesDAutorisation` ne porte que deux politiques, qui sont des **domaines**, pas des rôles.
+- **Le budget de 400 ms** est calé sur une machine de développement. À revoir sur l'instance OVHcloud, où le PBKDF2 sera plus lent.
+
+**Ce qui la rouvrirait :** un audit ultérieur, que ces corrections n'exemptent de rien — un scan est non déterministe, et le relancer construit la couverture dans le temps.

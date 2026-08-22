@@ -118,3 +118,42 @@ provoquée, le rouge constaté, le motif vérifié.
 
 Les exigences **1** et **7** n'ont aucun fichier, et c'est la mesure exacte de
 leur absence.
+
+---
+
+## 6. Ce que l'audit du 22 août 2026 a changé
+
+Un scan de sécurité multi-agents a été passé sur `back` et `db` à la révision
+`b611c3b`, puis **six défauts ont été corrigés** (D58). Ce paragraphe met à jour
+ce que les sections précédentes affirment, et il prime sur elles là où elles
+divergent.
+
+**Ce qui se renforce dans le tableau du § 1 :**
+
+| #   | Exigence                   | Ce qui change                                                                                                                                                                                                                                                                                                                          |
+| --- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4   | Limitation et verrouillage | Le compteur d'échecs était une lecture-modification-écriture **non atomique** : cinq tentatives simultanées n'en comptaient qu'une, et le verrouillage par compte — seule défense nommée contre le bourrage distribué — se contournait en tirant les essais en parallèle. Il passe désormais par une transaction avec verrou de ligne. |
+| 5   | 2FA TOTP                   | `/2fa/preparer` **réenrôlait le second facteur sans aucune preuve** : un jeton d'accès volé suffisait à rebinder le TOTP et à invalider les codes de récupération de la victime, définitivement. Une preuve de possession est exigée. Les codes de récupération sont désormais **hachés** ; ils étaient conservés en clair.            |
+| 6   | Rotation des jetons        | Un rejeu dans la fenêtre de grâce **fourchait la famille** : voleur et victime repartaient chacun sur une chaîne vivante, et la détection de réemploi était éteinte pour toujours. Les deux convergent maintenant sur le successeur, scellé sous une clé dérivée du jeton présenté.                                                    |
+
+**Ce qui s'ajoute aux durées de conservation du § 2 :**
+
+| Donnée                  | Où                                  | Durée                                                 | Ce qu'elle est                                                                                                                                                                                                                                                                                         |
+| ----------------------- | ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Sceau du successeur** | `sessions_refresh.successor_sealed` | **Trente secondes** après la consommation de sa ligne | Un chiffré AES-GCM du jeton successeur, sous une clé dérivée du jeton parent — jamais stockée. Effacé par la rotation suivante et par la purge, y compris pour les familles dormantes. Sans ce bornage, il resterait déchiffrable quatorze jours et les sceaux s'enchaîneraient jusqu'au jeton vivant. |
+
+**Ce qui reste ouvert, et doit figurer au registre comme tel :**
+
+- **Le secret TOTP demeure en clair** dans `AspNetUserTokens`. Il ne peut pas
+  être haché — le serveur le relit à chaque vérification — et le chiffrer
+  demande une décision de gestion de clé qui n'est pas prise. Quiconque obtient
+  une lecture de la base peut donc encore forger un second facteur, à condition
+  de disposer par ailleurs du mot de passe.
+- **`GET /api/v1/sante` est passée derrière l'authentification**, comme D41
+  l'exigeait depuis le lot 4 — elle publiait l'identifiant exact de la dernière
+  migration appliquée. Le **rôle d'administration** que D41 demande également
+  n'existe pas encore dans le produit.
+
+**Ce que cet audit ne dit pas.** Les quatre suites d'épreuves ont été écartées de
+son périmètre, ainsi que `front/`, `scripts/` et la documentation. Il a jugé le
+code de production, pas la preuve qu'il est gardé, et rien du navigateur.
