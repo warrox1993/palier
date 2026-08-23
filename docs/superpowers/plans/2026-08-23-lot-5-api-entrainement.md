@@ -787,3 +787,74 @@ en entier : l'exécutant a le harnais (`HarnaisHttp`, `DemandeurMutable`) et six
 suites existantes comme modèle. Ce qui n'est PAS laissé implicite, parce que s'y
 tromper coûte cher : les codes de statut (404 contre 403), le `with check` en
 plus du `using`, et le troisième rôle sur chaque table nouvelle.
+
+---
+
+## Journal d'exécution — ce que le plan n'avait pas prévu
+
+Écrit au fil des tâches. Un plan qui ne se corrige pas ment sur ce qui a été
+fait.
+
+### Le seuil de couverture décide où vivent les épreuves
+
+Le plan plaçait toutes les épreuves dans `Palier.Database.Tests`. C'était faux :
+le seuil de 100 % de `Palier.Application` est mesuré par
+**`Palier.Application.Tests` et par lui seul**. Un contrat couvert uniquement
+par une épreuve d'intégration fait tomber le seuil — ce qui est arrivé dès la
+tâche 2, `PageDeSeances` ayant été écrit avant son gestionnaire.
+
+C'est le mécanisme voulu, pas un obstacle : `CLAUDE.md` § 4 en fait la seule
+détection de code mort **public** dont Roslyn est incapable. Les bords se
+jugent donc en unitaire, en microsecondes ; l'intégration ne garde que ce qui
+exige un vrai moteur — isolation, clés étrangères, contraintes d'unicité.
+
+Il l'a prouvé une seconde fois à la tâche 3 : deux accesseurs d'`AjoutDeSerie`
+n'étaient lus nulle part, donc rien n'aurait rougi si le gestionnaire avait
+ignoré le drapeau d'échauffement en écrivant en base.
+
+### Trois prédicats nouveaux au domaine
+
+Le plan supposait qu'on validerait en appelant les fabriques du domaine.
+Celles-ci **lèvent**, et une valeur hors bornes tapée par un utilisateur est
+une saisie, pas un défaut du programme. `Charge.EstValide`,
+`Repetitions.EstValide`, `Rir.EstValide` et `Masse.EstValide` ont donc été
+ajoutés, et les fabriques s'appuient dessus : les bornes ne sont écrites
+qu'une fois.
+
+### Le curseur est un COUPLE, pas un instant
+
+Le plan proposait `?avant={instant}`. Deux séances peuvent porter le même
+`started_at` — un import, deux entraînements notés à la minute près — et un
+`<` strict en aurait sauté une définitivement. Le curseur porte donc
+`(started_at, id)`, comparé par `EF.Functions.LessThan` sur un tuple, que
+Npgsql traduit en row value PostgreSQL.
+
+### La garde de perte de poids était SILENCIEUSE
+
+Découvert en la branchant, et c'est le défaut le plus grave trouvé pendant ce
+lot. `PerteDePoidsRapide.EstDetectee` suppose des entrées **hebdomadaires** ;
+la série brute de `body_weight` est quotidienne chez qui pèse tous les jours.
+La détection serait restée muette exactement chez les utilisateurs les plus
+assidus.
+
+**D61** tranche : moyenne hebdomadaire, semaines ISO. Voir `docs/decisions.md`.
+
+### Le ratio tirage/poussée est REPORTÉ, et voici pourquoi
+
+`docs/05-entrainement.md` § 4 le définit, `VolumeParGroupe.SurSeptJours` sait
+le calculer depuis le lot 3, et `SerieEffectuee` attend un `RoleMouvement`.
+
+**Ce rôle n'existe nulle part en base.** `exercises` porte `primary_muscles` et
+`secondary_muscles` ; aucune colonne ne dit si un mouvement tire ou pousse. Le
+déduire des muscles serait faux — un pull-over travaille les pectoraux ET le
+grand dorsal, un rowing inversé et un développé partagent le deltoïde — et un
+ratio faux vaut moins que pas de ratio : il ferait modifier un programme sur
+une mesure inventée.
+
+La colonne se pose au lot qui **remplit** le catalogue (étape 1 bis, 250 à 400
+exercices), où le rôle se renseigne avec le reste. L'ajouter maintenant
+créerait une colonne vide sur un catalogue vide — le « garde-fou sans cible »
+que D39 refuse.
+
+Le volume par muscle, lui, est livré : il ne demande que la vue
+`weekly_volume`, qui existe depuis le lot 2.

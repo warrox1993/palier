@@ -237,3 +237,83 @@ public sealed record SerieDePoids(IReadOnlyList<PoidsRendu> Mesures, string? Con
     public static int BornerLaFenetre(int? demandee) =>
         Math.Clamp(demandee ?? FenetreParDefaut, 1, FenetreMaximale);
 }
+
+/// <summary>Ce que le produit sait dire d'un exercice.</summary>
+/// <param name="ExerciceId">L'exercice interrogé.</param>
+/// <param name="UnRepetitionMaximumKg">
+/// Le 1RM estimé, ou <c>null</c>. Absent signifie « pas encore de série
+/// exploitable » ou « série trop longue pour qu'une estimation ait un sens » —
+/// et ces deux cas se lisent au champ <paramref name="SeriesRetenues" />.
+/// </param>
+/// <param name="Fiabilite">
+/// <c>Bonne</c>, <c>Moyenne</c>, <c>Faible</c>, ou <c>null</c> quand il n'y a
+/// pas d'estimation. Elle voyage AVEC la valeur, jamais séparément : une force
+/// estimée sans sa fiabilité invite à la lire comme une mesure.
+/// </param>
+/// <param name="EnPlateau">
+/// Un constat, pas une consigne. `docs/05-entrainement.md` § 2 : le système
+/// « signale, SANS prescrire de solution ».
+/// </param>
+/// <param name="SeriesRetenues">
+/// Combien de séries dures ont servi. Zéro dit « je n'ai pas encore de
+/// donnée » — l'état vide que `11-qualite.md` exige de traiter, et qui n'est
+/// pas une erreur.
+/// </param>
+public sealed record ProgressionRendue(
+    Guid ExerciceId,
+    decimal? UnRepetitionMaximumKg,
+    string? Fiabilite,
+    bool EnPlateau,
+    int SeriesRetenues
+);
+
+/// <summary>Le volume d'un muscle sur une semaine.</summary>
+/// <param name="Muscle">Le groupe musculaire, tel qu'il est nommé au catalogue.</param>
+/// <param name="SeriesDures">
+/// Les séries d'échauffement sont exclues, et un muscle secondaire compte pour
+/// une demi-série — d'où le décimal. C'est la vue <c>weekly_volume</c> qui
+/// applique ces deux règles, posée au lot 2.
+/// </param>
+public sealed record VolumeDUnMuscle(string Muscle, decimal SeriesDures);
+
+/// <summary>Une semaine de volume.</summary>
+/// <param name="Semaine">Le LUNDI de la semaine, tel que la vue le calcule.</param>
+/// <param name="Muscles">Un élément par muscle travaillé, du plus au moins travaillé.</param>
+public sealed record SemaineDeVolume(DateOnly Semaine, IReadOnlyList<VolumeDUnMuscle> Muscles);
+
+/// <summary>Le volume hebdomadaire, de la semaine la plus récente à la plus ancienne.</summary>
+/// <remarks>
+/// <para>
+/// <b>Le ratio tirage/poussée n'est PAS ici, et c'est délibéré.</b>
+/// <c>docs/05-entrainement.md</c> § 4 le définit — « dos et trapèzes contre
+/// pectoraux et triceps, sur 7 jours, cible minimale 1,3 » — et
+/// <c>VolumeParGroupe.SurSeptJours</c> sait le calculer depuis le lot 3.
+/// </para>
+///
+/// <para>
+/// Ce qui manque est en base : <c>exercises</c> porte <c>primary_muscles</c> et
+/// <c>secondary_muscles</c>, mais AUCUNE colonne ne dit si un mouvement tire ou
+/// pousse. Le déduire des muscles serait faux — un pull-over travaille les
+/// pectoraux ET le grand dorsal, un rowing inversé et un développé partagent le
+/// deltoïde — et un ratio faux vaut moins que pas de ratio : il ferait modifier
+/// un programme sur une mesure inventée.
+/// </para>
+///
+/// <para>
+/// La colonne se pose au lot qui remplit le catalogue — étape 1 bis, 250 à 400
+/// exercices — où le rôle se renseigne exercice par exercice, avec le reste.
+/// L'ajouter maintenant créerait une colonne vide sur un catalogue vide.
+/// </para>
+/// </remarks>
+public sealed record BilanDeVolume(IReadOnlyList<SemaineDeVolume> Semaines)
+{
+    /// <summary>Le nombre de semaines rendues par défaut.</summary>
+    public const int SemainesParDefaut = 8;
+
+    /// <summary>Le plafond, en semaines — deux ans.</summary>
+    public const int SemainesMaximales = 104;
+
+    /// <summary>Le nombre de semaines effectif, borné des deux côtés.</summary>
+    public static int BornerLesSemaines(int? demandees) =>
+        Math.Clamp(demandees ?? SemainesParDefaut, 1, SemainesMaximales);
+}

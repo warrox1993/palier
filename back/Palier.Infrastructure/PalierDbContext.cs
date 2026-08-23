@@ -33,6 +33,13 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
     public DbSet<BodyWeight> BodyWeights => Set<BodyWeight>();
 
     /// <summary>
+    /// La vue <c>weekly_volume</c>, en LECTURE seule — lot 5. Elle n'est pas
+    /// pilotée par les migrations : <c>ToView</c> l'en empêche, et le SQL de la
+    /// vue vit dans la migration du socle, écrit à la main comme D14 l'impose.
+    /// </summary>
+    public DbSet<WeeklyVolume> WeeklyVolumes => Set<WeeklyVolume>();
+
+    /// <summary>
     /// Les sessions de rafraîchissement — lot 4. Déclarées ici parce que le
     /// schéma appartient à ce contexte et à lui seul ; c'est
     /// <c>PalierAuthDbContext</c> qui les LIT, sous le rôle qui en a le droit.
@@ -62,6 +69,20 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.Property(x => x.DernierEchecLe).HasColumnName("DernierEchecLe");
             t.Property(x => x.VerrouillagesSubis).HasColumnName("VerrouillagesSubis").HasDefaultValue(0);
             t.Property(x => x.ConsentementSanteLe).HasColumnName("ConsentementSanteLe");
+        });
+
+        // La vue du volume hebdomadaire. `HasNoKey` parce qu'une vue agrégée
+        // n'a pas d'identité de ligne, et `ToView` pour qu'aucune migration ne
+        // tente de la créer ou de la supprimer — elle appartient au SQL écrit
+        // à la main de la migration du socle.
+        builder.Entity<WeeklyVolume>(t =>
+        {
+            t.HasNoKey();
+            t.ToView("weekly_volume");
+            t.Property(x => x.OwnerId).HasColumnName("owner_id");
+            t.Property(x => x.Week).HasColumnName("week");
+            t.Property(x => x.Muscle).HasColumnName("muscle");
+            t.Property(x => x.HardSets).HasColumnName("hard_sets");
         });
 
         builder.Entity<SessionRafraichissement>(t =>

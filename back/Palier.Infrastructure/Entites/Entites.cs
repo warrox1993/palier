@@ -146,4 +146,38 @@ public sealed class BodyWeight
     public decimal WeightKg { get; set; }
 }
 
+/// <summary>
+/// Une ligne de la vue <c>weekly_volume</c> : séries dures par muscle et par
+/// semaine.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>C'est une VUE, pas une table.</b> Elle est déclarée <c>HasNoKey</c> et
+/// <c>ToView</c>, ce qui la rend strictement en lecture et empêche EF Core de
+/// vouloir la créer : elle est posée par <c>migrationBuilder.Sql</c> au lot 2,
+/// avec la logique de dépliage qu'aucun modèle objet n'exprimerait — un muscle
+/// primaire compte 1, un secondaire compte 0,5.
+/// </para>
+///
+/// <para>
+/// <b>Elle porte <c>security_invoker = true</c></b>, donc elle s'exécute sous
+/// les politiques de l'APPELANT. Sans cela, elle tournerait avec les droits de
+/// son propriétaire — <c>palier_migrations</c>, qui possède toutes les tables —
+/// et serait le seul chemin du schéma où l'isolation change de règle sans que
+/// personne le voie. Une épreuve d'isolation le prouve sur la vue elle-même.
+/// </para>
+/// </remarks>
+public sealed class WeeklyVolume
+{
+    public Guid OwnerId { get; set; }
+
+    /// <summary>Le LUNDI de la semaine — <c>date_trunc('week', ...)</c>.</summary>
+    public DateTimeOffset Week { get; set; }
+
+    public required string Muscle { get; set; }
+
+    /// <summary>Décimal, parce qu'un muscle secondaire compte pour une demi-série.</summary>
+    public decimal HardSets { get; set; }
+}
+
 #pragma warning restore CA1819
