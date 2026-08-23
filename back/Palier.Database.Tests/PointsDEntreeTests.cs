@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Palier.Api;
 using Palier.Api.Auth;
+using Palier.Infrastructure.Courrier;
 using Palier.Infrastructure.Identite;
 
 namespace Palier.Database.Tests;
@@ -49,6 +50,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, _motDePasseSolide),
                 utilisateurs,
+                portee.ServiceProvider.GetRequiredService<EnvoyeurSmtp>(),
+                portee.ServiceProvider.GetRequiredService<ReglagesDuCourrier>(),
                 CancellationToken.None
             )
         );
@@ -73,6 +76,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, _motDePasseSolide),
                 utilisateurs,
+                portee.ServiceProvider.GetRequiredService<EnvoyeurSmtp>(),
+                portee.ServiceProvider.GetRequiredService<ReglagesDuCourrier>(),
                 CancellationToken.None
             )
         );
@@ -80,6 +85,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, _motDePasseSolide),
                 utilisateurs,
+                portee.ServiceProvider.GetRequiredService<EnvoyeurSmtp>(),
+                portee.ServiceProvider.GetRequiredService<ReglagesDuCourrier>(),
                 CancellationToken.None
             )
         );
@@ -108,6 +115,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, _motDePasseSolide),
                 utilisateurs,
+                portee.ServiceProvider.GetRequiredService<EnvoyeurSmtp>(),
+                portee.ServiceProvider.GetRequiredService<ReglagesDuCourrier>(),
                 CancellationToken.None
             )
         );
@@ -118,6 +127,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(email, "court"),
                 utilisateurs,
+                portee.ServiceProvider.GetRequiredService<EnvoyeurSmtp>(),
+                portee.ServiceProvider.GetRequiredService<ReglagesDuCourrier>(),
                 CancellationToken.None
             )
         );
@@ -139,6 +150,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(EmailNeuf(), "azertyuiop"),
                 portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
+                portee.ServiceProvider.GetRequiredService<EnvoyeurSmtp>(),
+                portee.ServiceProvider.GetRequiredService<ReglagesDuCourrier>(),
                 CancellationToken.None
             )
         );
@@ -158,6 +171,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(EmailNeuf(), "brouette9"),
                 portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
+                portee.ServiceProvider.GetRequiredService<EnvoyeurSmtp>(),
+                portee.ServiceProvider.GetRequiredService<ReglagesDuCourrier>(),
                 CancellationToken.None
             )
         );
@@ -182,6 +197,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             PointsDEntree.InscrireAsync(
                 new DemandeDIdentifiants(EmailNeuf(), "grenouille verte sur le toit"),
                 portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
+                portee.ServiceProvider.GetRequiredService<EnvoyeurSmtp>(),
+                portee.ServiceProvider.GetRequiredService<ReglagesDuCourrier>(),
                 CancellationToken.None
             )
         );

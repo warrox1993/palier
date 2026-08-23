@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Palier.Application.Pipeline;
+using Palier.Infrastructure.Courrier;
 using Palier.Infrastructure.Identite;
 
 namespace Palier.Api.Auth;
@@ -153,6 +154,7 @@ internal static class PointsDEntree
         groupe.MapPost("/deconnexion-totale", DeconnecterPartoutAsync).RequireAuthorization();
         groupe.MapGet("/sessions", ListerAsync).RequireAuthorization();
 
+        Verification.Router(groupe);
         DeuxFacteurs.Router(groupe);
     }
 
@@ -163,11 +165,15 @@ internal static class PointsDEntree
     public static async Task<IResult> InscrireAsync(
         DemandeDIdentifiants corps,
         UserManager<Utilisateur> utilisateurs,
+        EnvoyeurSmtp envoyeur,
+        ReglagesDuCourrier reglages,
         CancellationToken jeton
     )
     {
         ArgumentNullException.ThrowIfNull(corps);
         ArgumentNullException.ThrowIfNull(utilisateurs);
+        ArgumentNullException.ThrowIfNull(envoyeur);
+        ArgumentNullException.ThrowIfNull(reglages);
         jeton.ThrowIfCancellationRequested();
 
         var email = corps.Email?.Trim() ?? string.Empty;
@@ -178,15 +184,17 @@ internal static class PointsDEntree
         // paie le même PBKDF2 qu'une inscription neuve. L'épreuve
         // `Le_MOT_DE_PASSE_est_juge_AVANT_l_unicite_de_l_adresse` garde cet
         // ordre, qui n'est écrit nulle part dans le contrat d'Identity.
+        var nouveau = new Utilisateur { UserName = email, Email = email };
         var resultat = await utilisateurs
-            .CreateAsync(
-                new Utilisateur { UserName = email, Email = email },
-                corps.MotDePasse ?? string.Empty
-            )
+            .CreateAsync(nouveau, corps.MotDePasse ?? string.Empty)
             .ConfigureAwait(false);
 
         if (resultat.Succeeded)
         {
+            await Verification
+                .EnvoyerLaVerificationAsync(utilisateurs, envoyeur, reglages, nouveau, email, jeton)
+                .ConfigureAwait(false);
+
             return Enregistree();
         }
 
@@ -195,13 +203,44 @@ internal static class PointsDEntree
             code => !Array.Exists(_codesQuiTrahissent, c => c == code)
         );
 
-        // Rien d'autre que l'unicité n'a échoué : on ne dit pas que l'adresse
-        // est prise, et la réponse est celle du succès, à l'octet près.
-        return revelateur is null ? Enregistree() : Results.Json(
-            new Reponse(revelateur),
-            statusCode: StatusCodes.Status400BadRequest
-        );
+        if (revelateur is not null)
+        {
+            return Results.Json(
+                new Reponse(revelateur),
+                statusCode: StatusCodes.Status400BadRequest
+            );
+        }
+
+        // Rien d'autre que l'unicité n'a échoué : l'adresse est prise. On ne le
+        // dit pas — la réponse est celle du succès, à l'octet près — ET ON
+        // ENVOIE QUAND MÊME un courriel, à son propriétaire légitime.
+        //
+        // Sans ce second envoi, le seul fait qu'un message parte ou non
+        // trahirait l'existence du compte : le temps de réponse suffirait à
+        // interroger l'annuaire. Le lot 4 a fermé ce canal sur la connexion ;
+        // l'inscription le rouvrait par la porte de derrière.
+        await AvertirLeProprietaireAsync(envoyeur, reglages, email, jeton).ConfigureAwait(false);
+
+        return Enregistree();
     }
+
+    /// <summary>
+    /// Avertit le propriétaire d'une adresse qu'on a tenté de s'inscrire avec.
+    /// Il ne porte AUCUN code : le message ne fait qu'informer, et pointe vers
+    /// la réinitialisation si la personne a simplement oublié son mot de passe.
+    /// </summary>
+    private static Task AvertirLeProprietaireAsync(
+        EnvoyeurSmtp envoyeur,
+        ReglagesDuCourrier reglages,
+        string adresse,
+        CancellationToken jeton
+    ) =>
+        envoyeur.EnvoyerAsync(
+            Courriel.TentativeDInscription,
+            adresse,
+            reglages.BaseDesLiens + "/mot-de-passe-oublie",
+            jeton: jeton
+        );
 
     /// <summary>
     /// Ouvre une session. Le jeton d'accès part dans le corps, le

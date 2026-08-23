@@ -14,6 +14,17 @@ public enum Courriel
 
     /// <summary>Confirmation de suppression de compte — sur demande.</summary>
     Suppression,
+
+    /// <summary>
+    /// « Quelqu'un a tenté de s'inscrire avec votre adresse. »
+    ///
+    /// Il n'est pas là par courtoisie : sans lui, une inscription sur une
+    /// adresse déjà prise n'enverrait rien, et le seul fait qu'un courriel
+    /// parte — ou non — trahirait l'existence du compte. Le lot 4 a fermé ce
+    /// canal sur la connexion ; l'inscription le rouvrait par la porte de
+    /// derrière.
+    /// </summary>
+    TentativeDInscription,
 }
 
 /// <summary>Un gabarit rendu : sujet, corps texte, corps HTML.</summary>
@@ -145,6 +156,33 @@ public static class Gabarits
                     + "<br><a href=\"{0}\">{0}</a></p><p><strong>Your data will be erased and "
                     + "cannot be recovered.</strong></p><p>If you did not ask for this, ignore "
                     + "this message.</p><p>"
+                    + _marque
+                    + "</p>"
+            ),
+            (Courriel.TentativeDInscription, false) => new(
+                _marque + " — une inscription a été tentée avec votre adresse",
+                "Bonjour,\n\nQuelqu'un a tenté de créer un compte avec votre adresse. Votre "
+                    + "compte existant n'a pas changé, et aucune action n'est nécessaire.\n\n"
+                    + "Si vous avez oublié votre mot de passe, vous pouvez le "
+                    + "réinitialiser :\n{0}\n\n"
+                    + _marque,
+                "<p>Bonjour,</p><p>Quelqu'un a tenté de créer un compte avec votre adresse. "
+                    + "Votre compte existant n'a pas changé, et aucune action n'est "
+                    + "nécessaire.</p><p>Si vous avez oublié votre mot de passe, vous pouvez le "
+                    + "réinitialiser :<br><a href=\"{0}\">{0}</a></p><p>"
+                    + _marque
+                    + "</p>"
+            ),
+            (Courriel.TentativeDInscription, true) => new(
+                _marque + " — someone tried to sign up with your address",
+                "Hello,\n\nSomeone tried to create an account with your address. Your existing "
+                    + "account is unchanged, and no action is needed.\n\nIf you forgot your "
+                    + "password, you can reset it:\n{0}\n\n"
+                    + _marque,
+                "<p>Hello,</p><p>Someone tried to create an account with your address. Your "
+                    + "existing account is unchanged, and no action is needed.</p><p>If you "
+                    + "forgot your password, you can reset it:<br>"
+                    + "<a href=\"{0}\">{0}</a></p><p>"
                     + _marque
                     + "</p>"
             ),

@@ -8,6 +8,7 @@ using Palier.Api;
 using Palier.Api.Auth;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure.Coffre;
+using Palier.Infrastructure.Courrier;
 
 namespace Palier.Database.Tests;
 
@@ -103,6 +104,17 @@ internal static class HarnaisHttp
         constructeur.Configuration.AddInMemoryCollection(reglages);
 
         Composition.Composer(constructeur);
+
+        // UN PUITS par défaut. Sans lui, toute épreuve qui inscrit un compte
+        // tenterait un vrai envoi vers `relais.invalid` et échouerait sur
+        // « Hôte inconnu » — un échec qui ne dit rien du sujet de l'épreuve.
+        //
+        // Il est posé APRÈS `Composer` pour écraser le transport réel, et AVANT
+        // `ajuster` pour qu'une épreuve qui veut LIRE les messages puisse le
+        // remplacer par le sien.
+        constructeur.Services.AddSingleton<Func<ITransportDeCourrier>>(
+            () => new TransportFactice()
+        );
 
         // L'ajustement vient APRÈS la composition réelle : il remplace un
         // service précis sans recomposer l'application. Recomposer reviendrait
