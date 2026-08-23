@@ -317,3 +317,126 @@ public sealed record BilanDeVolume(IReadOnlyList<SemaineDeVolume> Semaines)
     public static int BornerLesSemaines(int? demandees) =>
         Math.Clamp(demandees ?? SemainesParDefaut, 1, SemainesMaximales);
 }
+
+/// <summary>Ce qu'on donne pour créer un exercice personnalisé.</summary>
+/// <param name="Nom">Obligatoire, et borné : c'est du texte libre affiché.</param>
+/// <param name="Materiel">Facultatif — « barre », « haltères », « poids de corps ».</param>
+/// <param name="MusclesPrimaires">Au moins un. Sans lui, l'exercice ne compte dans aucun volume.</param>
+/// <param name="MusclesSecondaires">Comptent pour une demi-série dans le volume.</param>
+/// <param name="Unilateral">Vrai quand le mouvement se fait un côté à la fois.</param>
+/// <param name="IncrementParDefaut">Le pas de progression proposé, en kilogrammes.</param>
+/// <param name="ContreIndicationsPour">Zéro à quatre régions, prises dans la liste FERMÉE.</param>
+public sealed record CreationDExercice(
+    string Nom,
+    string? Materiel,
+    IReadOnlyList<string> MusclesPrimaires,
+    IReadOnlyList<string> MusclesSecondaires,
+    bool Unilateral,
+    decimal IncrementParDefaut,
+    IReadOnlyList<string> ContreIndicationsPour
+)
+{
+    /// <summary>La longueur maximale du nom.</summary>
+    /// <remarks>
+    /// La colonne est <c>text</c>, donc PostgreSQL ne borne rien : sans ce
+    /// contrôle, un nom d'un mégaoctet entrerait en base et casserait chaque
+    /// écran qui l'affiche. Cent vingt signes tiennent le plus long nom
+    /// d'exercice réel avec de la marge.
+    /// </remarks>
+    public const int LongueurMaximaleDuNom = 120;
+
+    /// <summary>Le pas de progression le plus grand qu'on accepte, en kilogrammes.</summary>
+    /// <remarks>
+    /// UNE PROPRIÉTÉ, ET NON UNE <c>const decimal</c>. Un <c>decimal</c> n'est
+    /// pas une constante de compilation en IL : le compilateur engendre un
+    /// constructeur statique pour l'initialiser, et ce constructeur n'est
+    /// JAMAIS exécuté — lire la constante depuis une épreuve n'y change rien,
+    /// puisque la valeur est inlinée à l'appel. La ligne reste donc
+    /// éternellement non couverte, et le seuil de 100 % échoue sans qu'aucune
+    /// épreuve ne manque. Les <c>const int</c> voisines n'ont pas ce défaut.
+    /// </remarks>
+    public static decimal IncrementMaximal => 50m;
+
+    /// <summary>Le nombre maximal de muscles nommés, primaires et secondaires confondus.</summary>
+    public const int MusclesMaximum = 12;
+
+    /// <summary>La longueur maximale d'un nom de muscle.</summary>
+    public const int LongueurMaximaleDUnMuscle = 40;
+
+    /// <summary>Le code du premier refus, ou <c>null</c>.</summary>
+    /// <remarks>
+    /// <b>Tout est borné, y compris ce qui semble anodin.</b> Les tableaux
+    /// <c>text[]</c> n'ont pas de taille maximale en PostgreSQL : un tableau
+    /// d'un million d'entrées passerait, entrerait dans la vue
+    /// <c>weekly_volume</c> — qui le DÉPLIE par <c>unnest</c> — et y
+    /// multiplierait les lignes autant de fois. C'est un déni de service qu'un
+    /// compte authentifié déclenche en une requête, et le nombre de muscles
+    /// d'un exercice réel dépasse rarement six.
+    /// </remarks>
+    /// <summary>
+    /// Les muscles secondaires, une liste ABSENTE valant une liste vide.
+    /// </summary>
+    /// <remarks>
+    /// <b>Le type dit non-nullable, et il ment.</b> Ces listes viennent de la
+    /// désérialisation d'un corps JSON : un client qui omet
+    /// <c>musclesSecondaires</c> — ce qui est parfaitement légitime — produit
+    /// <c>null</c>, que l'annotation de nullabilité n'empêche EN RIEN. Lire
+    /// <c>.Count</c> dessus lèverait une <c>NullReferenceException</c>, donc un
+    /// 500 sur une requête valide.
+    ///
+    /// C'est exactement ce que <c>CLAUDE.md</c> § 4 vise : « toute donnée qui
+    /// vient de l'extérieur est hostile jusqu'à preuve du contraire », et une
+    /// annotation de compilation n'est pas une preuve — elle ne survit pas au
+    /// passage par le réseau.
+    /// </remarks>
+    public IReadOnlyList<string> SecondairesOuVide => MusclesSecondaires ?? [];
+
+    /// <inheritdoc cref="SecondairesOuVide" />
+    public IReadOnlyList<string> ContraintesOuVide => ContreIndicationsPour ?? [];
+
+    /// <inheritdoc cref="SecondairesOuVide" />
+    public IReadOnlyList<string> PrimairesOuVide => MusclesPrimaires ?? [];
+
+    public string? Faute =>
+        string.IsNullOrWhiteSpace(Nom) ? "NomRequis"
+        : Nom.Length > LongueurMaximaleDuNom ? "NomTropLong"
+        : PrimairesOuVide.Count == 0 ? "MusclePrimaireRequis"
+        : PrimairesOuVide.Count + SecondairesOuVide.Count > MusclesMaximum ? "TropDeMuscles"
+        : PrimairesOuVide.Concat(SecondairesOuVide).Any(m => !MuscleValide(m)) ? "MuscleInvalide"
+        // Une comparaison ordinaire, et non un motif `is <= 0m or > ...` : un
+        // motif exige une CONSTANTE, et `IncrementMaximal` est devenue une
+        // propriété pour échapper au constructeur statique jamais exécuté
+        // qu'un `const decimal` engendre.
+        : IncrementParDefaut <= 0m || IncrementParDefaut > IncrementMaximal ? "IncrementInvalide"
+        : ContraintesOuVide.Any(c => !Contraintes.Lire(c, out _)) ? "ContrainteInvalide"
+        : null;
+
+    private static bool MuscleValide(string? muscle) =>
+        !string.IsNullOrWhiteSpace(muscle) && muscle.Length <= LongueurMaximaleDUnMuscle;
+}
+
+/// <summary>Un exercice, tel qu'il sort de l'API.</summary>
+/// <param name="Id">L'identifiant, celui que les séries référencent.</param>
+/// <param name="Nom">Le libellé affiché.</param>
+/// <param name="Materiel">Le matériel, ou <c>null</c>.</param>
+/// <param name="MusclesPrimaires">Comptent pour une série pleine dans le volume.</param>
+/// <param name="MusclesSecondaires">Comptent pour une demi-série.</param>
+/// <param name="Unilateral">Vrai quand le mouvement se fait un côté à la fois.</param>
+/// <param name="IncrementParDefaut">Le pas de progression proposé, en kilogrammes.</param>
+/// <param name="ContreIndicationsPour">Les régions sur lesquelles il est contre-indiqué.</param>
+/// <param name="EstPersonnalise">
+/// Vrai pour les siens, faux pour le catalogue public. C'est ce drapeau qui dit
+/// au front s'il peut proposer la suppression — et l'API le refuse de toute
+/// façon, parce que cacher un bouton ne rend pas une action indisponible.
+/// </param>
+public sealed record ExerciceRendu(
+    Guid Id,
+    string Nom,
+    string? Materiel,
+    IReadOnlyList<string> MusclesPrimaires,
+    IReadOnlyList<string> MusclesSecondaires,
+    bool Unilateral,
+    decimal IncrementParDefaut,
+    IReadOnlyList<string> ContreIndicationsPour,
+    bool EstPersonnalise
+);

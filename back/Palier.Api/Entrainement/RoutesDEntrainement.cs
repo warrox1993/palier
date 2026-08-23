@@ -36,5 +36,6 @@ internal static class RoutesDEntrainement
         Series.Router(groupe);
         PoidsCorporel.Router(groupe);
         Mesures.Router(groupe);
+        Catalogue.Router(groupe);
     }
 }

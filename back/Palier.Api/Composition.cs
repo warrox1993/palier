@@ -386,6 +386,9 @@ internal static class Composition
         constructeur.Services.AddScoped<ListerLePoids>();
         constructeur.Services.AddScoped<LireLaProgression>();
         constructeur.Services.AddScoped<LireLeVolume>();
+        constructeur.Services.AddScoped<ListerLeCatalogue>();
+        constructeur.Services.AddScoped<CreerUnExercice>();
+        constructeur.Services.AddScoped<SupprimerUnExercice>();
 
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();
