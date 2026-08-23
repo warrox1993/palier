@@ -367,13 +367,14 @@ internal static class Composition
         // angle. Plus une sonde gratuite et illimitée de l'accessibilité de la
         // base.
         //
-        // CE QUI RESTE DE D41 : le rôle d'administration. Aucun rôle n'existe
-        // dans ce produit — `PolitiquesDAutorisation` n'en porte que deux, qui
-        // sont des DOMAINES, pas des rôles. Exiger ici une politique
-        // inexistante fermerait la route à tout le monde, y compris au
-        // diététicien que `09-comptes.md` § 6 prévoit. La moitié réalisable est
-        // donc livrée, et la seconde attend le lot qui introduira les rôles.
-        application.MapGet(CheminDeSante, RepondreAsync).RequireAuthorization();
+        // D41 EST FERMÉE — lot 4b. Le rôle manquait : `PolitiquesDAutorisation`
+        // n'en portait que deux, qui sont des DOMAINES. La liste des
+        // administrateurs vit au coffre, par adresse, et une adresse non
+        // vérifiée n'ouvre rien — sans quoi s'inscrire avec l'adresse d'un
+        // administrateur suffirait à en devenir un.
+        application
+            .MapGet(CheminDeSante, RepondreAsync)
+            .RequireAuthorization(PolitiquesDAutorisation.Administration);
 
         PointsDEntree.Router(application);
     }

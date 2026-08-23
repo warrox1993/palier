@@ -58,21 +58,30 @@ internal static class HarnaisHttp
     /// </remarks>
     public static WebApplication Hote(
         BaseFixture baseDeDonnees,
-        Action<IServiceCollection>? ajuster = null
+        Action<IServiceCollection>? ajuster = null,
+        IReadOnlyDictionary<string, string?>? configurationEnPlus = null
     )
     {
         ArgumentNullException.ThrowIfNull(baseDeDonnees);
 
+        var reglages = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["ConnectionStrings:Palier"] = baseDeDonnees.ChaineApp,
+            ["ConnectionStrings:PalierAuth"] = baseDeDonnees.ChaineAuth,
+            ["JWT_SIGNING_KEY"] = Cle,
+        };
+
+        // Ce que l'épreuve ajoute PRIME : une clé posée ici remplace le défaut,
+        // ce qui permet d'éprouver une liste d'administrateurs vide aussi bien
+        // qu'une liste peuplée.
+        foreach (var paire in configurationEnPlus ?? new Dictionary<string, string?>())
+        {
+            reglages[paire.Key] = paire.Value;
+        }
+
         var constructeur = WebApplication.CreateBuilder();
         constructeur.Configuration.Sources.Clear();
-        constructeur.Configuration.AddInMemoryCollection(
-            new Dictionary<string, string?>(StringComparer.Ordinal)
-            {
-                ["ConnectionStrings:Palier"] = baseDeDonnees.ChaineApp,
-                ["ConnectionStrings:PalierAuth"] = baseDeDonnees.ChaineAuth,
-                ["JWT_SIGNING_KEY"] = Cle,
-            }
-        );
+        constructeur.Configuration.AddInMemoryCollection(reglages);
 
         Composition.Composer(constructeur);
 

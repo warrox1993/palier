@@ -23,6 +23,82 @@ internal sealed class ExigenceDeDomaine(Domaine domaine) : IAuthorizationRequire
     public Domaine Domaine => domaine;
 }
 
+/// <summary>L'exigence d'être administrateur — D41.</summary>
+internal sealed class ExigenceDAdministration : IAuthorizationRequirement;
+
+/// <summary>
+/// Les adresses des administrateurs, lues UNE FOIS au démarrage depuis
+/// <c>ADMIN_EMAILS</c> — donc depuis le coffre (D59).
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Une liste vide n'ouvre à personne.</b> C'est le piège classique de la
+/// liste blanche, et ce dépôt l'a déjà payé une fois : vider
+/// <c>TRUSTED_PROXIES</c> rendait la confiance TOTALE au lieu de la fermer,
+/// parce que le cadre n'inspectait plus rien. Ici, l'ensemble vide fait
+/// simplement échouer <c>Contains</c>, et c'est ce qu'on veut.
+/// </para>
+///
+/// <para>
+/// La comparaison est <b>insensible à la casse</b> : Identity normalise les
+/// adresses, et comparer brut ferait perdre son rôle à un administrateur qui
+/// s'inscrirait « Gardien@… » quand la liste dit « gardien@… ».
+/// </para>
+/// </remarks>
+internal sealed class ListeDesAdministrateurs
+{
+    private readonly HashSet<string> _adresses;
+
+    public ListeDesAdministrateurs(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        _adresses = (configuration["ADMIN_EMAILS"] ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public bool Porte(string? adresse) => adresse is not null && _adresses.Contains(adresse);
+}
+
+/// <summary>
+/// Applique la liste. Il charge le compte en base plutôt que de lire une
+/// revendication : le jeton vaut quinze minutes, et un administrateur retiré de
+/// la liste ne doit pas garder son pouvoir jusqu'au prochain rafraîchissement —
+/// c'est le raisonnement de <see cref="GardienDesDomaines" />, appliqué au rôle.
+/// </summary>
+internal sealed class GardienDAdministration(
+    IIdentiteDemandeur demandeur,
+    UserManager<Utilisateur> utilisateurs,
+    ListeDesAdministrateurs liste
+) : AuthorizationHandler<ExigenceDAdministration>
+{
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext contexte,
+        ExigenceDAdministration exigence
+    )
+    {
+        ArgumentNullException.ThrowIfNull(contexte);
+
+        if (demandeur.Identifiant is not { } identifiant)
+        {
+            return;
+        }
+
+        var compte = await utilisateurs
+            .FindByIdAsync(identifiant.ToString("D", CultureInfo.InvariantCulture))
+            .ConfigureAwait(false);
+
+        // `EmailConfirmed` n'est PAS une précaution de plus : l'inscription est
+        // ouverte, et sans elle quiconque s'inscrit avec l'adresse d'un
+        // administrateur en devient un, sans jamais prouver qu'il la possède.
+        if (compte is { EmailConfirmed: true } && liste.Porte(compte.Email))
+        {
+            contexte.Succeed(exigence);
+        }
+    }
+}
+
 /// <summary>
 /// Applique <see cref="PorteDesDomaines" /> : il lit les drapeaux, il appelle,
 /// il tranche.
@@ -96,6 +172,9 @@ internal static class PolitiquesDAutorisation
     /// <summary>Apports, références, calculs.</summary>
     public const string Nutrition = "nutrition";
 
+    /// <summary>Le rôle que D41 réclamait depuis le lot 4.</summary>
+    public const string Administration = "administration";
+
     /// <summary>Enregistre les politiques et leur gestionnaire.</summary>
     public static void Composer(WebApplicationBuilder constructeur)
     {
@@ -120,9 +199,24 @@ internal static class PolitiquesDAutorisation
                     politique.Requirements.Add(new ExigenceDeDomaine(Domaine.Nutrition));
                 }
             );
+
+            options.AddPolicy(
+                Administration,
+                politique =>
+                {
+                    politique.RequireAuthenticatedUser();
+                    politique.Requirements.Add(new ExigenceDAdministration());
+                }
+            );
         });
+
+        // Singleton : la liste est lue une fois, au démarrage, depuis le
+        // coffre. La relire à chaque requête ferait un aller-retour pour une
+        // valeur qui ne change qu'au redéploiement.
+        constructeur.Services.AddSingleton<ListeDesAdministrateurs>();
 
         // Scoped, et non singleton : il prend `UserManager`, qui l'est.
         constructeur.Services.AddScoped<IAuthorizationHandler, GardienDesDomaines>();
+        constructeur.Services.AddScoped<IAuthorizationHandler, GardienDAdministration>();
     }
 }
