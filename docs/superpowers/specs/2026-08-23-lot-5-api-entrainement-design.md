@@ -124,22 +124,67 @@ internal sealed class OuvrirUneSeance(PalierDbContext contexte)
 
 ---
 
-## 7. Les questions ouvertes — celles qui reviennent au porteur
+## 7. Les quatre questions, et ce que j'en ai fait
 
-**1. D39 n'est toujours pas validée.** Elle porte, en toutes lettres : « arbitrage à confirmer par le porteur du projet — sans sa validation explicite, cette décision n'est pas prise ». Le lot 2 a livré six tables au lieu de dix-neuf sur cette base, et le lot 5 continue sur la même. **Il faut trancher**, dans un sens ou dans l'autre, avant que l'écart grandisse encore.
+Le porteur a demandé que ce lot soit exécuté **en autonomie**. Les quatre
+questions restent donc posées, mais chacune est tranchée ici, avec ce qui la
+défait — comme au lot 4b.
 
-**2. Le périmètre du lot 5.** Ce document propose : séances, séries, poids, force estimée, volume, catalogue, ressenti, contraintes. C'est cohérent et fermé, mais c'est **un choix** — on pourrait s'arrêter aux séances et aux séries, et livrer plus tôt.
+### 7.1 D39 — considérée comme prise
 
-**3. La pagination.** `GET /api/v1/seances` rend une liste qui grandit sans fin. Curseur ou décalage ? Le curseur est plus juste sur une liste où l'on insère ; le décalage est plus simple. Aucun document du dossier ne tranche.
+Elle porte « arbitrage à confirmer par le porteur du projet ». Deux lots
+s'appuient déjà dessus, et la défaire coûterait treize tables et treize épreuves
+RLS que **rien n'exercerait** — le « garde-fou sans cible » que D31 refuse.
 
-**4. Les contraintes de `user_constraints`.** `05-entrainement.md` § 4 dit « adaptation par contrainte » sans énumérer les contraintes. Liste fermée en base, ou texte libre ? Une liste fermée se traduit et se raisonne ; un texte libre ne se raisonne pas et finit dans un prompt de modèle, ce que `01-conformite.md` encadre.
+**Ce qui la défait :** un mot du porteur. Le coût de revenir en arrière augmente
+à chaque lot ; c'est aujourd'hui qu'il est le plus bas.
+
+### 7.2 Le périmètre — celui du § 3, fermé
+
+Séances, séries, poids, force estimée, volume, catalogue, ressenti, contraintes.
+Rien de plus.
+
+**Ce qui la défait :** vouloir livrer plus tôt en s'arrêtant aux séances.
+
+### 7.3 La pagination — par CURSEUR
+
+`GET /api/v1/seances?avant={instant}&limite={n}`. Le curseur est le `started_at`
+de la dernière séance vue.
+
+**Le décalage serait faux ici.** Une liste triée par date décroissante reçoit
+des insertions **en tête** : entre deux pages, un `OFFSET 20` saute des lignes ou
+en répète. Le curseur ne bouge pas quand la liste grandit.
+
+Et l'index existe déjà : `workouts (owner_id, started_at desc)`, posé par D39
+pour exactement cette requête.
+
+**Ce qui la défait :** un besoin de sauter à la page N, qu'aucun écran ne
+demande.
+
+### 7.4 Les contraintes — LISTE FERMÉE, et le document la donne
+
+`docs/05-entrainement.md` § 4 nomme quatre contraintes — **cervicale, lombaire,
+épaule, genou** — chacune avec ses exclusions et ses priorités. Il n'y a donc
+rien à inventer : la liste est fermée par le document métier.
+
+**Le texte libre aurait été un piège.** Il ne se traduit pas, il ne se raisonne
+pas, et il finirait dans un prompt de modèle — ce que `01-conformite.md` encadre
+strictement. Une valeur d'énumération se compare, se traduit, et alimente le
+filtrage par intersection avec `exercises.contraindicated_for`, qui existe déjà.
+
+Le ressenti suit la même logique : trois états `good`, `meh`, `pain`, § 5.
+
+**Ce qui la défait :** une cinquième contrainte réclamée par un utilisateur —
+qui s'ajoute alors à l'énumération, en base et dans les libellés.
 
 ---
 
-## 8. Pourquoi ce document s'arrête ici
+## 8. Ce que ce document ne tranche pas
 
-`CLAUDE.md` § 1 : « Jamais de code avant qu'un plan ait été approuvé. » Le lot 4b faisait exception dans les faits parce qu'il fermait des exigences écrites noir sur blanc dans un document opposable — il n'y avait rien à arbitrer, seulement à exécuter.
+Le **filtrage automatique du catalogue** par les contraintes — § 4 du document
+métier — demande de décider ce qu'on fait d'un exercice contre-indiqué :
+l'exclure du catalogue, ou l'afficher marqué. C'est une décision de produit
+visible par l'utilisateur, donc `CLAUDE.md` § 6 s'applique.
 
-**Le lot 5 est différent.** Les quatre questions ci-dessus changent ce qu'il faut écrire, et deux d'entre elles touchent au schéma — que `CLAUDE.md` § 6 range parmi les sujets sur lesquels je ne dois pas trancher seul.
-
-La conception est donc écrite, et l'exécution attend.
+**Le lot 5 stocke les contraintes et les expose.** Le filtrage arrive au lot 6,
+avec l'écran qui le montre.
