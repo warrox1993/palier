@@ -180,4 +180,42 @@ public sealed class WeeklyVolume
     public decimal HardSets { get; set; }
 }
 
+/// <summary>
+/// Le ressenti d'un exercice au sein d'une séance —
+/// <c>docs/05-entrainement.md</c> § 5.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Possédée PAR JOINTURE, comme <see cref="WorkoutSet" /></b> : aucune
+/// colonne <c>owner_id</c>. Sa politique remonte jusqu'à <c>workouts</c>, et
+/// c'est toute la difficulté de cette forme — une politique qui oublierait la
+/// remontée laisserait lire les ressentis de tout le monde, sans qu'une seule
+/// ligne de code applicatif ne le montre.
+/// </para>
+///
+/// <para>
+/// <b>Un ressenti par exercice et par séance</b>, garanti par
+/// <c>unique (workout_id, exercise_id)</c> : changer d'avis en cours de séance
+/// est un remplacement, pas un second avis. Les seuils du § 5 — « 2 pain
+/// consécutifs », « 3 meh consécutifs » — compteraient faux sur des doublons.
+/// </para>
+/// </remarks>
+public sealed class ExerciseFeedback
+{
+    public Guid Id { get; set; }
+
+    public Guid WorkoutId { get; set; }
+
+    public Guid ExerciseId { get; set; }
+
+    /// <summary>
+    /// <c>good</c>, <c>meh</c> ou <c>pain</c>. Borné par un <c>CHECK</c> écrit
+    /// dans la migration : la contrainte applicative refuse déjà, mais elle ne
+    /// protège pas d'une écriture faite hors de l'API.
+    /// </summary>
+    public required string Feeling { get; set; }
+
+    public DateTimeOffset NotedAt { get; set; }
+}
+
 #pragma warning restore CA1819

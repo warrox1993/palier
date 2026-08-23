@@ -32,6 +32,9 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
 
     public DbSet<BodyWeight> BodyWeights => Set<BodyWeight>();
 
+    /// <summary>Le ressenti par exercice — lot 5, `05-entrainement.md` § 5.</summary>
+    public DbSet<ExerciseFeedback> ExerciseFeedbacks => Set<ExerciseFeedback>();
+
     /// <summary>
     /// La vue <c>weekly_volume</c>, en LECTURE seule — lot 5. Elle n'est pas
     /// pilotée par les migrations : <c>ToView</c> l'en empêche, et le SQL de la
@@ -69,6 +72,38 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.Property(x => x.DernierEchecLe).HasColumnName("DernierEchecLe");
             t.Property(x => x.VerrouillagesSubis).HasColumnName("VerrouillagesSubis").HasDefaultValue(0);
             t.Property(x => x.ConsentementSanteLe).HasColumnName("ConsentementSanteLe");
+        });
+
+        builder.Entity<ExerciseFeedback>(t =>
+        {
+            t.ToTable("exercise_feedback");
+            t.HasKey(x => x.Id);
+            t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            t.Property(x => x.WorkoutId).HasColumnName("workout_id");
+            t.Property(x => x.ExerciseId).HasColumnName("exercise_id");
+            t.Property(x => x.Feeling).HasColumnName("feeling").IsRequired();
+            t.Property(x => x.NotedAt).HasColumnName("noted_at").HasDefaultValueSql("now()");
+
+            // UN ressenti par exercice et par séance. Changer d'avis en cours
+            // de séance est un remplacement, pas un second avis : les seuils du
+            // § 5 — deux `pain` consécutifs, trois `meh` consécutifs —
+            // compteraient faux sur des doublons.
+            t.HasIndex(x => new { x.WorkoutId, x.ExerciseId })
+                .IsUnique()
+                .HasDatabaseName("ux_exercise_feedback_workout_exercise");
+
+            // La séance emporte ses ressentis, comme elle emporte ses séries.
+            t.HasOne<Workout>()
+                .WithMany()
+                .HasForeignKey(x => x.WorkoutId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // RESTRICT sur l'exercice, comme `sets` : supprimer un exercice ne
+            // doit pas effacer silencieusement l'historique qui le référence.
+            t.HasOne<Exercise>()
+                .WithMany()
+                .HasForeignKey(x => x.ExerciseId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // La vue du volume hebdomadaire. `HasNoKey` parce qu'une vue agrégée

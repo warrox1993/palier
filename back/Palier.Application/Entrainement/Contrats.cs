@@ -440,3 +440,42 @@ public sealed record ExerciceRendu(
     IReadOnlyList<string> ContreIndicationsPour,
     bool EstPersonnalise
 );
+
+/// <summary>Ce qu'on donne pour noter le ressenti d'un exercice.</summary>
+/// <param name="ExerciceId">L'exercice noté. Il doit avoir été travaillé dans la séance.</param>
+/// <param name="Ressenti">
+/// <c>good</c>, <c>meh</c> ou <c>pain</c>. La liste est fermée par
+/// <c>docs/05-entrainement.md</c> § 5.
+/// </param>
+public sealed record NoteDeRessenti(Guid ExerciceId, string? Ressenti)
+{
+    /// <summary>Le code du refus, ou <c>null</c>.</summary>
+    public string? Faute => Ressentis.Lire(Ressenti, out _) ? null : "RessentiInvalide";
+}
+
+/// <summary>Un ressenti, tel qu'il sort de l'API.</summary>
+/// <param name="SeanceId">La séance où il a été noté — c'est elle qui l'ordonne dans le temps.</param>
+/// <param name="ExerciceId">L'exercice concerné.</param>
+/// <param name="Ressenti">La forme stockée : <c>good</c>, <c>meh</c> ou <c>pain</c>.</param>
+/// <param name="Instant">Quand il a été noté.</param>
+public sealed record RessentiRendu(
+    Guid SeanceId,
+    Guid ExerciceId,
+    string Ressenti,
+    DateTimeOffset Instant
+)
+{
+    /// <summary>Le nombre de ressentis rendus par défaut pour un exercice.</summary>
+    /// <remarks>
+    /// Dix couvre largement les fenêtres du § 5 — « les 3 dernières séances »,
+    /// « 2 consécutifs », « 3 consécutifs » — et tient dans un écran.
+    /// </remarks>
+    public const int HistoriqueParDefaut = 10;
+
+    /// <summary>Le plafond.</summary>
+    public const int HistoriqueMaximal = 200;
+
+    /// <summary>La taille effective de l'historique, bornée des deux côtés.</summary>
+    public static int BornerLHistorique(int? demande) =>
+        Math.Clamp(demande ?? HistoriqueParDefaut, 1, HistoriqueMaximal);
+}
