@@ -35,6 +35,9 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
     /// <summary>Le ressenti par exercice — lot 5, `05-entrainement.md` § 5.</summary>
     public DbSet<ExerciseFeedback> ExerciseFeedbacks => Set<ExerciseFeedback>();
 
+    /// <summary>Les contraintes déclarées — lot 5, `05-entrainement.md` § 4.</summary>
+    public DbSet<UserConstraint> UserConstraints => Set<UserConstraint>();
+
     /// <summary>
     /// La vue <c>weekly_volume</c>, en LECTURE seule — lot 5. Elle n'est pas
     /// pilotée par les migrations : <c>ToView</c> l'en empêche, et le SQL de la
@@ -104,6 +107,30 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
                 .WithMany()
                 .HasForeignKey(x => x.ExerciseId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<UserConstraint>(t =>
+        {
+            t.ToTable("user_constraints");
+            t.HasKey(x => x.Id);
+            t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            t.Property(x => x.OwnerId).HasColumnName("owner_id");
+            t.Property(x => x.Region).HasColumnName("region").IsRequired();
+            t.Property(x => x.DeclaredAt).HasColumnName("declared_at").HasDefaultValueSql("now()");
+
+            // UNE ligne par région. Déclarer deux fois la même contrainte est
+            // un remplacement, pas un doublon.
+            t.HasIndex(x => new { x.OwnerId, x.Region })
+                .IsUnique()
+                .HasDatabaseName("ux_user_constraints_owner_region");
+
+            // Article 17 : les contraintes ne survivent pas au compte. Elles
+            // relèvent de l'article 9 — une contrainte cervicale ou lombaire
+            // est une donnée de santé.
+            t.HasOne<Utilisateur>()
+                .WithMany()
+                .HasForeignKey(x => x.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // La vue du volume hebdomadaire. `HasNoKey` parce qu'une vue agrégée

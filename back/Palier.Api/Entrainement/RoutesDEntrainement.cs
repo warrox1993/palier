@@ -38,5 +38,6 @@ internal static class RoutesDEntrainement
         Mesures.Router(groupe);
         Catalogue.Router(groupe);
         RessentiParExercice.Router(groupe);
+        ContraintesDuCompte.Router(groupe);
     }
 }

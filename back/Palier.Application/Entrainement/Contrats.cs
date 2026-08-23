@@ -479,3 +479,41 @@ public sealed record RessentiRendu(
     public static int BornerLHistorique(int? demande) =>
         Math.Clamp(demande ?? HistoriqueParDefaut, 1, HistoriqueMaximal);
 }
+
+/// <summary>La liste COMPLÈTE des contraintes qu'on déclare.</summary>
+/// <param name="Regions">
+/// Zéro à quatre régions, prises dans la liste fermée. Une liste vide est
+/// LÉGITIME : c'est ainsi qu'on déclare n'avoir aucune contrainte, ou qu'on
+/// retire la dernière.
+/// </param>
+public sealed record DeclarationDeContraintes(IReadOnlyList<string>? Regions)
+{
+    /// <summary>La liste, une absence valant une liste vide.</summary>
+    /// <remarks>
+    /// Le type dit nullable ICI, contrairement à <c>CreationDExercice</c> où
+    /// il mentait. C'est la même réalité — un corps JSON qui omet le champ
+    /// donne <c>null</c> — écrite honnêtement.
+    /// </remarks>
+    public IReadOnlyList<string> RegionsOuVide => Regions ?? [];
+
+    /// <summary>Le code du refus, ou <c>null</c>.</summary>
+    /// <remarks>
+    /// <b>Les doublons sont TOLÉRÉS et dédupliqués</b>, pas refusés : déclarer
+    /// deux fois « genou » dit la même chose que le déclarer une fois, et un
+    /// refus obligerait le client à dédupliquer avant d'envoyer. La contrainte
+    /// <c>unique (owner_id, region)</c> reste le dernier mot.
+    /// </remarks>
+    public string? Faute =>
+        RegionsOuVide.Count > Contraintes.Toutes.Count ? "TropDeContraintes"
+        : RegionsOuVide.Any(r => !Contraintes.Lire(r, out _)) ? "ContrainteInvalide"
+        : null;
+}
+
+/// <summary>Une contrainte déclarée, telle qu'elle sort de l'API.</summary>
+/// <param name="Region">La forme stockée : <c>cervicale</c>, <c>lombaire</c>, <c>epaule</c> ou <c>genou</c>.</param>
+/// <param name="DeclareeLe">
+/// Depuis quand elle est déclarée. Elle NE CHANGE PAS quand on renvoie une
+/// liste qui la contient déjà — sans quoi la date dirait « depuis le dernier
+/// enregistrement » au lieu de « depuis quand ».
+/// </param>
+public sealed record ContrainteRendue(string Region, DateTimeOffset DeclareeLe);

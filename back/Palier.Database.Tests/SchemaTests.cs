@@ -102,6 +102,60 @@ public sealed class SchemaTests(BaseFixture baseDeDonnees)
     }
 
     [Fact]
+    public async Task Les_DEUX_tables_du_lot_5_existent()
+    {
+        // D39 : « les treize autres tables arrivent au lot qui les utilise ».
+        // Le lot 5 en a exigé DEUX, et pas davantage — le ressenti par
+        // exercice et les contraintes déclarées. Les onze restantes
+        // appartiennent à la nutrition, à l'abonnement et à l'assistant : les
+        // poser ici aurait produit onze tables qu'aucun cas d'usage n'exerce,
+        // le « garde-fou sans cible » que D39 refuse nommément.
+        //
+        // Cette épreuve est SÉPARÉE de celle de la tranche D39, parce qu'elles
+        // ne disent pas la même chose : l'une garde une décision d'architecture
+        // prise au lot 2, l'autre constate ce que le lot 5 a ajouté.
+        foreach (var table in new[] { "exercise_feedback", "user_constraints" })
+        {
+            var existe = await Compter(
+                "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+                    + $"where n.nspname = 'public' and c.relkind = 'r' and c.relname = '{table}'"
+            );
+            Assert.True(existe == 1, $"Table manquante dans `public` : {table}");
+        }
+    }
+
+    [Fact]
+    public async Task Les_bornes_des_DEUX_listes_fermees_sont_appliquees_par_le_MOTEUR()
+    {
+        // Les contraintes `CHECK` des deux tables nouvelles. La validation
+        // applicative refuse déjà, mais elle ne protège pas d'une écriture
+        // faite HORS de l'API — une commande d'exploitation, une reprise de
+        // données, un script. Et une valeur inconnue en base ne produirait
+        // aucune erreur : les seuils du § 5 compteraient faux, et le filtrage
+        // du § 4 ne trouverait simplement rien.
+        //
+        // On interroge le catalogue plutôt que de relire la migration : c'est
+        // l'état du moteur qui compte, pas le texte qui l'a produit.
+        foreach (
+            var (table, contrainte) in new[]
+            {
+                ("exercise_feedback", "ck_exercise_feedback_feeling"),
+                ("user_constraints", "ck_user_constraints_region"),
+            }
+        )
+        {
+            var posee = await Compter(
+                "select count(*) from pg_constraint c "
+                    + "join pg_class t on t.oid = c.conrelid "
+                    + "join pg_namespace n on n.oid = t.relnamespace "
+                    + $"where n.nspname = 'public' and t.relname = '{table}' "
+                    + $"and c.conname = '{contrainte}' and c.contype = 'c'"
+            );
+            Assert.True(posee == 1, $"Contrainte CHECK manquante : {contrainte} sur {table}");
+        }
+    }
+
+    [Fact]
     public async Task La_vue_weekly_volume_est_appliquee_et_s_execute_avec_les_droits_de_l_appelant()
     {
         // Interroger `pg_views` plutôt que comparer un fichier : c'est l'état

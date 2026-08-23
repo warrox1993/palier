@@ -391,6 +391,9 @@ internal static class Composition
         constructeur.Services.AddScoped<SupprimerUnExercice>();
         constructeur.Services.AddScoped<NoterUnRessenti>();
         constructeur.Services.AddScoped<ListerLesRessentis>();
+        constructeur.Services.AddScoped<ListerLesContraintes>();
+        constructeur.Services.AddScoped<RemplacerLesContraintes>();
+        constructeur.Services.AddScoped<RetirerUneContrainte>();
 
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();

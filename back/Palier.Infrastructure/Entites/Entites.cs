@@ -218,4 +218,40 @@ public sealed class ExerciseFeedback
     public DateTimeOffset NotedAt { get; set; }
 }
 
+/// <summary>
+/// Une contrainte déclarée par l'utilisateur —
+/// <c>docs/05-entrainement.md</c> § 4, « le second différenciateur ».
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Possédée DIRECTE</b>, contrairement à <see cref="ExerciseFeedback" /> :
+/// elle porte son <c>owner_id</c>, et sa politique est la forme la plus simple
+/// du schéma. C'est aussi la forme la plus facile à écrire juste, donc celle où
+/// une erreur se verrait le moins.
+/// </para>
+///
+/// <para>
+/// <b>Une ligne par région</b>, garantie par
+/// <c>unique (owner_id, region)</c> : déclarer deux fois la même contrainte est
+/// un remplacement, pas un doublon. Sans cette contrainte, le filtrage du
+/// catalogue — lot 6 — dédupliquerait à la lecture, ou ne dédupliquerait pas.
+/// </para>
+/// </remarks>
+public sealed class UserConstraint
+{
+    public Guid Id { get; set; }
+
+    public Guid OwnerId { get; set; }
+
+    /// <summary>
+    /// <c>cervicale</c>, <c>lombaire</c>, <c>epaule</c> ou <c>genou</c>. Borné
+    /// par un <c>CHECK</c> écrit dans la migration, et par l'énumération
+    /// <c>Contrainte</c> côté applicatif — les deux, parce que le CHECK
+    /// protège aussi d'une écriture faite hors de l'API.
+    /// </summary>
+    public required string Region { get; set; }
+
+    public DateTimeOffset DeclaredAt { get; set; }
+}
+
 #pragma warning restore CA1819
