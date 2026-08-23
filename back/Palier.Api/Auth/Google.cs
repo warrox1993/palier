@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
+using Palier.Infrastructure.Coffre;
 using Palier.Infrastructure.Identite;
 
 namespace Palier.Api.Auth;
@@ -105,12 +106,15 @@ internal static class Google
         HttpContext contexte,
         UserManager<Utilisateur> utilisateurs,
         MagasinDeSessions sessions,
+        PorteurDeTrousseau porteur,
         TimeProvider horloge,
         CancellationToken jeton
     )
     {
         ArgumentNullException.ThrowIfNull(contexte);
         ArgumentNullException.ThrowIfNull(utilisateurs);
+        ArgumentNullException.ThrowIfNull(porteur);
+        ArgumentNullException.ThrowIfNull(horloge);
 
         var authentification = await contexte.AuthenticateAsync(Schema).ConfigureAwait(false);
         if (!authentification.Succeeded || authentification.Principal is null)
@@ -159,12 +163,52 @@ internal static class Google
                 )
                 .ConfigureAwait(false),
 
-            // La liaison se PROPOSE. Le front reçoit un marqueur sans secret :
-            // c'est un second appel, avec preuve de possession, qui liera.
-            SuiteDeGoogle.ProposerLaLiaison => Results.Redirect("/lier-google"),
+            // La liaison se PROPOSE. Le sceau part en COOKIE — jamais dans
+            // l'URL — et ne vaut rien sans le mot de passe du compte visé.
+            SuiteDeGoogle.ProposerLaLiaison => ProposerLaLiaison(
+                contexte,
+                porteur,
+                parAdresse!.Id,
+                constat.Sujet!,
+                horloge.GetUtcNow()
+            ),
 
             _ => Refus(),
         };
+    }
+
+    /// <summary>
+    /// Pose le sceau et renvoie le front vers l'écran de liaison. Le sceau ne
+    /// donne AUCUN accès : il atteste seulement quel compte Google se présente,
+    /// et il est lié au compte visé par ses données associées.
+    /// </summary>
+    private static IResult ProposerLaLiaison(
+        HttpContext contexte,
+        PorteurDeTrousseau porteur,
+        Guid compte,
+        string sujet,
+        DateTimeOffset maintenant
+    )
+    {
+        contexte.Response.Cookies.Append(
+            LiaisonGoogle.NomDuCookie,
+            LiaisonGoogle.Sceller(
+                porteur.Trousseau,
+                compte,
+                sujet,
+                maintenant + LiaisonGoogle.Duree
+            ),
+            new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Path = LiaisonGoogle.CheminDuCookie,
+                Expires = maintenant + LiaisonGoogle.Duree,
+            }
+        );
+
+        return Results.Redirect("/lier-google");
     }
 
     private static async Task<IResult> CreerPuisOuvrirAsync(

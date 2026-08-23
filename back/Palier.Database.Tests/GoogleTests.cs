@@ -114,10 +114,10 @@ public sealed class GoogleTests(BaseFixture baseDeDonnees)
         // clic. Absentes, le front sait qu'il ne doit pas afficher le bouton.
         await using var hote = HarnaisHttp.Hote(baseDeDonnees);
 
-        Assert.DoesNotContain(
-            Endpoints(hote),
-            e => e.RoutePattern.RawText?.Contains("google", StringComparison.Ordinal) == true
-        );
+        // Le filtre porte sur le PRÉFIXE, pas sur « contient google » :
+        // `/lier-google` existe toujours, lui, et n'a rien à voir avec le
+        // câblage OAuth — c'est la seconde moitié de la fusion des comptes.
+        Assert.DoesNotContain(Endpoints(hote), EstUneRouteDeGoogle);
     }
 
     [Fact]
@@ -134,12 +134,7 @@ public sealed class GoogleTests(BaseFixture baseDeDonnees)
             }
         );
 
-        var chemins = Endpoints(hote)
-            .Select(e => e.RoutePattern.RawText)
-            .Where(t => t?.Contains("google", StringComparison.Ordinal) == true)
-            .ToArray();
-
-        Assert.Equal(2, chemins.Length);
+        Assert.Equal(2, Endpoints(hote).Count(EstUneRouteDeGoogle));
     }
 
     // ================================================================
@@ -157,6 +152,13 @@ public sealed class GoogleTests(BaseFixture baseDeDonnees)
     }
 
     // ================================================================
+
+    /// <summary>Les routes du CÂBLAGE OAuth, et elles seules.</summary>
+    private static bool EstUneRouteDeGoogle(RouteEndpoint endpoint) =>
+        endpoint.RoutePattern.RawText?.StartsWith(
+            PointsDEntree.Prefixe + "/google",
+            StringComparison.Ordinal
+        ) == true;
 
     private static List<RouteEndpoint> Endpoints(WebApplication hote)
     {

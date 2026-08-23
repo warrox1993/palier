@@ -158,6 +158,7 @@ internal static class PointsDEntree
         Verification.Router(groupe);
         Reinitialisation.Router(groupe);
         Google.Router(groupe, application.Configuration);
+        LiaisonGoogle.Router(groupe);
         DeuxFacteurs.Router(groupe);
     }
 

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Palier.Api.Auth;
+using Palier.Infrastructure.Coffre;
 using Palier.Infrastructure.Identite;
 
 namespace Palier.Database.Tests;
@@ -65,12 +66,13 @@ public sealed class RappelDeGoogleTests(BaseFixture baseDeDonnees)
         Assert.DoesNotContain("jeton", destination, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("=ey", destination, StringComparison.Ordinal);
 
-        // Et le cookie de rafraîchissement, lui, EST posé.
+        // Et le cookie de rafraîchissement, lui, EST posé — c'est par là que le
+        // front obtiendra son jeton d'accès.
         Assert.Contains(
+            CookieDeRafraichissement.Nom,
             contexte.Response.Headers.SetCookie.ToString(),
-            c => true
+            StringComparison.Ordinal
         );
-        Assert.NotEmpty(contexte.Response.Headers.SetCookie.ToString());
     }
 
     // ================================================================
@@ -104,7 +106,12 @@ public sealed class RappelDeGoogleTests(BaseFixture baseDeDonnees)
 
         // Il n'est PAS connecté : la liaison se propose, elle ne se fait pas.
         Assert.Contains("lier-google", contexte.Response.Headers.Location.ToString(), StringComparison.Ordinal);
-        Assert.Empty(contexte.Response.Headers.SetCookie.ToString());
+
+        // Le cookie posé est celui de la LIAISON, pas celui du
+        // rafraîchissement : le sceau atteste qui se présente, il n'ouvre rien.
+        var cookies = contexte.Response.Headers.SetCookie.ToString();
+        Assert.Contains(LiaisonGoogle.NomDuCookie, cookies, StringComparison.Ordinal);
+        Assert.DoesNotContain(CookieDeRafraichissement.Nom, cookies, StringComparison.Ordinal);
     }
 
     // ================================================================
@@ -161,6 +168,7 @@ public sealed class RappelDeGoogleTests(BaseFixture baseDeDonnees)
             contexte,
             portee.ServiceProvider.GetRequiredService<UserManager<Utilisateur>>(),
             portee.ServiceProvider.GetRequiredService<MagasinDeSessions>(),
+            hote.Services.GetRequiredService<PorteurDeTrousseau>(),
             hote.Services.GetRequiredService<TimeProvider>(),
             CancellationToken.None
         );
