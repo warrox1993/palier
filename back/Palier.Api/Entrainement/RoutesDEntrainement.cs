@@ -33,5 +33,6 @@ internal static class RoutesDEntrainement
             .RequireAuthorization(PolitiquesDAutorisation.Entrainement);
 
         Seances.Router(groupe);
+        Series.Router(groupe);
     }
 }

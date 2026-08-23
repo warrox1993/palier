@@ -72,11 +72,11 @@ public sealed class OuvrirUneSeance(PalierDbContext contexte, IIdentiteDemandeur
     }
 }
 
-/// <summary>Lit une séance. Rend <c>null</c> si elle n'existe pas — ou n'est pas la sienne.</summary>
+/// <summary>Lit une séance ET ses séries. Rend <c>null</c> si elle n'existe pas — ou n'est pas la sienne.</summary>
 [GestionnaireDeCasDUsage]
 public sealed class LireUneSeance(PalierDbContext contexte)
 {
-    public async Task<SeanceRendue?> ExecuterAsync(Guid identifiant, CancellationToken jeton)
+    public async Task<SeanceDetaillee?> ExecuterAsync(Guid identifiant, CancellationToken jeton)
     {
         var seance = await contexte
             .Workouts.AsNoTracking()
@@ -87,7 +87,27 @@ public sealed class LireUneSeance(PalierDbContext contexte)
         // et « elle n'est pas à vous » doivent être indiscernables de
         // l'extérieur. Les distinguer transformerait la route en oracle
         // d'existence.
-        return seance is null ? null : RenduDeSeance.Depuis(seance);
+        if (seance is null)
+        {
+            return null;
+        }
+
+        // Les séries dans la MÊME transaction, donc sous la même identité.
+        // Triées par rang : l'ordre d'insertion n'est pas garanti par
+        // PostgreSQL, et un écran de séance qui affiche les séries dans le
+        // désordre est un écran faux.
+        var series = await contexte
+            .WorkoutSets.AsNoTracking()
+            .Where(s => s.WorkoutId == identifiant)
+            .OrderBy(s => s.SetIndex)
+            .ThenBy(s => s.LoggedAt)
+            .ToListAsync(jeton)
+            .ConfigureAwait(false);
+
+        return new SeanceDetaillee(
+            RenduDeSeance.Depuis(seance),
+            [.. series.Select(RenduDeSerie.Depuis)]
+        );
     }
 }
 

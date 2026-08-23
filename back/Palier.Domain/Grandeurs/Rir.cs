@@ -23,8 +23,23 @@ public readonly record struct Rir
     /// <summary>L'hypothèse retenue quand le RIR n'a pas été renseigné.</summary>
     public static Rir ParDefaut => new(2);
 
+    /// <summary>
+    /// Les bornes, DEMANDÉES plutôt que franchies.
+    /// </summary>
+    /// <remarks>
+    /// Une valeur hors bornes tapée par un utilisateur n'est pas un défaut du
+    /// programme : c'est une saisie, et une saisie se refuse par un 400. Sans
+    /// ce prédicat, l'adaptateur HTTP n'aurait que deux choix, tous deux
+    /// mauvais — attraper l'exception pour en faire un flux normal, ou
+    /// recopier les bornes chez lui, ce qui dupliquerait la connaissance à
+    /// l'endroit exact où elle doit être unique.
+    ///
+    /// La fabrique s'appuie dessus : les bornes ne sont écrites QU'UNE FOIS.
+    /// </remarks>
+    public static bool EstValide(int nombre) => nombre is >= 0 and <= 10;
+
     public static Rir De(int nombre) =>
-        nombre is >= 0 and <= 10
+        EstValide(nombre)
             ? new Rir(nombre)
             : throw new ArgumentOutOfRangeException(nameof(nombre), nombre, null);
 }

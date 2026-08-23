@@ -98,3 +98,71 @@ public sealed record PageDeSeances(
     public static int Borner(int? demandee) =>
         Math.Clamp(demandee ?? TailleParDefaut, 1, TailleMaximale);
 }
+
+/// <summary>Ce qu'on donne pour ajouter une série à une séance.</summary>
+/// <param name="ExerciceId">L'exercice travaillé. Il doit exister et être visible.</param>
+/// <param name="Index">Le rang de la série dans la séance, à partir de 1.</param>
+/// <param name="ChargeKg">Nul est légitime : une série au poids de corps n'a pas de charge.</param>
+/// <param name="Repetitions">Nul est légitime : un gainage se compte en secondes, pas en répétitions.</param>
+/// <param name="Rir">Répétitions en réserve. Nul signifie « non renseigné », que le domaine suppose à 2.</param>
+/// <param name="Echauffement">Une série d'échauffement ne compte dans AUCUN volume ni aucune estimation.</param>
+public sealed record AjoutDeSerie(
+    Guid ExerciceId,
+    int Index,
+    decimal? ChargeKg,
+    int? Repetitions,
+    int? Rir,
+    bool Echauffement
+)
+{
+    /// <summary>
+    /// Le code du premier refus rencontré, ou <c>null</c> si tout passe.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Les bornes viennent du DOMAINE, elles ne sont pas recopiées ici.</b>
+    /// <c>Charge.EstValide</c>, <c>Repetitions.EstValide</c> et
+    /// <c>Rir.EstValide</c> sont les mêmes prédicats dont les fabriques se
+    /// servent : il ne peut donc pas exister de valeur que ce contrôle accepte
+    /// et que la construction refuse, ni l'inverse. C'est le critère du destin
+    /// commun de <c>CLAUDE.md</c> § 4 — si une borne change, un seul endroit
+    /// bouge.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Rendre le CODE plutôt qu'un booléen</b> évite au point d'entrée de
+    /// redécouvrir laquelle des quatre règles a mordu — ce qu'il ferait en
+    /// réécrivant les mêmes conditions, donc en dupliquant exactement ce que
+    /// ce membre existe pour centraliser.
+    /// </para>
+    /// </remarks>
+    public string? Faute =>
+        Index < 1 ? "IndexInvalide"
+        : ChargeKg is { } charge && !Domain.Grandeurs.Charge.EstValide(charge) ? "ChargeInvalide"
+        : Repetitions is { } reps && !Domain.Grandeurs.Repetitions.EstValide(reps)
+            ? "RepetitionsInvalides"
+        : Rir is { } reserve && !Domain.Grandeurs.Rir.EstValide(reserve) ? "RirInvalide"
+        : null;
+}
+
+/// <summary>Une série, telle qu'elle sort de l'API.</summary>
+public sealed record SerieRendue(
+    Guid Id,
+    Guid ExerciceId,
+    int Index,
+    decimal? ChargeKg,
+    int? Repetitions,
+    int? Rir,
+    bool Echauffement,
+    DateTimeOffset Instant
+);
+
+/// <summary>Une séance avec ses séries.</summary>
+/// <remarks>
+/// La lecture d'une séance rend ses séries dans la MÊME réponse, et la liste
+/// paginée ne les rend pas. Ce n'est pas une incohérence : l'écran de séance
+/// affiche les deux ensemble, et les faire chercher en N+1 requêtes coûterait
+/// un aller-retour par séance. La liste, elle, n'affiche que des en-têtes —
+/// y joindre les séries multiplierait par vingt le volume transféré pour rien.
+/// </remarks>
+public sealed record SeanceDetaillee(SeanceRendue Seance, IReadOnlyList<SerieRendue> Series);

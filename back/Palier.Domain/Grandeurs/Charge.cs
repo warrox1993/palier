@@ -15,8 +15,23 @@ public readonly record struct Charge
 
     public decimal Kilogrammes { get; }
 
+    /// <summary>
+    /// Les bornes, DEMANDÉES plutôt que franchies.
+    /// </summary>
+    /// <remarks>
+    /// Une valeur hors bornes tapée par un utilisateur n'est pas un défaut du
+    /// programme : c'est une saisie, et une saisie se refuse par un 400. Sans
+    /// ce prédicat, l'adaptateur HTTP n'aurait que deux choix, tous deux
+    /// mauvais — attraper l'exception pour en faire un flux normal, ou
+    /// recopier les bornes chez lui, ce qui dupliquerait la connaissance à
+    /// l'endroit exact où elle doit être unique.
+    ///
+    /// La fabrique s'appuie dessus : les bornes ne sont écrites QU'UNE FOIS.
+    /// </remarks>
+    public static bool EstValide(decimal kilogrammes) => kilogrammes is >= 0m and <= 1000m;
+
     public static Charge DepuisKilogrammes(decimal kilogrammes) =>
-        kilogrammes is >= 0m and <= 1000m
+        EstValide(kilogrammes)
             ? new Charge(kilogrammes)
             : throw new ArgumentOutOfRangeException(nameof(kilogrammes), kilogrammes, null);
 }
