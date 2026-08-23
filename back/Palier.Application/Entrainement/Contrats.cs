@@ -166,3 +166,74 @@ public sealed record SerieRendue(
 /// y joindre les séries multiplierait par vingt le volume transféré pour rien.
 /// </remarks>
 public sealed record SeanceDetaillee(SeanceRendue Seance, IReadOnlyList<SerieRendue> Series);
+
+/// <summary>Ce qu'on donne pour enregistrer une pesée.</summary>
+/// <param name="Jour">Absent, c'est aujourd'hui.</param>
+/// <param name="PoidsKg">Le poids corporel.</param>
+public sealed record MesureDePoids(DateOnly? Jour, decimal PoidsKg)
+{
+    /// <summary>
+    /// Le code du premier refus, ou <c>null</c>.
+    /// </summary>
+    /// <param name="aujourdHui">
+    /// La date du jour, DONNÉE plutôt que lue. Appeler l'horloge ici rendrait
+    /// ce membre impur, donc son épreuve dépendante de la date d'exécution —
+    /// et une épreuve qui rougit un jour sur trois cesse d'être lue.
+    /// </param>
+    /// <remarks>
+    /// <b>Une pesée DANS LE FUTUR est refusée.</b> Ce n'est pas du zèle : la
+    /// détection de perte rapide compare des valeurs consécutives dans le
+    /// temps, et une date future les réordonne. Une faute de frappe sur
+    /// l'année suffirait à faire passer la dernière pesée en tête de série et
+    /// à inverser le sens de la variation.
+    /// </remarks>
+    public string? Faute(DateOnly aujourdHui) =>
+        !Domain.Grandeurs.Masse.EstValide(PoidsKg) ? "PoidsInvalide"
+        : Jour is { } jour && jour > aujourdHui ? "JourDansLeFutur"
+        : null;
+}
+
+/// <summary>Une pesée, telle qu'elle sort de l'API.</summary>
+public sealed record PoidsRendu(DateOnly Jour, decimal PoidsKg);
+
+/// <summary>La série de pesées, et le constat de sécurité s'il y en a un.</summary>
+/// <param name="Mesures">De la plus ancienne à la plus récente.</param>
+/// <param name="Constat">
+/// Un CODE — <c>PerteRapide</c> — ou <c>null</c>. JAMAIS une phrase.
+/// </param>
+/// <remarks>
+/// <para>
+/// <b>Le constat n'empêche RIEN.</b> `docs/01-conformite.md` § 5 impose « un
+/// message d'orientation vers un professionnel, jamais de renforcement de la
+/// restriction ». Un produit qui REFUSERAIT la saisie se ferait contourner en
+/// cessant de saisir — ce qui supprime justement le signal qu'on cherchait à
+/// lire.
+/// </para>
+///
+/// <para>
+/// <b>Et l'API ne rédige pas le message.</b> Le libellé vit en base, versionné
+/// et validé — <c>09-comptes.md</c>. Une phrase écrite ici échapperait à cette
+/// validation ET à i18next, sur le sujet exact où <c>01-conformite.md</c>
+/// sépare informer de prescrire.
+/// </para>
+/// </remarks>
+public sealed record SerieDePoids(IReadOnlyList<PoidsRendu> Mesures, string? Constat)
+{
+    /// <summary>Le code du constat de perte rapide. Le SEUL de ce lot.</summary>
+    public const string PerteRapide = "PerteRapide";
+
+    /// <summary>La fenêtre de lecture par défaut, en jours.</summary>
+    /// <remarks>
+    /// Quatre-vingt-dix jours couvrent largement les quatre semaines dont la
+    /// détection a besoin, et donnent une courbe lisible sans rapatrier des
+    /// années de mesures à chaque ouverture d'écran.
+    /// </remarks>
+    public const int FenetreParDefaut = 90;
+
+    /// <summary>Le plafond de la fenêtre, en jours — cinq ans.</summary>
+    public const int FenetreMaximale = 1825;
+
+    /// <summary>La fenêtre effective, bornée des deux côtés.</summary>
+    public static int BornerLaFenetre(int? demandee) =>
+        Math.Clamp(demandee ?? FenetreParDefaut, 1, FenetreMaximale);
+}

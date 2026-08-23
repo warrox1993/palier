@@ -382,6 +382,8 @@ internal static class Composition
         constructeur.Services.AddScoped<SupprimerUneSeance>();
         constructeur.Services.AddScoped<AjouterUneSerie>();
         constructeur.Services.AddScoped<RetirerUneSerie>();
+        constructeur.Services.AddScoped<EnregistrerLePoids>();
+        constructeur.Services.AddScoped<ListerLePoids>();
 
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();

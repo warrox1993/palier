@@ -15,8 +15,18 @@ public readonly record struct Masse
 
     public decimal Kilogrammes { get; }
 
+    /// <summary>
+    /// Les bornes, DEMANDÉES plutôt que franchies.
+    /// </summary>
+    /// <remarks>
+    /// Un poids hors bornes tapé par un utilisateur est une saisie, pas un
+    /// défaut du programme : il se refuse par un 400. La fabrique s'appuie
+    /// dessus, donc les bornes ne sont écrites QU'UNE FOIS.
+    /// </remarks>
+    public static bool EstValide(decimal kilogrammes) => kilogrammes is > 0m and <= 500m;
+
     public static Masse DepuisKilogrammes(decimal kilogrammes) =>
-        kilogrammes is > 0m and <= 500m
+        EstValide(kilogrammes)
             ? new Masse(kilogrammes)
             : throw new ArgumentOutOfRangeException(nameof(kilogrammes), kilogrammes, null);
 }

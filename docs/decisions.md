@@ -1014,3 +1014,32 @@ L'exigence 2 de `docs/09-comptes.md` § 1 — « pas de nutrition sans email vé
 - **Aucun envoi, et une vérification d'adresse par un autre canal** — il n'y en a pas d'autre.
 
 **Ce qui la rouvrirait :** un besoin de suivi de délivrabilité — ouvertures, rebonds, plaintes — que SMTP ne rapporte pas et qu'une API de fournisseur expose. Ce jour-là, l'adaptateur change et le reste du produit ne bouge pas : c'est précisément ce que le port `IEmailSender<Utilisateur>` garantit.
+
+---
+
+## D61 — La détection de perte rapide lit des MOYENNES hebdomadaires, pas des pesées
+
+**Tranché le :** 24/08/2026, au lot 5. **Pris en autonomie**, le porteur du projet ayant demandé que ce lot soit exécuté pendant son sommeil. **À relire** : la décision touche un garde-fou de santé.
+
+`PerteDePoidsRapide.EstDetectee` existait depuis le lot 3, éprouvée et couverte à 100 %. En la branchant sur l'API, une chose est apparue qu'aucune de ses épreuves ne pouvait montrer : **elle suppose que ses entrées sont hebdomadaires**. Elle compare des valeurs consécutives et lit chaque écart comme « une semaine ». Lui passer la série brute de `body_weight`, où l'utilisateur pèse quand il veut — donc souvent tous les jours — lui aurait fait mesurer des JOURS en croyant mesurer des semaines.
+
+**L'effet n'est pas un faux positif, c'est un SILENCE.** La variation d'un jour à l'autre reste sous le seuil de 1 %, donc la boucle sort à la première comparaison et rend `false`. La détection serait restée muette exactement chez les utilisateurs les plus assidus — ceux qui pèsent tous les jours parce qu'ils surveillent leur poids de près, c'est-à-dire la population que `docs/01-conformite.md` § 5 nomme comme celle qu'il faut protéger. Aucune épreuve n'aurait rougi : le domaine faisait correctement ce qu'on lui demandait, sur des entrées qui ne voulaient pas dire ce qu'il croyait.
+
+**Ce qui a été retenu : la MOYENNE de la semaine, et non sa dernière pesée.** Le poids corporel varie de 1 à 2 % d'un jour à l'autre — eau, glycogène, contenu digestif — soit **plus que le seuil lui-même**. Un échantillon hebdomadaire unique ferait donc du seuil un générateur de faux positifs : quatre creux successifs suffiraient à déclencher l'alerte chez quelqu'un dont le poids ne bouge pas. Une épreuve construit exactement ce cas et vérifie que le constat ne tombe pas.
+
+Et un garde-fou qui crie sans motif est un garde-fou qu'on finit par ignorer, puis par désactiver. Sur ce sujet-là, le coût d'une alerte de trop n'est pas nul : il use la seule alerte qui compte.
+
+**La semaine est la semaine ISO**, par `System.Globalization.ISOWeek`. Elle ne dépend ni de la culture du serveur ni du fuseau de l'utilisateur, contrairement au premier jour de semaine du calendrier, qui change de pays en pays. Une épreuve garde le passage du 31 décembre au 1er janvier, où un regroupement par année civile aurait scindé une même semaine en deux et inventé une comparaison hebdomadaire d'un jour.
+
+**Une semaine incomplète compte quand même** — la moyenne d'une pesée vaut cette pesée. Refuser les semaines partielles retarderait la détection de sept jours au pire moment : celui où quelqu'un vient de commencer à perdre vite.
+
+**Où vit le calcul.** Dans `Palier.Domain`, avec le seuil et la fenêtre qu'il sert. Le mettre dans le gestionnaire aurait placé une règle de sécurité hors du seul projet tenu à 100 % de couverture, et hors de portée des épreuves qui la gardent.
+
+**Les voies écartées.**
+
+- **Passer la série brute au domaine** — c'est l'état par défaut, celui qu'on obtient en ne se posant pas la question. Silencieux chez les utilisateurs assidus.
+- **La dernière pesée de chaque semaine** — plus simple à écrire et à expliquer, mais elle échantillonne un signal plus bruyant que le seuil qu'on lui applique.
+- **La moyenne mobile sur sept jours** — techniquement supérieure au découpage par semaines calendaires, qui traite mal une série commençant un jeudi. Écartée pour aujourd'hui : `01-conformite.md` § 5 parle de semaines, et une moyenne mobile changerait le sens de la règle en même temps que son calcul. C'est un raffinement, pas une correction.
+- **Exiger une pesée hebdomadaire du produit** — une contrainte d'interface pour éviter un calcul de dix lignes, et qui rendrait la détection dépendante d'un comportement qu'on ne contrôle pas.
+
+**Ce qui la rouvrirait :** un avis clinique — le kinésithérapeute que `docs/14-contenu.md` prévoit — sur la bonne façon de lire une série de poids. C'est le genre de question où une source médicale prime sur un raisonnement de conception, et cette décision est prise faute de l'avoir demandée.
