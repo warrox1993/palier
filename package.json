@@ -19,6 +19,8 @@
     "db:up": "node scripts/db.mjs up palier-db",
     "db:down": "node scripts/db.mjs down",
     "db:reset": "node scripts/db.mjs reset",
+    "outils:up": "node scripts/db.mjs outils-up",
+    "outils:down": "node scripts/db.mjs outils-down",
     "audit:back": "dotnet list back/Palier.sln package --vulnerable --include-transitive",
     "test:harness": "npm --prefix front run test:harness && npm run test:harness:back",
     "test:harness:back": "node front/node_modules/vitest/vitest.mjs run --config back/vitest.config.mjs",

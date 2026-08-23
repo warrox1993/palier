@@ -22,6 +22,12 @@ import { fileURLToPath } from 'node:url'
 const RACINE = dirname(dirname(fileURLToPath(import.meta.url)))
 const COMPOSE = resolve(RACINE, 'db', 'compose.yaml')
 
+// Les outils de confort vivent dans LEUR fichier — D33 exige que
+// `db/compose.yaml` ne déclare qu'un seul service, et `tests-harness/db.test.mjs`
+// le vérifie. Le GARDE, lui, est le même : détecter un démon éteint et le dire
+// en français est une seule connaissance, pas deux.
+const COMPOSE_OUTILS = resolve(RACINE, 'db', 'compose.outils.yaml')
+
 const CODE_COMPOSE = 1
 const CODE_USAGE = 2
 // Distinct du 1 : « le moteur est éteint » et « compose a échoué » n'appellent
@@ -35,6 +41,12 @@ const ACTIONS = {
   // La SEULE commande du projet qui détruit des données. Le `-v` supprime le
   // volume nommé `palier-db-data` avec le conteneur.
   reset: () => ['compose', '-f', COMPOSE, 'down', '-v'],
+
+  // L'attrape-courriel du développement. Il ne porte AUCUN volume : les
+  // messages meurent avec le conteneur, donc `outils-down` n'a pas de variante
+  // destructrice à distinguer.
+  'outils-up': () => ['compose', '-f', COMPOSE_OUTILS, 'up', '-d'],
+  'outils-down': () => ['compose', '-f', COMPOSE_OUTILS, 'down'],
 }
 
 function lancerDocker(args) {

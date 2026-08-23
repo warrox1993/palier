@@ -1,3 +1,4 @@
+using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MimeKit;
@@ -68,6 +69,40 @@ public sealed class CourrierTests
         var reglages = ReglagesDuCourrier.Depuis(sansIdentifiants);
 
         Assert.Null(reglages.Utilisateur);
+    }
+
+    // ================================================================
+    // Épreuves 6 bis — le chiffrement est décidé par l'HÔTE
+    // ================================================================
+
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("127.0.0.1")]
+    [InlineData("::1")]
+    public void Sur_la_BOUCLE_LOCALE_le_chiffrement_n_est_pas_exige(string hote)
+    {
+        // Ce n'est pas une commodité : le chiffrement protège d'un
+        // intermédiaire sur le réseau, et il n'y en a pas entre un processus et
+        // un conteneur qui n'écoute que sur 127.0.0.1.
+        var reglages = ReglagesDuCourrier.Depuis(ConfigurationAvec("SMTP_HOST", hote));
+
+        Assert.Equal(SecureSocketOptions.None, reglages.Chiffrement);
+    }
+
+    [Theory]
+    [InlineData("ssl0.ovh.net")]
+    [InlineData("smtp.exemple.test")]
+    [InlineData("192.0.2.44")]
+    public void AILLEURS_le_chiffrement_est_EXIGE_et_non_opportuniste(string hote)
+    {
+        // `StartTlsWhenAvailable` négocierait en clair si le serveur ne
+        // proposait pas l'extension — un attaquant en position d'intermédiaire
+        // n'aurait qu'à retirer l'annonce pour lire les liens de vérification
+        // de tous les comptes créés. La valeur exigeante est la seule sûre.
+        var reglages = ReglagesDuCourrier.Depuis(ConfigurationAvec("SMTP_HOST", hote));
+
+        Assert.Equal(SecureSocketOptions.StartTls, reglages.Chiffrement);
+        Assert.NotEqual(SecureSocketOptions.StartTlsWhenAvailable, reglages.Chiffrement);
     }
 
     // ================================================================

@@ -1,4 +1,5 @@
 using System.Globalization;
+using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 
 namespace Palier.Infrastructure.Courrier;
@@ -26,6 +27,39 @@ public sealed record ReglagesDuCourrier(
     /// et les exiger empêcherait un déploiement parfaitement légitime.
     /// </summary>
     private static readonly string[] _requis = ["SMTP_HOST", "SMTP_PORT", "SMTP_FROM", "APP_URL"];
+
+    /// <summary>
+    /// <b>Le chiffrement est décidé par l'hôte, jamais par un réglage.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Hors de la machine, c'est <c>StartTls</c> — <b>exigé</b>, et non
+    /// <c>StartTlsWhenAvailable</c> : ce dernier négocierait en clair si le
+    /// serveur ne propose pas l'extension, et un attaquant en position
+    /// d'intermédiaire n'aurait qu'à retirer l'annonce pour lire les liens de
+    /// vérification de tous les comptes créés.
+    /// </para>
+    ///
+    /// <para>
+    /// Sur la boucle locale, <c>None</c>. Ce n'est pas une commodité : le
+    /// chiffrement protège d'un intermédiaire sur le réseau, et il n'y a pas de
+    /// réseau à traverser entre un processus et un conteneur qui n'écoute que
+    /// sur <c>127.0.0.1</c>. Exiger TLS y coûterait des certificats à fabriquer
+    /// et à renouveler pour zéro menace.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>La décision est AUTOMATIQUE, et c'est ce qui la rend sûre.</b> Un
+    /// réglage « désactiver TLS » finirait un jour posé en production par
+    /// quelqu'un qui déboguait ; une adresse d'hôte, elle, ne se règle pas par
+    /// mégarde — si elle vaut <c>localhost</c> en production, le courriel ne
+    /// part de toute façon nulle part.
+    /// </para>
+    /// </remarks>
+    public SecureSocketOptions Chiffrement =>
+        Hote is "localhost" or "127.0.0.1" or "::1" or "[::1]"
+            ? SecureSocketOptions.None
+            : SecureSocketOptions.StartTls;
 
     public static ReglagesDuCourrier Depuis(IConfiguration source)
     {

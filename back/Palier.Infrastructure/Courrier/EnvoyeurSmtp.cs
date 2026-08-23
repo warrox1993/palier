@@ -1,6 +1,5 @@
 using System.Globalization;
 using MailKit.Net.Smtp;
-using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using MimeKit;
 
@@ -119,11 +118,8 @@ internal sealed class TransportMailKit(ReglagesDuCourrier reglages) : ITransport
 
     public async Task EnvoyerAsync(MimeMessage message, CancellationToken jeton)
     {
-        // `StartTlsWhenAvailable` négocierait en clair si le serveur ne propose
-        // pas STARTTLS — un attaquant en position d'intermédiaire n'aurait qu'à
-        // retirer l'annonce. `StartTls` exige le chiffrement et échoue sinon.
         await _client
-            .ConnectAsync(reglages.Hote, reglages.Port, SecureSocketOptions.StartTls, jeton)
+            .ConnectAsync(reglages.Hote, reglages.Port, reglages.Chiffrement, jeton)
             .ConfigureAwait(false);
 
         if (reglages.Utilisateur is { } utilisateur)
