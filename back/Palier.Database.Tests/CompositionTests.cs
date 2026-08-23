@@ -112,6 +112,10 @@ public sealed class CompositionTests
             valeurs["JWT_SIGNING_KEY"] = cle;
         }
 
+        // Le courrier n'est pas le sujet de ce fichier, mais sa composition
+        // refuse sans lui — D60.
+        HarnaisHttp.PoserLeCourrier(valeurs);
+
         constructeur.Configuration.AddInMemoryCollection(valeurs);
 
         // La preuve que le nettoyage a PRIS EFFET. Sans elle, une source

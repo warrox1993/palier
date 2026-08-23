@@ -38,6 +38,22 @@ internal static class HarnaisHttp
     /// </summary>
     public const string Cle = "cle-de-signature-des-epreuves-du-lot-quatre-";
 
+    /// <summary>
+    /// Les réglages SANS LESQUELS `Composition.Composer` refuse — D60 fait
+    /// tomber le refus au démarrage, et c'est voulu. Toute épreuve qui compose
+    /// l'API les pose, y compris celles qui n'envoient rien : elles éprouvent
+    /// autre chose, et ne doivent pas buter sur une exigence hors sujet.
+    /// </summary>
+    public static void PoserLeCourrier(IDictionary<string, string?> reglages)
+    {
+        ArgumentNullException.ThrowIfNull(reglages);
+
+        reglages["SMTP_HOST"] = "relais.invalid";
+        reglages["SMTP_PORT"] = "587";
+        reglages["SMTP_FROM"] = "palier@exemple.test";
+        reglages["APP_URL"] = "https://palier.test";
+    }
+
     /// <summary>La clé de données des épreuves. Fixe : rien ici ne protège.</summary>
     public static readonly Guid CleDeDonnees = new("33333333-3333-3333-3333-333333333333");
 
@@ -69,7 +85,10 @@ internal static class HarnaisHttp
             ["ConnectionStrings:Palier"] = baseDeDonnees.ChaineApp,
             ["ConnectionStrings:PalierAuth"] = baseDeDonnees.ChaineAuth,
             ["JWT_SIGNING_KEY"] = Cle,
+
         };
+
+        PoserLeCourrier(reglages);
 
         // Ce que l'épreuve ajoute PRIME : une clé posée ici remplace le défaut,
         // ce qui permet d'éprouver une liste d'administrateurs vide aussi bien

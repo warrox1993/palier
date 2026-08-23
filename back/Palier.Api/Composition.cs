@@ -7,6 +7,7 @@ using Palier.Api.Socle;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure;
 using Palier.Infrastructure.Coffre;
+using Palier.Infrastructure.Courrier;
 using Palier.Infrastructure.Identite;
 using Palier.Infrastructure.Pipeline;
 
@@ -281,6 +282,16 @@ internal static class Composition
         // le trousseau lui-même obligerait le conteneur à parler au coffre
         // pendant une requête d'utilisateur, ce que la conception écarte.
         constructeur.Services.AddSingleton<PorteurDeTrousseau>();
+
+        // Le courrier — D60. Les réglages sont construits ICI, et non
+        // paresseusement : un produit qui démarre sans pouvoir envoyer d'email
+        // laisse ses utilisateurs bloqués à l'inscription, et rien ne le
+        // signale avant la première plainte. Le refus tombe au démarrage.
+        constructeur.Services.AddSingleton(
+            ReglagesDuCourrier.Depuis(constructeur.Configuration)
+        );
+        constructeur.Services.AddSingleton<EnvoyeurSmtp>();
+        constructeur.Services.AddSingleton<IEmailSender<Utilisateur>, EnvoiDeCourriel>();
 
         // Les trois services du coffre. Tous PARESSEUX : le conteneur ne les
         // construit qu'à la première résolution, et seul `Program` la demande.

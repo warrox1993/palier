@@ -100,6 +100,11 @@ public sealed class JournalisationTests(BaseFixture baseDeDonnees)
                 ["ConnectionStrings:PalierAuth"] = baseDeDonnees.ChaineAuth,
                 // ... et une clé de signature d'au moins 32 octets.
                 ["JWT_SIGNING_KEY"] = "cle-de-signature-des-epreuves-du-lot-quatre",
+                // D60 : la composition refuse sans le courrier.
+                ["SMTP_HOST"] = "relais.invalid",
+                ["SMTP_PORT"] = "587",
+                ["SMTP_FROM"] = "palier@exemple.test",
+                ["APP_URL"] = "https://palier.test",
             }
         );
 

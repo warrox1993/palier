@@ -990,3 +990,27 @@ D58 laissait ouverte la seule chose qui manquait au chiffrement du secret TOTP :
 **Ce qui la rouvrirait :** un modèle de menace où le vidage mémoire du processus devient crédible — l'alternative serait alors l'appel par vérification, dont le coût est mesuré. Ou une rupture de service OKMS répétée, qui remettrait en cause le refus de démarrer.
 
 **Conception détaillée :** `docs/superpowers/specs/2026-08-22-coffre-des-secrets-design.md`.
+
+---
+
+## D60 — MailKit porte l'envoi d'emails, et le fournisseur reste interchangeable
+
+**Tranché le :** 23/08/2026, au lot 4b. **Le porteur du projet a choisi le SMTP générique** parmi trois options, puis a précisé que le fournisseur serait OVHcloud.
+
+L'exigence 2 de `docs/09-comptes.md` § 1 — « pas de nutrition sans email vérifié » — était livrée à moitié depuis le lot 4 : la règle existait, l'**envoi** non. `IEmailSender<TUser>` n'avait que son défaut, `NoOpEmailSender`, qui « ne fait rien » et existe pour qu'on remarque qu'on ne l'a pas remplacé.
+
+**Pourquoi SMTP plutôt qu'une API de fournisseur.** Brevo et Postmark exposent des API HTTP, ce qui aurait évité toute dépendance nouvelle — le produit sait déjà parler HTTP, le coffre en est la preuve. Mais le code aurait alors **connu son fournisseur** : en changer aurait demandé de réécrire l'adaptateur. En SMTP, l'hôte, le port, les identifiants et l'expéditeur sont de la configuration ; passer d'OVHcloud à un autre ne touche pas une ligne.
+
+**Pourquoi MailKit et non `System.Net.Mail`.** `SmtpClient` est explicitement déconseillé par Microsoft pour du code neuf — sa propre documentation renvoie à MailKit. Ce n'est pas une préférence de style : `SmtpClient` ne gère correctement ni STARTTLS moderne, ni l'authentification OAuth2, ni les jeux de caractères des en-têtes.
+
+**Ce qui a été vérifié à la source le 23/08/2026**, et non supposé : version **4.17.0**, publiée le **26/05/2026**, licence **MIT**. L'âge de la version satisfait le délai d'adoption de la doctrine des dépendances — un paquet compromis est généralement retiré en quelques heures, et trois mois valent mieux que trente jours.
+
+**Un piège rencontré en la vérifiant, qui vaut d'être écrit.** `dotnet package search MailKit --exact-match` a rendu **`1.10.0`** — une version qui n'a rien à voir avec la réalité. C'est l'index NuGet interrogé directement qui a donné la bonne. Une version lue dans la sortie de `dotnet package search` ne prouve rien.
+
+**Les voies écartées.**
+
+- **Une API de fournisseur (Brevo, Postmark)** — aucune dépendance nouvelle, mais le code connaît son fournisseur. Écartée pour cette raison seule.
+- **`System.Net.Mail.SmtpClient`** — aucune dépendance non plus, et déconseillée par son propre éditeur.
+- **Aucun envoi, et une vérification d'adresse par un autre canal** — il n'y en a pas d'autre.
+
+**Ce qui la rouvrirait :** un besoin de suivi de délivrabilité — ouvertures, rebonds, plaintes — que SMTP ne rapporte pas et qu'une API de fournisseur expose. Ce jour-là, l'adaptateur change et le reste du produit ne bouge pas : c'est précisément ce que le port `IEmailSender<Utilisateur>` garantit.

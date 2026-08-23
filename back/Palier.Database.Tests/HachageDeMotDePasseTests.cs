@@ -108,6 +108,14 @@ public sealed class HachageDeMotDePasseTests
         constructeur.Configuration["ConnectionStrings:Palier"] = sansIdentifiants;
         constructeur.Configuration["ConnectionStrings:PalierAuth"] = sansIdentifiants;
         constructeur.Configuration["JWT_SIGNING_KEY"] = "cle-de-signature-des-epreuves-du-lot-quatre";
+
+        // D60 : la composition refuse sans le courrier. Ce fichier éprouve le
+        // hachage, pas l'envoi — il pose donc le minimum et passe.
+        constructeur.Configuration["SMTP_HOST"] = "relais.invalid";
+        constructeur.Configuration["SMTP_PORT"] = "587";
+        constructeur.Configuration["SMTP_FROM"] = "palier@exemple.test";
+        constructeur.Configuration["APP_URL"] = "https://palier.test";
+
         Composition.Composer(constructeur);
 
         using var fournisseur = constructeur.Services.BuildServiceProvider();

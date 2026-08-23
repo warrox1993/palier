@@ -302,6 +302,11 @@ public sealed class LimitationTests
                 ["ConnectionStrings:Palier"] = "Host=127.0.0.1",
                 ["ConnectionStrings:PalierAuth"] = "Host=127.0.0.1",
                 ["JWT_SIGNING_KEY"] = HarnaisHttp.Cle,
+                // D60 : la composition refuse sans le courrier.
+                ["SMTP_HOST"] = "relais.invalid",
+                ["SMTP_PORT"] = "587",
+                ["SMTP_FROM"] = "palier@exemple.test",
+                ["APP_URL"] = "https://palier.test",
             }
         );
 
