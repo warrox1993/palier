@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Palier.Api.Auth;
@@ -281,6 +282,40 @@ internal static class Composition
         // `AmorcageDuTrousseau` le remplit avant que le port s'ouvre. Y mettre
         // le trousseau lui-même obligerait le conteneur à parler au coffre
         // pendant une requête d'utilisateur, ce que la conception écarte.
+        // Google — exigence 1, lot 4b. AJOUTÉ SEULEMENT S'IL EST CONFIGURÉ :
+        // sans identifiants, `AddGoogle` lève au premier défi avec un message
+        // qui ne dit rien à qui n'a pas ouvert de compte Google. Un
+        // développement local sans Google reste ainsi parfaitement utilisable.
+        if (Auth.Google.EstConfigure(constructeur.Configuration))
+        {
+            constructeur
+                .Services.AddAuthentication()
+                .AddGoogle(options =>
+                {
+                    options.ClientId = constructeur.Configuration[Auth.Google.CleDeLIdentifiant]!;
+                    options.ClientSecret = constructeur.Configuration[Auth.Google.CleDuSecret]!;
+                    options.CallbackPath = "/api/v1/auth/google/retour";
+
+                    // Les trois scopes, et RIEN d'autre : `09-comptes.md` § 1
+                    // l'interdit explicitement. `AddGoogle` en pose déjà
+                    // certains ; on repart d'une liste vide pour que celle-ci
+                    // fasse foi.
+                    options.Scope.Clear();
+                    foreach (var scope in Auth.Google.Scopes)
+                    {
+                        options.Scope.Add(scope);
+                    }
+
+                    // Google rend `email_verified` ; sans cette ligne, la
+                    // revendication n'atteint pas le principal et le produit
+                    // croirait chaque adresse non vérifiée.
+                    options.ClaimActions.MapJsonKey(
+                        Auth.Google.RevendicationEmailVerifie,
+                        Auth.Google.RevendicationEmailVerifie
+                    );
+                });
+        }
+
         constructeur.Services.AddSingleton<PorteurDeTrousseau>();
 
         // Le courrier — D60. Les réglages sont construits ICI, et non

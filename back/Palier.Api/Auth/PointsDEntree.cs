@@ -126,6 +126,7 @@ internal static class PointsDEntree
     {
         ArgumentNullException.ThrowIfNull(application);
 
+
         var groupe = application.MapGroup(Prefixe);
 
         // `AllowAnonymous` est EXPLICITE. Il n'est pas redondant : le jour où
@@ -156,6 +157,7 @@ internal static class PointsDEntree
 
         Verification.Router(groupe);
         Reinitialisation.Router(groupe);
+        Google.Router(groupe, application.Configuration);
         DeuxFacteurs.Router(groupe);
     }
 
