@@ -10,7 +10,7 @@
 > les sept sont couvertes. Ce serait faux, et ce serait faux dans un document
 > opposable.
 
-**Date de l'état :** 21 août 2026, fin du lot 4.
+**Date de l'état :** 21 août 2026, fin du lot 4 — **révisé le 23 août 2026, fin du lot 4b.**
 **Portée :** les sept exigences de `docs/09-comptes.md` § 1.
 **Ce qui fait foi :** le code du dépôt à cette date, et les épreuves qui le
 gardent — 388 au total, dont chaque garde-fou a été franchi, c'est-à-dire vu
@@ -22,27 +22,36 @@ aucune.
 
 ## 1. L'état des sept exigences
 
-| #   | Exigence                                           | État                | Ce qui est livré                                                                                                                                             | Ce qui manque, et pourquoi                                                                                                                                                                                                                      |
-| --- | -------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Google OAuth**                                   | ⛔ **Reportée**     | Rien. Le magasin des connexions externes existe (`AspNetUserLogins`), il n'est pas utilisé.                                                                  | L'enregistrement du client chez Google, les points d'entrée de défi et de rappel, la décision au retour. **Aucune ligne de code n'en a été écrite** : l'écart est entier.                                                                       |
-| 2   | **Email vérifié avant la nutrition**               | 🟡 **Partielle**    | La **règle** : `PorteDesDomaines.NutritionOuverte` et la politique `nutrition`, éprouvées sur les quatre combinaisons.                                       | L'**envoi** du courriel. `IEmailSender<TUser>` n'a aucune implémentation utilisable ; le défaut `NoOpEmailSender` « ne fait rien ». Sans envoi, aucun compte ne se vérifie.                                                                     |
-| 3   | **Mot de passe contre HaveIBeenPwned**             | ✅ **Livrée**       | Validateur à deux étages : liste embarquée obligatoire, API k-anonymat opportuniste, en-tête `Add-Padding`, entrées de remplissage écartées.                 | Rien pour cette exigence.                                                                                                                                                                                                                       |
-| 4   | **5 tentatives / 15 min, verrouillage progressif** | 🟡 **Sous réserve** | Le verrouillage par compte, avec fenêtre glissante et escalade 5 → 15 → 60 min. La limitation par adresse, avec traitement des en-têtes transférés.          | La limitation compte **en mémoire de processus** : sur plusieurs répliques, la limite effective est multipliée par leur nombre. Et `TRUSTED_PROXIES` doit être renseignée en exploitation, faute de quoi tout le monde tombe dans le même seau. |
-| 5   | **2FA TOTP**                                       | ✅ **Livrée**       | Préparation, activation contre code valide, désactivation contre code valide, codes de récupération, porte à la connexion.                                   | Le **QR code**, laissé au navigateur — délibérément, pour ne pas ajouter de dépendance. L'écran reste à écrire.                                                                                                                                 |
-| 6   | **Rotation des jetons de rafraîchissement**        | ✅ **Livrée**       | Magasin serveur, rotation à chaque usage, détection de réemploi avec révocation de famille, fenêtre de grâce de 30 s, cookie `HttpOnly` de chemin restreint. | Rien pour cette exigence.                                                                                                                                                                                                                       |
-| 7   | **Fusion des comptes email et Google**             | ⛔ **Reportée**     | Rien. Elle dépend entièrement de l'exigence 1.                                                                                                               | Le parcours entier, **et la preuve de possession** : lier sur la seule égalité des adresses est une prise de contrôle de compte.                                                                                                                |
+| #   | Exigence                                           | État                | Ce qui est livré                                                                                                                                                                                                             | Ce qui manque, et pourquoi                                                                                                                                                                                                                      |
+| --- | -------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Google OAuth**                                   | ✅ **Livrée** (4b)  | Défi, rappel, et la décision au retour en quatre cas — connecter, créer, proposer la liaison, refuser. Scopes `openid profile email`, et rien d'autre. Le compte créé naît vérifié.                                          | L'**enregistrement du client chez Google**, qui est une action sur un compte tiers. Sans identifiants, les routes ne sont pas attachées : le code est complet et éprouvé, il attend deux valeurs au coffre.                                     |
+| 2   | **Email vérifié avant la nutrition**               | ✅ **Livrée** (4b)  | La règle du lot 4, **et son moyen** : envoi SMTP (D60), points d'entrée de vérification et de renvoi, migration du drapeau. Une inscription sur adresse déjà prise envoie aussi — sans quoi le silence trahirait l'annuaire. | L'**ouverture du compte SMTP** chez OVHcloud, et la configuration DNS de délivrabilité — SPF, DKIM, DMARC. Sans elles les courriels partent en indésirables, et l'inscription paraît cassée.                                                    |
+| 3   | **Mot de passe contre HaveIBeenPwned**             | ✅ **Livrée**       | Validateur à deux étages : liste embarquée obligatoire, API k-anonymat opportuniste, en-tête `Add-Padding`, entrées de remplissage écartées.                                                                                 | Rien pour cette exigence.                                                                                                                                                                                                                       |
+| 4   | **5 tentatives / 15 min, verrouillage progressif** | 🟡 **Sous réserve** | Le verrouillage par compte, avec fenêtre glissante et escalade 5 → 15 → 60 min. La limitation par adresse, avec traitement des en-têtes transférés.                                                                          | La limitation compte **en mémoire de processus** : sur plusieurs répliques, la limite effective est multipliée par leur nombre. Et `TRUSTED_PROXIES` doit être renseignée en exploitation, faute de quoi tout le monde tombe dans le même seau. |
+| 5   | **2FA TOTP**                                       | ✅ **Livrée**       | Préparation, activation contre code valide, désactivation contre code valide, codes de récupération, porte à la connexion.                                                                                                   | Le **QR code**, laissé au navigateur — délibérément, pour ne pas ajouter de dépendance. L'écran reste à écrire.                                                                                                                                 |
+| 6   | **Rotation des jetons de rafraîchissement**        | ✅ **Livrée**       | Magasin serveur, rotation à chaque usage, détection de réemploi avec révocation de famille, fenêtre de grâce de 30 s, cookie `HttpOnly` de chemin restreint.                                                                 | Rien pour cette exigence.                                                                                                                                                                                                                       |
+| 7   | **Fusion des comptes email et Google**             | ✅ **Livrée** (4b)  | Le parcours entier. Le sceau part en cookie, lié au compte visé par ses données associées ; la preuve de possession est le mot de passe, **et le second facteur s'il est actif**.                                            | Rien pour cette exigence.                                                                                                                                                                                                                       |
 
-**Le compte, sans l'édulcorer : trois livrées, deux partielles ou sous réserve,
-deux entièrement reportées.**
+**Le compte au 23/08/2026 : SIX livrées, une sous réserve.**
 
-### Ce que les deux exigences reportées impliquent aujourd'hui
+Le lot 4b a fermé les exigences 1, 2 et 7, plus le rôle d'administration que
+D41 réclamait. Ne reste sous réserve que l'exigence 4 — la limitation des
+tentatives vit toujours en mémoire de processus, et sur plusieurs répliques la
+limite effective est multipliée par leur nombre. **Le produit tourne à une seule
+instance : la réserve est réelle mais ne mord pas encore.**
 
-L'exigence 1 étant absente, **le seul moyen de créer un compte est l'adresse et
-le mot de passe**. L'exigence 2 n'étant que partielle, **aucun compte ne peut
-aujourd'hui atteindre la nutrition** : la règle est en place et le moyen de la
-satisfaire n'existe pas encore. Ce n'est pas une faille, c'est un état
-intermédiaire — mais il doit être connu de qui lit ce document, sans quoi
-« email vérifié avant la nutrition » se lirait comme une fonction disponible.
+Ce qui reste dépend d'actions hors du code : enregistrer le client OAuth chez
+Google, ouvrir le compte SMTP, et poser SPF, DKIM et DMARC sur le domaine.
+
+### Ce que le lot 4b a changé pour l'utilisateur
+
+**Un compte peut désormais atteindre la nutrition** : il s'inscrit, reçoit son
+courriel, suit le lien, et la porte du lot 4 s'ouvre. C'est ce que l'état du 21
+août décrivait comme impossible.
+
+Il peut aussi **s'inscrire par Google**, **réinitialiser son mot de passe** — ce
+qui coupe toutes ses sessions — et **lier ses deux méthodes** sur un seul
+compte, contre preuve de possession.
 
 ---
 
@@ -158,10 +167,18 @@ divergent.
   d'écriture anticipée de PostgreSQL. Aucun code ne peut l'effacer — la
   réparation est une rotation du WAL et une sauvegarde neuve après migration.
 
-- **`GET /api/v1/sante` est passée derrière l'authentification**, comme D41
-  l'exigeait depuis le lot 4 — elle publiait l'identifiant exact de la dernière
-  migration appliquée. Le **rôle d'administration** que D41 demande également
-  n'existe pas encore dans le produit.
+- ~~**Le rôle d'administration de D41**~~ — **fermé le 23/08/2026, lot 4b.** La
+  liste des administrateurs vit au coffre, par adresse : pour se promouvoir, il
+  faut compromettre le coffre, là où la table `AspNetUserRoles` aurait fait de
+  la même écriture en base un contrôle total. Une adresse **non vérifiée**
+  n'ouvre rien — l'inscription est ouverte, et sans cette condition il suffirait
+  de s'inscrire avec l'adresse d'un administrateur pour en devenir un.
+
+- **La limitation des tentatives vit toujours en mémoire de processus.** Sur
+  plusieurs répliques, la limite effective est multipliée par leur nombre. Le
+  lot 4b avait prévu de la faire passer en base et ne l'a pas fait : c'est une
+  réserve d'exploitation, pas un écart d'exigence, et elle ne mord qu'au jour où
+  l'API tournera à plus d'une instance.
 
 **Ce que cet audit ne dit pas.** Les quatre suites d'épreuves ont été écartées de
 son périmètre, ainsi que `front/`, `scripts/` et la documentation. Il a jugé le

@@ -248,9 +248,10 @@ Les **étapes** sont des jalons produit, avec leurs critères de sortie. Les **l
 | Étape      | Lot                                                            | Début      | Fin        | Durée constatée |
 | ---------- | -------------------------------------------------------------- | ---------- | ---------- | --------------- |
 | 1a         | **Lot 1 — harnais** (livré)                                    | 19/08/2026 | 20/08/2026 | 2 jours         |
-| 1b         | **Lot 2 — socle de données** + les 3 livrables D31             | 20/08/2026 | —          | —               |
+| 1b         | **Lot 2 — socle de données** + les 3 livrables D31 (livré)     | 20/08/2026 | 20/08/2026 | 1 jour          |
 | 1b         | **Lot 3 — domaine** (livré)                                    | 21/08/2026 | 21/08/2026 | 1 jour          |
 | 1b         | **Lot 4 — socle de session** (livré)                           | 21/08/2026 | 21/08/2026 | 1 jour          |
+| 1b         | **Lot 4b — fin du socle de session** (livré)                   | 23/08/2026 | 23/08/2026 | 1 nuit          |
 | 1b · 2 · 3 | **Lot 5 — API** (le reste du schéma y arrive, table par table) | —          | —          | —               |
 | 1b · 2     | **Lot 6 — socle d'écran complet et PWA**                       | —          | —          | —               |
 | 1b         | **Lot 7 — résilience front** (Dexie, file de retry)            | —          | —          | —               |
@@ -259,7 +260,17 @@ Les **étapes** sont des jalons produit, avec leurs critères de sortie. Les **l
 
 **À remplir à chaque fin de lot, depuis le rapport de lot.** Un tableau ne se remplit pas tout seul : c'est un instrument, pas un verrou. Sans lui, les conditions de réouverture de D9 et D17 n'ont rien qui puisse les déclencher.
 
-La seule ligne remplie l'est **par mesure et non par souvenir** : `git log` porte 22 commits datés du 19/08/2026 et 69 du 20/08/2026, et le lot 1 a été déclaré livré le 20/08/2026. Les lignes suivantes se remplissent de la même façon, et la colonne « durée constatée » ne reçoit jamais une estimation.
+Les lignes sont remplies **par mesure et non par souvenir**. `git log` compte, au 23/08/2026 :
+
+| Jour       | Commits | Ce qui y a été livré                              |
+| ---------- | ------: | ------------------------------------------------- |
+| 19/08/2026 |      22 | lot 1, première moitié                            |
+| 20/08/2026 |      99 | fin du lot 1, lot 2                               |
+| 21/08/2026 |      45 | lot 3, lot 4                                      |
+| 22/08/2026 |      21 | audit de sécurité, coffre des secrets (D59)       |
+| 23/08/2026 |       7 | lot 4b — Google, courriel, fusion, administration |
+
+La colonne « durée constatée » ne reçoit jamais une estimation. **Le lot 4b porte « 1 nuit » et non « 1 jour »** : il a été exécuté en autonomie entre le 22/08 au soir et le 23/08 au matin, et arrondir à la journée effacerait précisément ce que ce tableau existe pour mesurer.
 
 **Deux écarts à la spec d'architecture § 14, à valider par le porteur du projet :**
 
