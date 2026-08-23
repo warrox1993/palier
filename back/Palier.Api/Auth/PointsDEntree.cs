@@ -155,6 +155,7 @@ internal static class PointsDEntree
         groupe.MapGet("/sessions", ListerAsync).RequireAuthorization();
 
         Verification.Router(groupe);
+        Reinitialisation.Router(groupe);
         DeuxFacteurs.Router(groupe);
     }
 

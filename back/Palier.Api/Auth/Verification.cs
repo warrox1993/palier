@@ -166,7 +166,12 @@ internal static class Verification
     public static string Encoder(string code) =>
         WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
-    private static string Decoder(string code)
+    /// <summary>
+    /// Public parce que la réinitialisation lit le même format. Deux copies du
+    /// décodage divergeraient, et la divergence porterait sur la façon dont un
+    /// code de sécurité traverse une URL.
+    /// </summary>
+    public static string Decoder(string code)
     {
         try
         {
