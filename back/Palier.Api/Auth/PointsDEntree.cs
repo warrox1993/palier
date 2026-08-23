@@ -21,17 +21,6 @@ internal sealed record DemandeDIdentifiants(
 internal sealed record ReponseDeConnexion(string JetonDAcces, int ExpireDansSecondes);
 
 /// <summary>
-/// Une réponse qui ne porte qu'un CODE, jamais une phrase.
-/// </summary>
-/// <remarks>
-/// Les libellés vivent en base et passent par i18next — <c>CLAUDE.md</c> § 4,
-/// « aucune chaîne de caractères en dur ». Et un code se compare octet pour
-/// octet dans une épreuve, là où une phrase invite à des nuances qui finissent
-/// par distinguer deux causes d'échec.
-/// </remarks>
-internal sealed record Reponse(string Code);
-
-/// <summary>
 /// L'inscription et la connexion.
 /// </summary>
 /// <remarks>

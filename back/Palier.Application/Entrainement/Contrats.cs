@@ -1,0 +1,100 @@
+namespace Palier.Application.Entrainement;
+
+/// <summary>Ce qu'on donne pour ouvrir une séance. Tout est facultatif.</summary>
+/// <param name="Debut">
+/// Absent, c'est maintenant. On le laisse fournir pour qu'une séance saisie
+/// après coup — le soir, de mémoire — porte l'heure où elle a EU LIEU, et non
+/// celle où on l'a tapée : le volume hebdomadaire compte par semaine, et une
+/// séance du dimanche saisie le lundi changerait de semaine.
+/// </param>
+/// <param name="HeuresDeSommeil">Ce que la nuit précédente a donné, si l'utilisateur le note.</param>
+/// <param name="Note">Un texte libre. Il n'atteint AUCUN calcul et AUCUN modèle.</param>
+public sealed record OuvertureDeSeance(
+    DateTimeOffset? Debut,
+    decimal? HeuresDeSommeil,
+    string? Note
+);
+
+/// <summary>Ce qu'on donne pour clore une séance.</summary>
+public sealed record ClotureDeSeance(DateTimeOffset? Fin, int? Energie)
+{
+    /// <summary>Les bornes du <c>CHECK</c> écrit dans la migration du socle.</summary>
+    /// <remarks>
+    /// Elles sont ici, en <c>const int</c>, et non recopiées dans le point
+    /// d'entrée : le jour où la migration change l'échelle, un seul endroit
+    /// bouge. <c>const</c> et non <c>static readonly</c> — un
+    /// <c>const decimal</c> engendrerait un constructeur statique que rien
+    /// n'exécute, et le seuil de couverture le refuserait ; sur <c>int</c>, la
+    /// valeur est inscrite à la compilation.
+    /// </remarks>
+    public const int EnergieMinimale = 1;
+
+    /// <inheritdoc cref="EnergieMinimale" />
+    public const int EnergieMaximale = 5;
+
+    /// <summary>
+    /// Vrai si l'énergie est absente ou dans les bornes. ABSENTE EST VALIDE :
+    /// clore une séance sans noter son énergie doit rester possible, sans quoi
+    /// l'utilisateur pressé laisse ses séances ouvertes.
+    /// </summary>
+    /// <remarks>
+    /// Le contrôle vit ICI plutôt que de laisser le <c>CHECK</c> parler : une
+    /// violation de contrainte remonterait en 500, c'est-à-dire en « le serveur
+    /// a un défaut » là où l'utilisateur a simplement tapé 6.
+    /// </remarks>
+    public bool EnergieValide => Energie is null or (>= EnergieMinimale and <= EnergieMaximale);
+}
+
+/// <summary>Une séance, telle qu'elle sort de l'API.</summary>
+/// <remarks>
+/// <b>Aucun <c>OwnerId</c>.</b> Il est vrai que l'appelant ne peut voir que les
+/// siennes — mais le renvoyer apprendrait au front qu'il existe un identifiant
+/// de propriétaire, et le premier écran qui s'en sert le lira depuis la réponse
+/// plutôt que depuis le jeton. D36 tient parce que l'identité n'a qu'une seule
+/// source.
+/// </remarks>
+public sealed record SeanceRendue(
+    Guid Id,
+    DateTimeOffset Debut,
+    DateTimeOffset? Fin,
+    decimal? HeuresDeSommeil,
+    int? Energie,
+    string? Note
+);
+
+/// <summary>Une page de séances, et de quoi demander la suivante.</summary>
+/// <param name="Elements">Les séances, de la plus récente à la plus ancienne.</param>
+/// <param name="SuivantAvant">
+/// L'instant du DERNIER élément rendu, ou <c>null</c> s'il n'y a plus rien
+/// après. Le client le repasse tel quel.
+/// </param>
+/// <param name="SuivantAvantId">
+/// L'identifiant du dernier élément rendu. Il accompagne l'instant, et ce
+/// n'est pas une précaution théorique : deux séances peuvent porter le MÊME
+/// <c>started_at</c> — un import, une saisie en lot, deux entraînements le
+/// même matin notés à la minute près. Un curseur qui ne porterait que
+/// l'instant les traiterait comme une seule, et un <c>&lt;</c> strict en
+/// SAUTERAIT une définitivement : elle deviendrait invisible, sans erreur et
+/// sans trou apparent.
+/// </param>
+public sealed record PageDeSeances(
+    IReadOnlyList<SeanceRendue> Elements,
+    DateTimeOffset? SuivantAvant,
+    Guid? SuivantAvantId
+)
+{
+    /// <summary>La taille de page par défaut, quand le client ne demande rien.</summary>
+    public const int TailleParDefaut = 20;
+
+    /// <summary>
+    /// Le plafond. Il n'est PAS décoratif : sans lui, <c>?limite=1000000</c>
+    /// fait matérialiser toute la table en mémoire — un déni de service que
+    /// n'importe quel compte authentifié déclenche en une requête, et que ni
+    /// RLS ni la limitation par adresse n'empêchent.
+    /// </summary>
+    public const int TailleMaximale = 100;
+
+    /// <summary>La taille effective, bornée des deux côtés.</summary>
+    public static int Borner(int? demandee) =>
+        Math.Clamp(demandee ?? TailleParDefaut, 1, TailleMaximale);
+}

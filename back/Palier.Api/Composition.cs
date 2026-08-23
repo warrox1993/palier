@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Palier.Api.Auth;
+using Palier.Api.Entrainement;
 using Palier.Api.Socle;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure;
 using Palier.Infrastructure.Coffre;
 using Palier.Infrastructure.Courrier;
+using Palier.Infrastructure.Entrainement;
 using Palier.Infrastructure.Identite;
 using Palier.Infrastructure.Pipeline;
 
@@ -366,6 +368,19 @@ internal static class Composition
             fournisseur.GetRequiredService<TimeProvider>()
         ));
 
+        // ---- L'entraînement — lot 5 -------------------------------------
+        //
+        // SCOPED, comme le contexte qu'ils prennent. Un gestionnaire singleton
+        // capturerait un `PalierDbContext` de la première requête et le
+        // partagerait entre tous les utilisateurs : le contexte porte l'état de
+        // suivi des entités, et l'identité posée par le pipeline vit dans la
+        // transaction de SA connexion.
+        constructeur.Services.AddScoped<OuvrirUneSeance>();
+        constructeur.Services.AddScoped<LireUneSeance>();
+        constructeur.Services.AddScoped<ListerLesSeances>();
+        constructeur.Services.AddScoped<CloturerUneSeance>();
+        constructeur.Services.AddScoped<SupprimerUneSeance>();
+
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();
         constructeur.Services.AddHostedService<AssertionAuDemarrage>();
@@ -423,6 +438,7 @@ internal static class Composition
             .RequireAuthorization(PolitiquesDAutorisation.Administration);
 
         PointsDEntree.Router(application);
+        RoutesDEntrainement.Router(application);
     }
 
     private static async Task<IResult> RepondreAsync(
