@@ -57,6 +57,40 @@ insert into public.programs
   (slug, is_template, owner_id, name_fr, name_en, description_fr, description_en,
    notes_fr, notes_en, frequency_min, frequency_max, targets_constraint)
 values
+('une-seance', true, null, 'Une séance par semaine', 'One session a week',
+ 'Pour qui ne peut en tenir qu''une. Tout le corps en une fois, sur les mouvements qui rapportent le plus.',
+ 'For anyone who can only manage one. The whole body in a single session, built on the movements that return the most.',
+ '**Une séance par semaine fonctionne**, et ce n''est pas une consolation. À volume égal, une et deux séances hebdomadaires produisent des gains comparables chez quelqu''un qui débute : c''est la quantité de travail qui porte le résultat, pas le nombre de fois où l''on se déplace.
+
+Ce qui suit de ce constat : la séance unique **concentre** le volume au lieu de le réduire. Quatre séries sur les mouvements principaux, et rien qui n''en vaille pas la peine — pas d''isolation, pas de finition.
+
+**L''information chiffrée, sans détour** : avec cette structure, chaque muscle est travaillé une fois par semaine. Passer à deux séances double le volume hebdomadaire sans allonger aucune séance. C''est le levier le plus rentable si un jour vous en trouvez le temps — et si vous ne le trouvez pas, celui-ci reste bien meilleur que rien.
+
+**Une reserve d''age, et elle compte.** Ces resultats viennent d''adultes jeunes. Passe la soixantaine, les doses minimales qui suffisent a vingt ans ne suffisent plus : le maintien de la masse et de la force y demande davantage, et une seance hebdomadaire risque de ne pas y parvenir. Si vous etes dans ce cas, deux seances valent nettement mieux qu''une — ce n''est pas un conseil de zele, c''est ce que les donnees montrent.',
+ '**Once a week works**, and that is not a consolation prize. At equal volume, one and two weekly sessions produce comparable gains in someone starting out: it is the amount of work that carries the result, not how many times you travel to do it.
+
+What follows from that: the single session **concentrates** volume rather than cutting it. Four sets on the main movements, and nothing that does not earn its place — no isolation, no finishers.
+
+**The number, plainly**: with this structure each muscle is trained once a week. Moving to two sessions doubles weekly volume without making any session longer. It is the best-value change available if you ever find the time — and if you do not, this one still beats nothing by a wide margin.
+
+**One caveat about age, and it matters.** These findings come from younger adults. Past sixty, the minimal doses that suffice at twenty no longer do: maintaining mass and strength asks for more, and a single weekly session may not get there. If that is you, two sessions are markedly better than one — not out of zeal, but because that is what the data show.',
+ 1, 1, null),
+
+('deux-seances', true, null, 'Deux séances par semaine', 'Two sessions a week',
+ 'Deux séances complètes, aux angles différents. Chaque muscle est travaillé deux fois.',
+ 'Two full-body sessions at different angles. Every muscle is trained twice.',
+ 'Deux séances suffisent à atteindre **deux passages par muscle et par semaine**, le repère au-dessous duquel on ne descend qu''en connaissance de cause. C''est la fréquence la plus rentable par heure passée à la salle.
+
+Les deux séances ne sont pas jumelles : la première pousse à l''horizontale et tire à la verticale, la seconde fait l''inverse. Le même muscle revient deux fois, sous deux angles — ce qui répartit la contrainte au lieu de la répéter.
+
+Si une semaine n''en permet qu''une, faites la séance A : elle porte les mouvements les plus lourds. Une séance manquée n''annule pas la semaine.',
+ 'Two sessions are enough to reach **two passes per muscle per week**, the mark below which you only go knowingly. It is the best return per hour spent in the gym.
+
+The two sessions are not twins: the first presses horizontally and pulls vertically, the second does the opposite. The same muscle comes back twice, at two angles — which spreads the demand rather than repeating it.
+
+If a week only allows one, do session A: it carries the heaviest movements. A missed session does not write off the week.',
+ 2, 2, null),
+
 ('reprise', true, null, 'Reprise', 'Getting back',
  'Pour revenir après un arrêt, quelle qu''en soit la durée. Trois séances complètes par semaine, sur machines et charges légères.',
  'For coming back after a break, however long. Three full-body sessions a week, on machines and light loads.',
@@ -178,19 +212,23 @@ The six sessions do not repeat: each family has an A and a B version, at differe
  5, 6, null),
 
 ('split', true, null, 'Split spécialisé', 'Body-part split',
- 'Six séances par semaine, un groupe musculaire dominant par séance.',
- 'Six sessions a week, one dominant muscle group per session.',
+ 'Six à sept séances par semaine, un groupe musculaire dominant par séance.',
+ 'Six to seven sessions a week, one dominant muscle group per session.',
  'Chaque muscle est travaillé une à deux fois par semaine selon la séance. C''est **en dessous** du minimum de deux passages hebdomadaires pour plusieurs groupes, et il faut le savoir avant de choisir : ce programme échange de la fréquence contre du volume par séance.
 
 Ce choix se défend quand un groupe est en retard et qu''on veut lui consacrer une séance entière. Il se défend moins comme structure permanente — et à volume hebdomadaire égal, une fréquence de deux fait mieux.
 
-La règle est simple : le split par groupe musculaire devient légitime à partir de cinq séances hebdomadaires. En dessous, il ne l''est pas.',
+La règle est simple : le split par groupe musculaire devient légitime à partir de cinq séances hebdomadaires. En dessous, il ne l''est pas.
+
+**À sept séances, la septième reprend un groupe, elle n''en ajoute pas un.** Il n''y a que six ensembles à travailler ici ; le septième jour sert à repasser sur celui qui est en retard — c''est ce qu''on appelle prioriser. Inventer un septième groupe reviendrait à découper ce qui l''est déjà.',
  'Each muscle is trained once or twice a week depending on the session. That is **below** the minimum of two weekly passes for several groups, and you should know it before choosing: this program trades frequency for volume per session.
 
 The trade defends itself when one group lags and you want to give it a whole session. It defends itself less as a permanent structure — and at equal weekly volume, a frequency of two does better.
 
-The rule is simple: a body-part split becomes legitimate from five weekly sessions upward. Below that, it is not.',
- 6, 6, null)
+The rule is simple: a body-part split becomes legitimate from five weekly sessions upward. Below that, it is not.
+
+**At seven sessions, the seventh repeats a group rather than adding one.** There are only six sets of muscles here; the seventh day goes back over whichever one lags — that is what prioritising means. Inventing a seventh group would only split what is already split.',
+ 6, 7, null)
 
 on conflict (slug) where is_template
 do update set
@@ -219,6 +257,9 @@ delete from public.program_days
 insert into public.program_days (program_id, label_fr, label_en, position)
 select p.id, v.label_fr, v.label_en, v.position
   from (values
+    ('une-seance', 'La séance', 'The session', 1),
+    ('deux-seances', 'Séance A', 'Session A', 1),
+    ('deux-seances', 'Séance B', 'Session B', 2),
     ('reprise', 'Séance A', 'Session A', 1),
     ('reprise', 'Séance B', 'Session B', 2),
     ('reprise', 'Séance C', 'Session C', 3),
@@ -274,6 +315,26 @@ insert into public.program_exercises
 select d.id, e.id, v.position, v.target_sets,
        v.target_reps_min, v.target_reps_max, v.target_rir, v.rest_seconds, v.note
   from (values
+    ('une-seance', 1, 'presse-a-cuisses', 1, 4, 10, 12, 2, 120, null),
+    ('une-seance', 1, 'developpe-couche-halteres', 2, 4, 8, 12, 2, 120, null),
+    ('une-seance', 1, 'tirage-vertical', 3, 4, 8, 12, 2, 120, null),
+    ('une-seance', 1, 'souleve-de-terre-roumain', 4, 3, 8, 10, 2, 120, null),
+    ('une-seance', 1, 'developpe-epaules-halteres', 5, 3, 10, 12, 2, 90, null),
+    ('une-seance', 1, 'rowing-haltere', 6, 3, 10, 12, 2, 90, 'Répétitions par bras.'),
+    ('une-seance', 1, 'mollets-debout', 7, 3, 12, 15, 1, 60, null),
+    ('une-seance', 1, 'gainage-ventral', 8, 3, 30, 45, 2, 60, 'Les répétitions comptent des secondes de maintien.'),
+    ('deux-seances', 1, 'presse-a-cuisses', 1, 4, 10, 12, 2, 120, null),
+    ('deux-seances', 1, 'developpe-couche-halteres', 2, 4, 8, 12, 2, 120, null),
+    ('deux-seances', 1, 'tirage-vertical', 3, 4, 8, 12, 2, 120, null),
+    ('deux-seances', 1, 'leg-curl-assis', 4, 3, 12, 15, 2, 90, null),
+    ('deux-seances', 1, 'gainage-ventral', 5, 3, 30, 45, 2, 60, 'Les répétitions comptent des secondes de maintien.'),
+    ('deux-seances', 2, 'goblet-squat-kettlebell', 1, 4, 10, 12, 2, 120, null),
+    ('deux-seances', 2, 'developpe-incline-halteres', 2, 4, 8, 12, 2, 120, null),
+    ('deux-seances', 2, 'rowing-haltere', 3, 4, 8, 12, 2, 120, 'Répétitions par bras.'),
+    ('deux-seances', 2, 'souleve-de-terre-roumain', 4, 3, 8, 10, 2, 120, null),
+    ('deux-seances', 2, 'developpe-epaules-halteres', 5, 3, 10, 12, 2, 90, null),
+    ('deux-seances', 2, 'mollets-assis', 6, 3, 12, 15, 1, 60, null),
+    ('deux-seances', 2, 'dead-bug', 7, 3, 8, 10, 2, 60, 'Répétitions par côté.'),
     ('reprise', 1, 'goblet-squat-kettlebell', 1, 3, 10, 12, 4, 90, null),
     ('reprise', 1, 'pompes-inclinees', 2, 3, 8, 12, 4, 90, 'Plus le support est haut, plus le mouvement est facile.'),
     ('reprise', 1, 'tirage-horizontal-machine', 3, 3, 10, 12, 3, 90, null),
@@ -450,7 +511,7 @@ select d.id, e.id, v.position, v.target_sets,
 -- ---------------------------------------------------------------------
 do $$
 declare
-  attendu constant int := 157;
+  attendu constant int := 177;
   obtenu  int;
 begin
   select count(*) into obtenu

@@ -20,6 +20,18 @@
 services:
   palier-db:
     image: postgres:18.6
+    # LE NOM EST FIGÉ, et ce n'est pas du confort. Sans `container_name`,
+    # Compose engendre `<projet>-<service>-<n>` — `db-palier-db-1` — et
+    # `scripts/referentiel.mjs`, qui appelle `docker exec palier-db`, ne trouve
+    # jamais sa cible : mesuré le 24/08/2026, « No such container: palier-db ».
+    #
+    # Le référentiel de production était donc inapplicable sur toute machine, et
+    # rien ne le signalait : les épreuves appliquent les `.sql` par Npgsql, un
+    # chemin qui ne passe pas par Docker.
+    #
+    # Le prix de `container_name` est qu'une seule instance peut tourner. Pour
+    # une base de développement locale, ce n'est pas un prix.
+    container_name: palier-db
     # Le mot de passe local reste EN CLAIR ici, et c'est délibéré : il ne donne
     # accès à rien d'autre qu'à un conteneur vide sur la machine, et gitleaks
     # l'accepte sous cette forme — mesuré le 20/08/2026.

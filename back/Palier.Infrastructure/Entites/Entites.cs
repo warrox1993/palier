@@ -175,6 +175,28 @@ public sealed class Workout
 
     public Guid OwnerId { get; set; }
 
+    /// <summary>
+    /// La séance type dont celle-ci découle. NULLE quand l'utilisateur
+    /// s'entraîne hors programme — ce qui est un cas ordinaire, pas une
+    /// anomalie.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>docs/03-donnees.md</c> ligne 116 la prévoit depuis le début. Elle
+    /// manquait parce que <c>workouts</c> est née au lot 2, quand
+    /// <c>program_days</c> n'existait pas encore.
+    /// </para>
+    ///
+    /// <para>
+    /// <b><c>on delete SET NULL</c>, jamais <c>cascade</c>.</b> Supprimer un
+    /// programme ne doit pas effacer les séances qu'on a réellement faites :
+    /// ce sont des données de l'utilisateur, et son historique d'entraînement
+    /// ne dépend pas d'un plan qu'il a abandonné. La cascade aurait supprimé
+    /// des mois de travail au premier ménage dans les programmes.
+    /// </para>
+    /// </remarks>
+    public Guid? ProgramDayId { get; set; }
+
     public DateTimeOffset StartedAt { get; set; }
 
     public DateTimeOffset? EndedAt { get; set; }

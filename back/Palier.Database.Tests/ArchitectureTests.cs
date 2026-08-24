@@ -183,6 +183,164 @@ public sealed class ArchitectureTests
     /// C'est la forme la plus naturelle d'un contournement — on ne l'injecte
     /// pas, on se le fait passer.
     /// </summary>
+    [Fact]
+    public void AUCUN_type_d_entrainement_ne_prend_le_SEXE_en_dependance()
+    {
+        // LE GARDE-FOU LE PLUS CONTRE-INTUITIF DU DEPOT : il protege une
+        // ABSENCE.
+        //
+        // L'etude du 24/08/2026 — quatorze axes, trente-deux agents, chaque axe
+        // conteste par un sceptique — conclut sans nuance : aucune difference
+        // liee au sexe ne justifie deux programmes. Ni le choix des exercices,
+        // ni la charge relative, ni la plage de repetitions, ni le nombre de
+        // series, ni la frequence, ni la progression, ni les temps de repos.
+        //
+        // Les nuls reposent sur des effectifs tres superieurs a ceux des
+        // differences alleguees : 7 289 personnes pour la relation
+        // charge-repetitions, 78 etudes pour le cycle menstruel, contre n = 42
+        // pour l'ecart de plus grande ampleur du dossier.
+        //
+        // POURQUOI UNE EPREUVE PLUTOT QU'UN COMMENTAIRE. Brancher le sexe sur
+        // une decision d'entrainement ne casserait rien, ne leverait rien, et
+        // passerait toutes les autres epreuves. Le defaut serait invisible au
+        // compilateur et visible seulement a l'ecran, sous la forme d'un
+        // stereotype que le produit aurait fabrique lui-meme.
+        //
+        // Ce que l'epreuve N'INTERDIT PAS : le sexe reste legitime cote
+        // NUTRITION — Mifflin-St Jeor porte un terme de sexe de 166 kcal, et
+        // `Palier.Domain.Depense` comme `Palier.Domain.Objectifs` le lisent a
+        // bon droit. La frontiere est l'entrainement.
+        var fautifs = new List<string>();
+
+        foreach (var assemblage in _assemblages)
+        {
+            foreach (var type in assemblage.GetTypes())
+            {
+                if (
+                    type.Namespace is null
+                    || !type.Namespace.Contains("Entrainement", StringComparison.Ordinal)
+                )
+                {
+                    continue;
+                }
+
+                foreach (var voie in VoiesVersLeSexe(type))
+                {
+                    fautifs.Add($"{type.FullName} ({voie})");
+                }
+            }
+        }
+
+        Assert.True(
+            fautifs.Count == 0,
+            "Ces types d'entraînement prennent le SEXE en dépendance :\n  "
+                + string.Join("\n  ", fautifs)
+                + "\n\nAucune différence liée au sexe ne justifie d'adapter un programme — "
+                + "c'est la conclusion de l'étude du 24/08/2026, et elle est mieux étayée "
+                + "que n'importe quelle différence alléguée.\n"
+                + "Faire dépendre une décision d'entraînement du sexe FABRIQUERAIT une "
+                + "différence que la littérature ne soutient pas.\n"
+                + "Le sexe reste légitime côté NUTRITION : Mifflin-St Jeor en dépend."
+        );
+    }
+
+    [Fact]
+    public void Le_garde_fou_du_sexe_REGARDE_bien_quelque_chose()
+    {
+        // Quatrieme question du franchissement — ruling P12. Sans cette
+        // assertion, l'epreuve ci-dessus passerait au vert le jour ou le filtre
+        // sur « Entrainement » cesserait de trouver le moindre type : elle
+        // n'inspecterait plus rien, et le dirait en silence.
+        var inspectes = _assemblages
+            .SelectMany(a => a.GetTypes())
+            .Count(t =>
+                t.Namespace is not null
+                && t.Namespace.Contains("Entrainement", StringComparison.Ordinal)
+            );
+
+        Assert.True(
+            inspectes > 10,
+            $"Le garde-fou du sexe n'a inspecté que {inspectes} type(s) d'entraînement."
+        );
+
+        // Et la CIBLE doit exister. Si `Sexe` etait renomme ou deplace,
+        // `EstLeSexe` ne reconnaitrait plus rien et l'epreuve deviendrait un
+        // decor — le piege que ce depot ferme partout ailleurs.
+        Assert.True(
+            EstLeSexe(typeof(Palier.Domain.Grandeurs.Sexe)),
+            "`EstLeSexe` ne reconnaît plus le type `Sexe` : le garde-fou ne garde plus rien."
+        );
+    }
+
+    /// <summary>Le type que l'entraînement ne doit jamais atteindre.</summary>
+    private static bool EstLeSexe(Type type)
+    {
+        var nu = Nullable.GetUnderlyingType(type) ?? type;
+        return nu == typeof(Palier.Domain.Grandeurs.Sexe);
+    }
+
+    /// <summary>
+    /// Les voies par lesquelles un type atteint le sexe.
+    /// </summary>
+    /// <remarks>
+    /// Même parcours que <see cref="Voies"/> — constructeurs, propriétés,
+    /// champs, méthodes — parce qu'une dépendance se prend par n'importe
+    /// laquelle, et qu'en oublier une suffit à rendre le contrôle décoratif.
+    /// </remarks>
+    private static IEnumerable<string> VoiesVersLeSexe(Type type)
+    {
+        const BindingFlags tous =
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+
+        foreach (var constructeur in type.GetConstructors(tous))
+        {
+            foreach (var parametre in constructeur.GetParameters())
+            {
+                if (EstLeSexe(parametre.ParameterType))
+                {
+                    yield return $"constructeur, paramètre « {parametre.Name} »";
+                }
+            }
+        }
+
+        foreach (var propriete in type.GetProperties(tous))
+        {
+            if (EstLeSexe(propriete.PropertyType))
+            {
+                yield return $"propriété « {propriete.Name} »";
+            }
+        }
+
+        foreach (var champ in type.GetFields(tous))
+        {
+            if (EstLeSexe(champ.FieldType) && !champ.Name.Contains('<', StringComparison.Ordinal))
+            {
+                yield return $"champ « {champ.Name} »";
+            }
+        }
+
+        foreach (var methode in type.GetMethods(tous))
+        {
+            if (methode.IsSpecialName || methode.DeclaringType != type)
+            {
+                continue;
+            }
+
+            if (EstLeSexe(methode.ReturnType))
+            {
+                yield return $"méthode « {methode.Name} », type de retour";
+            }
+
+            foreach (var parametre in methode.GetParameters())
+            {
+                if (EstLeSexe(parametre.ParameterType))
+                {
+                    yield return $"méthode « {methode.Name} », paramètre « {parametre.Name} »";
+                }
+            }
+        }
+    }
+
     private static IEnumerable<string> Voies(Type type)
     {
         const BindingFlags tous =

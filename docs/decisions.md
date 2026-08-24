@@ -1292,3 +1292,119 @@ Refuser serait plus simple à écrire, et ce serait une faute : `01-conformite.m
 La réserve pèse plus lourd sur cinq d'entre eux : **Reprise cervicale, Reprise lombaire, Épaule ménagée, Genou ménagé, Reprise**. Ce sont ceux qu'on propose à quelqu'un qui revient de blessure, c'est-à-dire exactement la population que `00-produit.md` place au cœur de la cible.
 
 Comme pour le catalogue, la mention figure en tête du fichier de référentiel, dans `db/SOURCES.md`, et ici.
+
+---
+
+## D76 — le Split couvre SIX À SEPT séances, et la septième priorise
+
+_24/08/2026. Contradiction détectée entre deux documents, signalée puis tranchée par la hiérarchie de `CLAUDE.md` § 5._
+
+| Document                 | Ce qu'il disait                                   |
+| ------------------------ | ------------------------------------------------- |
+| `05-entrainement.md` § 1 | « **6-7** — Split spécialisé, avec priorisation » |
+| `14-contenu.md` § 2      | « Split — **6** »                                 |
+| `09-comptes.md` écran 6  | « Fréquence réaliste (**3 à 7**) »                |
+
+Le document spécialisé fait autorité sur son domaine : c'est `05-entrainement.md` pour l'entraînement. **Le Split va donc de six à sept**, et `14-contenu.md` était en retard.
+
+**Ce que la contradiction coûtait, mesuré.** Avant correction, la requête « quel programme pour sept séances » rendait `AUCUN`. Un utilisateur qui déclarait la fréquence haute que l'onboarding lui propose lui-même ne recevait aucune proposition — un cul-de-sac dans le parcours d'entrée du produit.
+
+**Pourquoi l'épreuve ne l'a pas vu.** `Les_STRUCTURES_du_document_sont_toutes_representees` bouclait sur `{ 3, 4, 5, 6 }`. Un seuil qui s'arrête avant la promesse ne garde rien : il vérifiait exactement ce que le contenu offrait, et n'aurait jamais pu signaler le manque. La boucle va désormais jusqu'à sept.
+
+**La septième séance REPREND un groupe, elle n'en ajoute pas.** Le split en compte six ; le septième jour repasse sur celui qui est en retard — c'est ce que « avec priorisation » veut dire. Inventer un septième groupe reviendrait à découper ce qui l'est déjà, et la note du programme le dit à l'utilisateur.
+
+---
+
+## D77 — le produit accueille UNE et DEUX séances par semaine
+
+_24/08/2026. Demandé par le porteur : « et aussi les gens pour 1 et 2 séances ». La décision a été prise APRÈS vérification de la littérature, parce qu'elle touche du contenu de santé._
+
+### Ce que les documents disaient, et pourquoi ça ne tenait pas
+
+`09-comptes.md` écran 6 proposait « fréquence réaliste (**3 à 7**) », et le tableau des structures de `05-entrainement.md` § 1 commence à trois. Quelqu'un qui ne peut tenir qu'une ou deux séances était donc **renvoyé dehors dès l'onboarding**.
+
+C'est contraire à la promesse même du produit. `00-produit.md` place au cœur de la cible la reprise, le retour après blessure, le temps compté — exactement les gens dont la fréquence est basse.
+
+### Ce que la littérature établit, et qui a permis de trancher
+
+Trois points, vérifiés avant d'écrire une ligne de contenu :
+
+1. **À volume égalisé, une et deux séances hebdomadaires produisent des gains comparables** chez le non-entraîné. Le volume porte le résultat ; la fréquence répartit le travail.
+
+   **Corrigé le 24/08/2026 par l'étude des méthodes.** Deux réserves que cette décision ne portait pas :
+
+   - **La dose minimale ne vaut PAS à tout âge.** C'est « la généralisation la plus dangereuse » du dossier : les doses de maintien réussissent chez les 20-35 ans et **échouent** chez les 60-75 ans. La note du programme le dit désormais à l'utilisateur.
+   - **Le « Weekend Warrior » ne dit pas ce qu'on lui fait dire.** Le protocole d'O'Donovan 2017 est de 150 min modérées ou 75 min vigoureuses concentrées en une ou deux séances — pas une séance courte. Une personne qui fait une séance brève n'est couverte par aucun de ses résultats.
+
+2. Une méta-analyse dose-réponse de 2025 — 67 études, 2 058 participants — trouve un effet de la **fréquence** compatible avec un effet **négligeable** une fois le volume tenu constant, là où l'effet du **volume** est établi avec une probabilité de 100 %.
+3. Cette même analyse compte les séries comme `05-entrainement.md` le fait déjà : **1 pour le muscle direct, 0,5 pour l'indirect**. Le document du projet était donc aligné sans le savoir.
+
+**Conséquence de conception, et non simple ajout :** la séance unique **concentre** le volume au lieu de le réduire. Quatre séries sur les mouvements principaux, aucune isolation, rien qui ne gagne sa place. Réduire le volume ET la fréquence aurait donné un programme qui ne fait rien.
+
+### La tension avec « chaque muscle 2 fois par semaine minimum »
+
+`05-entrainement.md` § 1 pose ce minimum. Le programme à deux séances le respecte ; celui à une séance, non.
+
+**Il n'est pas contourné, il est dit.** Le même document impose la manière : « le produit le signale — **comme une information chiffrée, jamais comme un reproche** ». La note du programme porte donc, mot pour mot, ce que la fréquence coûte et ce que passer à deux séances rapporterait — sans jugement, et sans laisser croire qu'une séance ne sert à rien.
+
+### Sources
+
+- [Dose-réponse volume et fréquence, méta-régressions (Sports Medicine, 2025)](https://link.springer.com/10.1007/s40279-025-02344-w)
+- [Dose-réponse volume hebdomadaire et masse musculaire (Schoenfeld et coll.)](https://pubmed.ncbi.nlm.nih.gov/27433992/)
+- [Entraînement minimaliste : dose et intensité réduites (Sports Medicine, 2023)](https://link.springer.com/article/10.1007/s40279-023-01949-3)
+- [Doses minimales pour la force en population générale](https://pmc.ncbi.nlm.nih.gov/articles/PMC11127831/)
+
+**Aucun texte n'en est repris.** Ce sont des faits et des ordres de grandeur, pas des formulations : la même ligne que pour le catalogue d'exercices.
+
+---
+
+## D78 — le sexe ne décide RIEN de l'entraînement, et une épreuve le garde
+
+_24/08/2026. Deux études en fan-out — 64 agents, 7,6 millions de jetons, chaque conclusion contestée par un agent sceptique remontant aux sources primaires._
+
+### La conclusion, sans nuance
+
+**Aucune différence liée au sexe ne justifie deux programmes.** Ni le choix des exercices, ni la charge relative, ni la plage de répétitions, ni le nombre de séries, ni la fréquence, ni la progression, ni les temps de repos, ni l'apport protéique, ni l'ampleur attendue des gains.
+
+À la question « qu'est-ce qui diffère vraiment et change quelque chose à un programme », le dossier répond en un mot : **rien**.
+
+### Ce qui rend cette absence solide
+
+Les résultats nuls reposent sur des effectifs très supérieurs à ceux des différences alléguées :
+
+| Question                      | Preuve                                                                |
+| ----------------------------- | --------------------------------------------------------------------- |
+| Hypertrophie relative         | ES 0,07 · p = 0,31 · **I² = 0**                                       |
+| Confirmation bayésienne       | +0,69 % (HDI −1,50 à +2,88) · 1 278 hommes, 1 537 femmes              |
+| Relation charge ↔ répétitions | **7 289 personnes**, 269 études                                       |
+| Cycle menstruel               | ES −0,06 · **78 études** · écart maximal jugé trivial par ses auteurs |
+| Besoins protéiques            | Plateau à 1,62 g/kg — modéré par l'âge, jamais par le sexe            |
+
+Contre `n = 42` pour l'écart de plus grande ampleur du dossier, qui porte sur **un seul exercice** et dont les auteurs qualifient eux-mêmes leurs mécanismes de « tentative and speculative ».
+
+### Pourquoi une ÉPREUVE et non un commentaire
+
+Brancher le sexe sur une décision d'entraînement ne casserait rien, ne lèverait rien, et passerait toutes les autres épreuves. **Le défaut serait invisible au compilateur et visible seulement à l'écran** — sous la forme d'un stéréotype que le produit aurait fabriqué lui-même.
+
+`ArchitectureTests.AUCUN_type_d_entrainement_ne_prend_le_SEXE_en_dependance` parcourt constructeurs, propriétés, champs et méthodes de tout type dont l'espace de noms contient `Entrainement`. Éprouvé par provocation le 24/08/2026 : une sonde posée dans `Palier.Application.Entrainement` a été refusée, nommément, sur ses deux voies.
+
+Une seconde épreuve garde le garde-fou : elle vérifie qu'il inspecte réellement des types, et que le type `Sexe` est toujours reconnu. Sans elle, un renommage aurait suffi à le transformer en décor.
+
+### Ce que l'épreuve N'INTERDIT PAS
+
+**Le sexe reste légitime côté nutrition.** Mifflin-St Jeor porte un terme de 166 kcal/jour, et `Palier.Domain.Depense` comme `Palier.Domain.Objectifs` le lisent à bon droit. La frontière est l'entraînement, pas le produit.
+
+### Les deux conséquences réelles — et aucune ne passe par le champ sexe
+
+1. **La progression s'affiche en pourcentage du point de départ.** Les gains absolus sont supérieurs chez l'homme, les relatifs sont équivalents : un affichage en kilos montre des chiffres plus petits à une femme pour un travail identique. La correction vaut **pour tout le monde** — « un affichage conditionné au sexe encoderait dans l'interface l'idée qu'une femme a besoin d'être protégée de ses valeurs absolues ».
+2. **Tout garde-fou de surcharge se calibre sur la personne par rapport à elle-même.** L'argument n'est pas le sexe : la variabilité entre deux personnes du même sexe dépasse l'écart moyen entre sexes.
+
+### Ce que le champ `sex` doit rester
+
+Binaire nullable, et **rien de plus**. Son terme vaut 166 kcal/jour quand l'erreur individuelle de l'équation est de ±150 à 300 kcal : le paramètre discuté est plus petit que le bruit de l'instrument.
+
+Pour une personne trans sous hormonothérapie, la masse maigre se déplace réellement — +4,12 kg sous testostérone, −2,4 kg sous œstrogènes — mais cela représente 50 à 90 kcal/jour, soit **la moitié** du saut que produirait un basculement du champ. Deux erreurs symétriques et aussi peu défendables : basculer le champ d'un coup, ou le figer à vie.
+
+### Ce qui reste dû
+
+Le dossier complet vit dans `.superpowers/sdd/2026-08-24-etude-sexe/`. Il porte des sections que ce journal ne résume pas — étapes de vie, plancher pelvien, signaux d'orientation vers un professionnel — et **elles attendent la même relecture que le catalogue**.

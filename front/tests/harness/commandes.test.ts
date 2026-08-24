@@ -114,4 +114,35 @@ describe('garde-fou : les commandes du projet, pas seulement les outils', () => 
       /No files matching the pattern/i,
     )
   })
+
+  it('le conteneur que le référentiel appelle porte bien ce nom dans compose', () => {
+    // CE GARDE-FOU A ÉTÉ PAYÉ. Le 24/08/2026, `npm run db:referentiel` rendait
+    // « No such container: palier-db » sur une machine où la base tournait
+    // pourtant : sans `container_name`, Compose engendre
+    // `<projet>-<service>-<n>`, soit `db-palier-db-1`.
+    //
+    // Le référentiel de production était donc inapplicable PARTOUT, et rien ne
+    // le disait : les épreuves de base appliquent les `.sql` par Npgsql, un
+    // chemin qui ne passe jamais par Docker. Seul un essai manuel l'a montré.
+    const script = readFileSync('../scripts/referentiel.mjs', 'utf8')
+    const compose = readFileSync('../db/compose.yaml', 'utf8')
+
+    const attendu = /PALIER_DB_CONTENEUR \?\? '([^']+)'/.exec(script)?.[1]
+    expect(attendu, 'referentiel.mjs ne nomme plus de conteneur par défaut').toBeTruthy()
+
+    // Le `container_name` du compose, et non le nom du SERVICE : ce sont deux
+    // choses différentes, et c'est exactement la confusion qui a coûté le
+    // défaut.
+    const declare = /^\s*container_name:\s*(\S+)\s*$/m.exec(compose)?.[1]
+    expect(
+      declare,
+      'db/compose.yaml ne fige aucun `container_name` : Compose en engendrera un, ' +
+        'et `docker exec` ne trouvera pas sa cible.',
+    ).toBeTruthy()
+
+    expect(
+      declare,
+      `referentiel.mjs appelle « ${attendu} » mais compose déclare « ${declare} ».`,
+    ).toBe(attendu)
+  })
 })

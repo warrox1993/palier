@@ -22,14 +22,18 @@ namespace Palier.Database.Tests;
 [Collection(BaseFixture.Collection)]
 public sealed class ReferentielProgrammesTests(BaseFixture baseDeDonnees)
 {
-    /// <summary>Les neuf de <c>docs/14-contenu.md</c> § 2, nommément.</summary>
+    /// <summary>
+    /// Les onze programmes, nommément — les neuf de <c>docs/14-contenu.md</c>
+    /// § 2, plus les deux de fréquence basse.
+    /// </summary>
     /// <remarks>
     /// La liste est écrite ICI plutôt que comptée : un tableau de neuf lignes
-    /// dont deux auraient fusionné donnerait encore neuf programmes si l'on
+    /// dont deux auraient fusionné donnerait encore le bon compte si l'on
     /// s'était contenté de compter.
     /// </remarks>
     private static readonly string[] _attendus =
     [
+        "deux-seances",
         "epaule-menagee",
         "full-body",
         "genou-menage",
@@ -38,11 +42,12 @@ public sealed class ReferentielProgrammesTests(BaseFixture baseDeDonnees)
         "reprise-cervicale",
         "reprise-lombaire",
         "split",
+        "une-seance",
         "upper-lower",
     ];
 
     [Fact]
-    public async Task Le_referentiel_pose_les_NEUF_programmes_du_document()
+    public async Task Le_referentiel_pose_les_ONZE_programmes()
     {
         await AppliquerAsync();
 
@@ -283,7 +288,17 @@ public sealed class ReferentielProgrammesTests(BaseFixture baseDeDonnees)
         // autres.
         await AppliquerAsync();
 
-        foreach (var seances in new[] { 3, 4, 5, 6 })
+        // D'UNE À SEPT, et les deux bornes ont été payées.
+        //
+        // L'épreuve s'arrêtait à six : mesuré le 24/08/2026, aucun programme ne
+        // convenait à sept séances alors que l'onboarding propose cette
+        // fréquence — un cul-de-sac que rien ne signalait. Un seuil qui
+        // s'arrête avant la promesse ne garde rien.
+        //
+        // Et elle commençait à trois, parce que les documents commençaient là.
+        // Quelqu'un qui ne tient qu'une ou deux séances existe, et le renvoyer
+        // dehors contredit la promesse du produit — D77.
+        foreach (var seances in new[] { 1, 2, 3, 4, 5, 6, 7 })
         {
             var compte = await CompterAsync(
                 "select count(*) from public.programs where is_template = true "

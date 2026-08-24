@@ -312,6 +312,7 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.HasKey(x => x.Id);
             t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
             t.Property(x => x.OwnerId).HasColumnName("owner_id");
+            t.Property(x => x.ProgramDayId).HasColumnName("program_day_id");
             t.Property(x => x.StartedAt).HasColumnName("started_at").HasDefaultValueSql("now()");
             t.Property(x => x.EndedAt).HasColumnName("ended_at");
             t.Property(x => x.SleepHours).HasColumnName("sleep_hours");
@@ -324,6 +325,19 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.HasIndex(x => new { x.OwnerId, x.StartedAt })
                 .HasDatabaseName("ix_workouts_owner_id_started_at")
                 .IsDescending(false, true);
+
+            // `SetNull` et non `Cascade` : supprimer un programme ne doit pas
+            // effacer les séances réellement faites. L'historique appartient à
+            // l'utilisateur, pas au plan qu'il suivait.
+            t.HasOne<ProgramDay>()
+                .WithMany()
+                .HasForeignKey(x => x.ProgramDayId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Le suivi d'un programme interroge « quelles séances viennent de
+            // ce jour type ». Sans index, la question coûte un parcours complet
+            // de l'historique à chaque ouverture de l'écran.
+            t.HasIndex(x => x.ProgramDayId).HasDatabaseName("ix_workouts_program_day_id");
         });
 
         builder.Entity<WorkoutSet>(t =>
