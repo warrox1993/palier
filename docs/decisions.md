@@ -1043,3 +1043,55 @@ Et un garde-fou qui crie sans motif est un garde-fou qu'on finit par ignorer, pu
 - **Exiger une pesée hebdomadaire du produit** — une contrainte d'interface pour éviter un calcul de dix lignes, et qui rendrait la détection dépendante d'un comportement qu'on ne contrôle pas.
 
 **Ce qui la rouvrirait :** un avis clinique — le kinésithérapeute que `docs/14-contenu.md` prévoit — sur la bonne façon de lire une série de poids. C'est le genre de question où une source médicale prime sur un raisonnement de conception, et cette décision est prise faute de l'avoir demandée.
+
+---
+
+## D62 — Les quatre arbitrages du lot 5
+
+**Tranchés le :** 24/08/2026. **Pris en autonomie**, le porteur du projet ayant demandé que le lot 5 soit exécuté pendant son sommeil. Chacun porte ce qui le défait ; deux d'entre eux ne sont pas des choix.
+
+### La pagination va au CURSEUR, et le curseur est un couple
+
+`GET /api/v1/seances?avant={instant}&avantId={guid}&limite={n}`.
+
+**Le décalage aurait été faux.** Une liste triée par date décroissante reçoit ses insertions **en tête** : entre le moment où le client lit la page 1 et celui où il demande la page 2, une séance ouverte décale tout d'un rang, et un `OFFSET 20` saute la vingtième — définitivement, sans erreur et sans trou visible dans la réponse.
+
+**Le couple, parce que l'instant seul ne suffit pas.** Deux séances peuvent porter le même `started_at` — un import, deux entraînements notés à la minute près — et un `<` strict en aurait sauté une pour toujours. `(started_at, id)` est un ordre total.
+
+`EF.Functions.LessThan` sur un tuple traduit en comparaison de **row values** PostgreSQL, `(started_at, id) < (@a, @b)`, qui se sert de l'index `workouts (owner_id, started_at desc)` posé par D39 — là où un `OR` force souvent un parcours. Trouvé par Context7, pas de mémoire.
+
+**Ce qui la défait :** un besoin de sauter à la page N, qu'aucun écran ne demande.
+
+### Les deux listes sont FERMÉES, et le document les donne
+
+`docs/05-entrainement.md` nomme les quatre contraintes au § 4 — cervicale, lombaire, épaule, genou — et les trois états de ressenti au § 5 — `good`, `meh`, `pain`. **Il n'y avait rien à trancher** : la liste est fermée par le document métier.
+
+**Le texte libre aurait été un piège.** Il ne se traduit pas, il ne se compare pas — « épaule », « epaule », « Épaule droite » sont trois valeurs pour une machine — et il finirait dans un prompt de modèle, ce que `docs/01-conformite.md` encadre strictement.
+
+La forme stockée est en **minuscules sans accent**, des deux côtés : `user_constraints.region` et `exercises.contraindicated_for` se comparent, et une collation qui traiterait « e » et « é » différemment selon l'environnement rendrait le filtrage dépendant de la configuration du serveur. Le libellé accentué vit dans i18next.
+
+**Ce qui la défait :** une cinquième région réclamée par un utilisateur. Elle s'ajoute alors à l'énumération, à la contrainte `CHECK` et aux libellés — pas par le corps d'une requête.
+
+### Le ratio tirage/poussée est REPORTÉ
+
+`docs/05-entrainement.md` § 4 le définit, `VolumeParGroupe.SurSeptJours` sait le calculer depuis le lot 3, et `SerieEffectuee` attend un `RoleMouvement`.
+
+**Ce rôle n'existe nulle part en base.** `exercises` porte `primary_muscles` et `secondary_muscles` ; aucune colonne ne dit si un mouvement tire ou pousse. Le déduire des muscles serait faux — un pull-over travaille les pectoraux **et** le grand dorsal, un rowing inversé et un développé partagent le deltoïde — et **un ratio faux vaut moins que pas de ratio** : il ferait modifier un programme sur une mesure inventée.
+
+La colonne se pose au lot qui **remplit** le catalogue — étape 1 bis, 250 à 400 exercices — où le rôle se renseigne exercice par exercice, avec le reste. L'ajouter maintenant créerait une colonne vide sur un catalogue vide : le « garde-fou sans cible » que D39 refuse.
+
+**Ce qui la défait :** rien, jusqu'au catalogue. Le volume par muscle, lui, est livré.
+
+### Le filtrage du catalogue par les contraintes N'EST PAS TRANCHÉ
+
+C'est le seul point que ce lot laisse **délibérément ouvert**, et il appartient au porteur.
+
+Le § 4 décrit un filtrage automatique par intersection. Il laisse ouvert ce qu'on fait d'un exercice contre-indiqué : **l'exclure** du catalogue, ou **l'afficher marqué**. Les deux se défendent — exclure protège, marquer informe — et le choix se voit par l'utilisateur, donc `CLAUDE.md` § 6 s'applique.
+
+**Le lot 5 stocke et expose.** L'épreuve `Declarer_une_contrainte_ne_FILTRE_PAS_encore_le_catalogue` rougira le jour où le filtrage arrivera, avec un message qui explique pourquoi. Sans elle, le filtrage se serait installé au détour d'une implémentation, dans la forme que quelqu'un aurait trouvée évidente, et **personne n'aurait jamais posé la question**.
+
+### Et D39, considérée comme prise
+
+Elle portait « arbitrage à confirmer par le porteur du projet ». Trois lots s'appuient dessus, et la défaire coûterait treize tables et treize épreuves RLS que rien n'exercerait. Le lot 5 l'a appliquée à la lettre : **deux** tables nouvelles, chacune avec sa politique, ses trois rôles et son épreuve d'isolation.
+
+**Ce qui la défait :** un mot du porteur. Le coût de revenir en arrière augmente à chaque lot ; il est aujourd'hui plus élevé qu'hier.
