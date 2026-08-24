@@ -24,11 +24,29 @@ namespace Palier.Database.Tests;
 [Collection(BaseFixture.Collection)]
 public sealed class ReferentielExercicesTests(BaseFixture baseDeDonnees)
 {
-    /// <summary>Le nombre de mouvements que le jalon 1 promet — `docs/16-projet.md` § 4.</summary>
-    private const int _prioritaires = 60;
+    /// <summary>
+    /// La CIBLE de `docs/14-contenu.md` § 1 : « 250 à 400 exercices ».
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Le seuil a monté trois fois avec le catalogue : soixante au jalon 1
+    /// (`16-projet.md` § 4, « 60 exercices prioritaires PUIS extension »), puis
+    /// cent cinquante — le seuil de crédibilité, « en dessous de 150, le
+    /// produit paraît vide face à la concurrence » — puis la borne basse de la
+    /// cible.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Il monte AVEC le contenu, jamais après.</b> Le laisser en arrière
+    /// laisserait un fichier se vider sans que rien ne rougisse : l'épreuve
+    /// dirait « au moins soixante » sur un catalogue qui en aurait perdu deux
+    /// cents.
+    /// </para>
+    /// </remarks>
+    private const int _cible = 250;
 
     [Fact]
-    public async Task Le_referentiel_s_applique_et_pose_les_SOIXANTE_mouvements()
+    public async Task Le_referentiel_s_applique_et_atteint_la_CIBLE_du_document()
     {
         await AppliquerAsync();
 
@@ -36,14 +54,14 @@ public sealed class ReferentielExercicesTests(BaseFixture baseDeDonnees)
             "select count(*) from public.exercises where is_custom = false and slug is not null"
         );
 
-        // `docs/16-projet.md` § 4 : « 60 exercices prioritaires puis
-        // extension ». Le nombre est une PROMESSE du document, pas une
-        // constatation de ce que le fichier contient — un fichier tronqué à
-        // quarante passerait sans cette assertion.
+        // `docs/14-contenu.md` § 1 : « Cible : 250 à 400 exercices ». Le
+        // nombre est une PROMESSE du document, pas une constatation de ce que
+        // les fichiers contiennent — un référentiel tronqué passerait sans
+        // cette assertion.
         Assert.True(
-            poses >= _prioritaires,
-            $"Le référentiel pose {poses} exercice(s) au lieu des {_prioritaires} promis "
-                + "par `docs/16-projet.md` § 4."
+            poses >= _cible,
+            $"Le référentiel pose {poses} exercice(s) au lieu des {_cible} promis "
+                + "par `docs/14-contenu.md` § 1."
         );
     }
 
@@ -156,8 +174,8 @@ public sealed class ReferentielExercicesTests(BaseFixture baseDeDonnees)
             "select count(*) from public.exercises where is_custom = false and movement_role = 'poussee'"
         );
 
-        Assert.True(tirages >= 8, $"Seulement {tirages} mouvement(s) de tirage au catalogue.");
-        Assert.True(poussees >= 8, $"Seulement {poussees} mouvement(s) de poussée au catalogue.");
+        Assert.True(tirages >= 30, $"Seulement {tirages} mouvement(s) de tirage au catalogue.");
+        Assert.True(poussees >= 30, $"Seulement {poussees} mouvement(s) de poussée au catalogue.");
     }
 
     [Fact]
@@ -171,7 +189,7 @@ public sealed class ReferentielExercicesTests(BaseFixture baseDeDonnees)
         await AppliquerAsync();
 
         var liens = await CompterAsync("select count(*) from public.exercise_variants");
-        Assert.True(liens >= 30, $"Seulement {liens} lien(s) de variante posé(s).");
+        Assert.True(liens >= 140, $"Seulement {liens} lien(s) de variante posé(s).");
 
         // Et aucune ne se pointe elle-même : `ck_exercise_variants_pas_soi_meme`
         // le refuse, mais l'épreuve vérifie que la contrainte est POSÉE.
@@ -221,6 +239,60 @@ public sealed class ReferentielExercicesTests(BaseFixture baseDeDonnees)
         Assert.Equal(0, personnalises);
     }
 
+    [Fact]
+    public async Task TOUTES_les_familles_d_equipement_sont_couvertes()
+    {
+        // Le porteur a nommé les familles à couvrir : machines, poids libres,
+        // poids de corps, élastiques, poulies, et les mouvements de
+        // renforcement.
+        //
+        // Sans cette épreuve, un catalogue riche mais déséquilibré passerait —
+        // trois cents mouvements dont aucun sans matériel, et le produit serait
+        // inutilisable pour quelqu'un qui s'entraîne chez lui, ou en reprise
+        // après une blessure.
+        await AppliquerAsync();
+
+        foreach (var famille in new[] { "machine", "barre", "haltère", "haltères", "poulie", "élastique", "poids de corps", "kettlebell" })
+        {
+            var compte = await CompterAsync(
+                $"select count(*) from public.exercises where is_custom = false and equipment = '{famille}'"
+            );
+
+            Assert.True(
+                compte >= 5,
+                $"La famille « {famille} » ne compte que {compte} mouvement(s). "
+                    + "Un catalogue déséquilibré est inutilisable pour qui n'a pas ce matériel."
+            );
+        }
+    }
+
+    [Fact]
+    public async Task Des_mouvements_SANS_MATERIEL_existent_pour_chaque_grande_region()
+    {
+        // La reprise, le retour après blessure, l'entraînement à domicile :
+        // `docs/00-produit.md` place cette population au cœur de la cible. Un
+        // catalogue qui exigerait une salle pour chaque région la laisserait
+        // dehors.
+        await AppliquerAsync();
+
+        foreach (var muscle in new[] { "pectoraux", "dos", "abdominaux", "fessiers", "quadriceps", "mollets" })
+        {
+            var compte = await CompterAsync(
+                $"""
+                select count(*) from public.exercises
+                 where is_custom = false
+                   and equipment in ('poids de corps', 'élastique')
+                   and '{muscle}' = any(primary_muscles)
+                """
+            );
+
+            Assert.True(
+                compte >= 1,
+                $"Aucun mouvement sans matériel pour « {muscle} »."
+            );
+        }
+    }
+
     // ================================================================
     // Le harnais
     // ================================================================
@@ -236,15 +308,20 @@ public sealed class ReferentielExercicesTests(BaseFixture baseDeDonnees)
     /// </remarks>
     private async Task AppliquerAsync()
     {
-        var chemin = Chemin();
-        var sql = await File.ReadAllTextAsync(chemin);
-
         await using var connexion = new NpgsqlConnection(baseDeDonnees.ChaineMigrations);
         await connexion.OpenAsync();
-#pragma warning disable CA2100 // Le SQL vient du fichier de référentiel du DÉPÔT, versionné et relu, jamais d'une entrée.
-        await using var commande = new NpgsqlCommand(sql, connexion);
+
+        // TOUS les fichiers d'exercices, dans l'ordre de leur préfixe — comme
+        // `scripts/referentiel.mjs`. N'en appliquer qu'un mesurerait un
+        // référentiel partiel, c'est-à-dire pas celui qui part en production.
+        foreach (var chemin in Fichiers())
+        {
+            var sql = await File.ReadAllTextAsync(chemin);
+#pragma warning disable CA2100 // Le SQL vient des fichiers de référentiel du DÉPÔT, versionnés, jamais d'une entrée.
+            await using var commande = new NpgsqlCommand(sql, connexion);
 #pragma warning restore CA2100
-        await commande.ExecuteNonQueryAsync();
+            await commande.ExecuteNonQueryAsync();
+        }
     }
 
     /// <summary>
@@ -255,7 +332,7 @@ public sealed class ReferentielExercicesTests(BaseFixture baseDeDonnees)
     /// premier changement de cadre cible ou de disposition des dossiers, et le
     /// message serait « fichier introuvable » sans dire lequel manque.
     /// </remarks>
-    private static string Chemin()
+    private static string[] Fichiers()
     {
         var dossier = new DirectoryInfo(AppContext.BaseDirectory);
 
@@ -269,15 +346,24 @@ public sealed class ReferentielExercicesTests(BaseFixture baseDeDonnees)
             "Racine du dépôt introuvable depuis " + AppContext.BaseDirectory
         );
 
-        var chemin = Path.Combine(dossier!.FullName, "db", "referentiel", "02-exercises.sql");
+        var referentiel = Path.Combine(dossier!.FullName, "db", "referentiel");
+
+        // Ceux qui portent des EXERCICES. Le référentiel accueillera aussi les
+        // nutriments et les aliments, qui n'ont rien à faire dans cette
+        // épreuve : les appliquer ici la ferait échouer sur des tables que le
+        // catalogue ne connaît pas.
+        var fichiers = Directory
+            .GetFiles(referentiel, "*exercises*.sql")
+            .OrderBy(chemin => Path.GetFileName(chemin), StringComparer.Ordinal)
+            .ToArray();
 
         Assert.True(
-            File.Exists(chemin),
-            $"Le référentiel du catalogue est introuvable : {chemin}. C'est la cible de cette "
-                + "épreuve ; une cible absente se signale au lieu de se remplacer."
+            fichiers.Length > 0,
+            $"Aucun fichier d'exercices dans {referentiel}. C'est la cible de cette épreuve ; "
+                + "une cible absente se signale au lieu de se remplacer."
         );
 
-        return chemin;
+        return fichiers;
     }
 
     private async Task<long> CompterAsync(string requete)
