@@ -64,7 +64,78 @@ public sealed class Exercise
 {
     public Guid Id { get; set; }
 
-    public required string Name { get; set; }
+    /// <summary>
+    /// La clé naturelle du catalogue — <c>developpe-couche-barre</c>. NULLE pour
+    /// un exercice personnalisé.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Elle résout deux problèmes d'un coup — D68. D'abord l'IDEMPOTENCE du
+    /// référentiel : <c>02-exercises.sql</c> doit pouvoir être rejoué après un
+    /// <c>db:reset</c> ou une correction, et un <c>on conflict (slug)</c> le
+    /// permet là où il faudrait sinon figer des UUID dans le fichier — que
+    /// personne ne pourrait relire.
+    /// </para>
+    ///
+    /// <para>
+    /// Ensuite les VARIANTES : un exercice se lie à un autre par son slug, pas
+    /// par un identifiant qu'aucun humain ne peut vérifier à la lecture.
+    /// </para>
+    ///
+    /// <para>
+    /// L'unicité est PARTIELLE — <c>where is_custom = false</c>. Un utilisateur
+    /// qui nomme son exercice comme un exercice du catalogue ne doit pas être
+    /// refusé, et il n'écrit pas de slug.
+    /// </para>
+    /// </remarks>
+    public string? Slug { get; set; }
+
+    /// <summary>Le nom français.</summary>
+    public required string NameFr { get; set; }
+
+    /// <summary>
+    /// Le nom anglais. NUL pour un exercice personnalisé, EXIGÉ au catalogue.
+    /// </summary>
+    /// <remarks>
+    /// <b>Des colonnes suffixées plutôt qu'une table de traductions</b> — D67.
+    /// Deux langues, figées par <c>11-qualite.md</c> : « français et anglais dès
+    /// la V1 ». Et surtout, la contrainte <c>CHECK</c> rend l'oubli impossible :
+    /// une table de traductions aurait permis un exercice sans sa ligne
+    /// anglaise, silencieusement, et l'écran aurait affiché un trou.
+    /// </remarks>
+    public string? NameEn { get; set; }
+
+    /// <summary>Les consignes d'exécution, en français. Exigées au catalogue.</summary>
+    /// <remarks>
+    /// <b>Elles décrivent le mouvement, elles ne prescrivent rien.</b>
+    /// « Genoux dans l'axe des pieds » dit comment faire ; « vous devriez
+    /// muscler vos quadriceps » serait un conseil, que
+    /// <c>01-conformite.md</c> § 2 interdit.
+    /// </remarks>
+    public string? InstructionsFr { get; set; }
+
+    /// <inheritdoc cref="InstructionsFr" />
+    public string? InstructionsEn { get; set; }
+
+    /// <summary>Les erreurs fréquentes, en français. Exigées au catalogue.</summary>
+    public string? CommonErrorsFr { get; set; }
+
+    /// <inheritdoc cref="CommonErrorsFr" />
+    public string? CommonErrorsEn { get; set; }
+
+    /// <summary>
+    /// <c>tirage</c>, <c>poussee</c> ou <c>aucun</c> — <c>05-entrainement.md</c> § 4.
+    /// </summary>
+    /// <remarks>
+    /// <b>Elle ferme le report de D62.</b> Le ratio tirage/poussée était
+    /// calculable par le domaine depuis le lot 3, mais rien en base ne disait
+    /// si un mouvement tire ou pousse — et le déduire des muscles aurait été
+    /// faux : un pull-over travaille les pectoraux ET le grand dorsal.
+    ///
+    /// <c>aucun</c> n'est pas un défaut par paresse : le document exclut
+    /// explicitement le deltoïde latéral du ratio, « il ne tire ni ne pousse ».
+    /// </remarks>
+    public required string MovementRole { get; set; }
 
     public string? Equipment { get; set; }
 
@@ -297,6 +368,33 @@ public sealed class UserConstraint
     public string? Note { get; set; }
 
     public DateTimeOffset DeclaredAt { get; set; }
+}
+
+/// <summary>
+/// Un lien de variante entre deux exercices du catalogue —
+/// <c>docs/05-entrainement.md</c> § 6.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Une table de liens, jamais un tableau d'identifiants</b> — D71. Un
+/// <c>uuid[]</c> aurait coûté une colonne au lieu d'une table, mais PostgreSQL
+/// ne contraint pas les références dans un tableau : une variante pointant sur
+/// un exercice supprimé y resterait, et le produit proposerait un remplacement
+/// qui n'existe plus.
+/// </para>
+///
+/// <para>
+/// Le lien n'est PAS symétrique en base : « développé haltères est une variante
+/// de développé barre » se déclare dans un sens, et le référentiel déclare les
+/// deux quand la réciproque a du sens. Forcer la symétrie par un déclencheur
+/// coûterait plus que de l'écrire.
+/// </para>
+/// </remarks>
+public sealed class ExerciseVariant
+{
+    public Guid ExerciseId { get; set; }
+
+    public Guid VariantId { get; set; }
 }
 
 #pragma warning restore CA1819

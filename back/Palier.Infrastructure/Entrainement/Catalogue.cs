@@ -40,7 +40,14 @@ internal static class RenduDExercice
     ) =>
         new(
             exercice.Id,
-            exercice.Name,
+            exercice.Slug,
+            exercice.NameFr,
+            exercice.NameEn,
+            exercice.InstructionsFr,
+            exercice.InstructionsEn,
+            exercice.CommonErrorsFr,
+            exercice.CommonErrorsEn,
+            exercice.MovementRole,
             exercice.Equipment,
             exercice.PrimaryMuscles,
             exercice.SecondaryMuscles,
@@ -88,7 +95,7 @@ public sealed class ListerLeCatalogue(PalierDbContext contexte)
         // qui divergerait le jour où les politiques changent.
         var exercices = await contexte
             .Exercises.AsNoTracking()
-            .OrderBy(e => e.Name)
+            .OrderBy(e => e.NameFr)
             .ToListAsync(jeton)
             .ConfigureAwait(false);
 
@@ -118,7 +125,15 @@ public sealed class CreerUnExercice(PalierDbContext contexte, IIdentiteDemandeur
 
         var exercice = new Exercise
         {
-            Name = demande.Nom.Trim(),
+            // Le nom donné devient le nom FRANÇAIS. Un exercice
+            // personnalisé n'a ni traduction ni consignes : la contrainte
+            // `CHECK` ne les exige que du catalogue public — D70.
+            NameFr = demande.Nom.Trim(),
+
+            // `aucun` : le rôle sert au ratio tirage/poussée, qui se calcule
+            // sur le catalogue relu. Le faire deviner à l'utilisateur
+            // fausserait un indicateur qu'il ne comprend pas encore.
+            MovementRole = "aucun",
             Equipment = string.IsNullOrWhiteSpace(demande.Materiel) ? null : demande.Materiel.Trim(),
             PrimaryMuscles = [.. demande.PrimairesOuVide.Select(m => m.Trim())],
             SecondaryMuscles = [.. demande.SecondairesOuVide.Select(m => m.Trim())],

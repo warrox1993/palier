@@ -12,12 +12,20 @@ l'ODbL, avec l'obligation de share-alike qui l'accompagne. Une source dont la
 licence n'est pas tracée est une source qu'on ne peut plus séparer des autres
 le jour où il le faut.
 
-| Fichier | Source | Licence | Version ou millésime | Date de relevé | URL |
-| ------- | ------ | ------- | -------------------- | -------------- | --- |
+| Fichier            | Source                                                                                                                                                       | Licence                             | Version ou millésime                | Date de relevé | URL                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | ----------------------------------- | -------------- | ------------------------- |
+| `02-exercises.sql` | **Rédigé pour ce projet** — contre-indications dérivées de `docs/05-entrainement.md` § 4, incréments de son § 3. **NON RELU par un professionnel de santé.** | Propriétaire — aucune donnée tierce | 60 mouvements prioritaires, jalon 1 | 24/08/2026     | — (aucune source externe) |
 
-_Aucun fichier de référentiel n'est encore livré : les données arrivent avec le
-cas d'usage qui les exige (D39). Le tableau est vide, pas absent — le contrôle
-a besoin de sa cible, et une cible absente se signale au lieu de se remplacer._
+**La colonne Source dit ce qu'elle vaut, et c'est délibéré.** `docs/14-contenu.md`
+§ 2 exige que les contre-indications soient « relues par un kinésithérapeute » ;
+cette relecture n'a pas eu lieu. Le fichier porte la même mention en tête.
+
+**Aucune source externe, et c'est un choix** — D66. Les bases d'exercices libres
+sont anglophones, et leurs licences de type ODbL imposent le share-alike : un
+catalogue enrichi de contre-indications et de consignes serait une base dérivée
+au sens de la licence, à rouvrir en entier. `docs/17-donnees-sources.md` pose
+d'ailleurs la règle qui l'interdit : « ne jamais fusionner les sources dans une
+table unifiée enrichie ».
 
 ## Ce qui doit figurer dans chaque colonne
 

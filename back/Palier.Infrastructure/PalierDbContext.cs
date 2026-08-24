@@ -26,6 +26,9 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
 
     public DbSet<Exercise> Exercises => Set<Exercise>();
 
+    /// <summary>Les liens de variante entre exercices — lot catalogue, D71.</summary>
+    public DbSet<ExerciseVariant> ExerciseVariants => Set<ExerciseVariant>();
+
     public DbSet<Workout> Workouts => Set<Workout>();
 
     public DbSet<WorkoutSet> WorkoutSets => Set<WorkoutSet>();
@@ -75,6 +78,28 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.Property(x => x.DernierEchecLe).HasColumnName("DernierEchecLe");
             t.Property(x => x.VerrouillagesSubis).HasColumnName("VerrouillagesSubis").HasDefaultValue(0);
             t.Property(x => x.ConsentementSanteLe).HasColumnName("ConsentementSanteLe");
+        });
+
+        builder.Entity<ExerciseVariant>(t =>
+        {
+            t.ToTable("exercise_variants");
+            t.HasKey(x => new { x.ExerciseId, x.VariantId });
+            t.Property(x => x.ExerciseId).HasColumnName("exercise_id");
+            t.Property(x => x.VariantId).HasColumnName("variant_id");
+
+            // CASCADE des deux côtés : un lien de variante n'a aucun sens sans
+            // ses deux exercices. C'est le seul endroit du schéma où la
+            // suppression en cascade est évidente — la ligne ne porte aucune
+            // donnée propre, elle n'est QUE la relation.
+            t.HasOne<Exercise>()
+                .WithMany()
+                .HasForeignKey(x => x.ExerciseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            t.HasOne<Exercise>()
+                .WithMany()
+                .HasForeignKey(x => x.VariantId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<ExerciseFeedback>(t =>
@@ -208,7 +233,26 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.ToTable("exercises");
             t.HasKey(x => x.Id);
             t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
-            t.Property(x => x.Name).HasColumnName("name").IsRequired();
+            t.Property(x => x.Slug).HasColumnName("slug");
+            t.Property(x => x.NameFr).HasColumnName("name_fr").IsRequired();
+            t.Property(x => x.NameEn).HasColumnName("name_en");
+            t.Property(x => x.InstructionsFr).HasColumnName("instructions_fr");
+            t.Property(x => x.InstructionsEn).HasColumnName("instructions_en");
+            t.Property(x => x.CommonErrorsFr).HasColumnName("common_errors_fr");
+            t.Property(x => x.CommonErrorsEn).HasColumnName("common_errors_en");
+            t.Property(x => x.MovementRole)
+                .HasColumnName("movement_role")
+                .IsRequired()
+                .HasDefaultValue("aucun");
+
+            // L'unicité est PARTIELLE : elle ne porte que sur le catalogue
+            // public. Un utilisateur n'écrit pas de slug, et deux exercices
+            // personnalisés sans slug ne doivent pas se gêner.
+            t.HasIndex(x => x.Slug)
+                .IsUnique()
+                .HasFilter("is_custom = false")
+                .HasDatabaseName("ux_exercises_slug");
+
             t.Property(x => x.Equipment).HasColumnName("equipment");
             t.Property(x => x.PrimaryMuscles).HasColumnName("primary_muscles").IsRequired();
             t.Property(x => x.SecondaryMuscles)

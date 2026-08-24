@@ -19,6 +19,7 @@
     "db:up": "node scripts/db.mjs up palier-db",
     "db:down": "node scripts/db.mjs down",
     "db:reset": "node scripts/db.mjs reset",
+    "db:referentiel": "node scripts/referentiel.mjs",
     "outils:up": "node scripts/db.mjs outils-up",
     "outils:down": "node scripts/db.mjs outils-down",
     "audit:back": "dotnet list back/Palier.sln package --vulnerable --include-transitive",

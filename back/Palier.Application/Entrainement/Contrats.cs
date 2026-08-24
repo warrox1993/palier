@@ -329,7 +329,7 @@ public sealed record BilanDeVolume(IReadOnlyList<SemaineDeVolume> Semaines)
 }
 
 /// <summary>Ce qu'on donne pour créer un exercice personnalisé.</summary>
-/// <param name="Nom">Obligatoire, et borné : c'est du texte libre affiché.</param>
+/// <param name="Nom">Obligatoire, et borné. Il devient le nom FRANÇAIS : un exercice personnalisé n'a pas de traduction.</param>
 /// <param name="Materiel">Facultatif — « barre », « haltères », « poids de corps ».</param>
 /// <param name="MusclesPrimaires">Au moins un. Sans lui, l'exercice ne compte dans aucun volume.</param>
 /// <param name="MusclesSecondaires">Comptent pour une demi-série dans le volume.</param>
@@ -440,7 +440,14 @@ public sealed record CreationDExercice(
 
 /// <summary>Un exercice, tel qu'il sort de l'API.</summary>
 /// <param name="Id">L'identifiant, celui que les séries référencent.</param>
-/// <param name="Nom">Le libellé affiché.</param>
+/// <param name="Slug">La clé naturelle du catalogue, ou <c>null</c> pour un exercice personnalisé.</param>
+/// <param name="NomFr">Le nom français.</param>
+/// <param name="NomEn">Le nom anglais, ou <c>null</c> pour un exercice personnalisé.</param>
+/// <param name="ConsignesFr">Les consignes d'exécution en français, ou <c>null</c>.</param>
+/// <param name="ConsignesEn">Les consignes d'exécution en anglais, ou <c>null</c>.</param>
+/// <param name="ErreursFr">Les erreurs fréquentes en français, ou <c>null</c>.</param>
+/// <param name="ErreursEn">Les erreurs fréquentes en anglais, ou <c>null</c>.</param>
+/// <param name="RoleDuMouvement"><c>tirage</c>, <c>poussee</c> ou <c>aucun</c>.</param>
 /// <param name="Materiel">Le matériel, ou <c>null</c>.</param>
 /// <param name="MusclesPrimaires">Comptent pour une série pleine dans le volume.</param>
 /// <param name="MusclesSecondaires">Comptent pour une demi-série.</param>
@@ -453,9 +460,28 @@ public sealed record CreationDExercice(
 /// au front s'il peut proposer la suppression — et l'API le refuse de toute
 /// façon, parce que cacher un bouton ne rend pas une action indisponible.
 /// </param>
+/// <remarks>
+/// <b>LES DEUX LANGUES VOYAGENT ENSEMBLE, et l'API n'en choisit aucune.</b>
+/// Le catalogue est une RÉFÉRENCE : le front le charge, le met en cache et
+/// affiche la langue que l'utilisateur a réglée. Rendre une seule langue
+/// obligerait à propager un paramètre de langue dans chaque appel, à faire
+/// varier le cache avec, et à décider d'un repli côté serveur — trois
+/// complications pour une information que le client possède déjà.
+///
+/// Les champs de langue sont NULS sur un exercice personnalisé : l'utilisateur
+/// donne un nom, pas une traduction ni des consignes. La contrainte <c>CHECK</c>
+/// du schéma les exige en revanche du catalogue public — D70.
+/// </remarks>
 public sealed record ExerciceRendu(
     Guid Id,
-    string Nom,
+    string? Slug,
+    string NomFr,
+    string? NomEn,
+    string? ConsignesFr,
+    string? ConsignesEn,
+    string? ErreursFr,
+    string? ErreursEn,
+    string RoleDuMouvement,
     string? Materiel,
     IReadOnlyList<string> MusclesPrimaires,
     IReadOnlyList<string> MusclesSecondaires,

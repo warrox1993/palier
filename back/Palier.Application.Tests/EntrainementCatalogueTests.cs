@@ -327,7 +327,14 @@ public sealed class EntrainementCatalogueTests
         var identifiant = Guid.NewGuid();
         var rendu = new ExerciceRendu(
             identifiant,
+            "rowing-haltere",
             "Rowing haltère",
+            "Dumbbell row",
+            "Dos plat, tirez vers la hanche.",
+            "Flat back, pull toward the hip.",
+            "Dos rond, épaule qui monte.",
+            "Rounded back, shrugging shoulder.",
+            "tirage",
             "haltère",
             ["dos"],
             ["biceps"],
@@ -335,11 +342,13 @@ public sealed class EntrainementCatalogueTests
             2.5m,
             ["lombaire"],
             EstPersonnalise: true,
-            [new MarquageDeContrainte("lombaire", "strict")]
+            Marquages: [new MarquageDeContrainte("lombaire", "strict")]
         );
 
         Assert.Equal(identifiant, rendu.Id);
-        Assert.Equal("Rowing haltère", rendu.Nom);
+        Assert.Equal("Rowing haltère", rendu.NomFr);
+        Assert.Equal("Dumbbell row", rendu.NomEn);
+        Assert.Equal("tirage", rendu.RoleDuMouvement);
         Assert.Equal("haltère", rendu.Materiel);
         Assert.Equal(["dos"], rendu.MusclesPrimaires);
         Assert.Equal(["biceps"], rendu.MusclesSecondaires);
@@ -348,6 +357,88 @@ public sealed class EntrainementCatalogueTests
         Assert.Equal(["lombaire"], rendu.ContreIndicationsPour);
         Assert.True(rendu.EstPersonnalise);
         Assert.Single(rendu.Marquages);
+    }
+
+    [Fact]
+    public void Un_exercice_du_CATALOGUE_porte_ses_deux_langues_et_son_slug()
+    {
+        // LES DEUX LANGUES VOYAGENT ENSEMBLE — D67. Le catalogue est une
+        // référence : le front le charge une fois, le met en cache et affiche
+        // la langue réglée. Rendre une seule langue obligerait à propager un
+        // paramètre dans chaque appel, à faire varier le cache avec, et à
+        // décider d'un repli côté serveur.
+        //
+        // Cette épreuve LIT chaque champ, et c'est son intérêt : le seuil de
+        // couverture l'a exigée, parce qu'un accesseur que rien ne lit est un
+        // champ que le gestionnaire pourrait oublier de remplir sans que rien
+        // ne rougisse.
+        var rendu = new ExerciceRendu(
+            Guid.NewGuid(),
+            "developpe-couche-barre",
+            "Développé couché",
+            "Bench press",
+            "Omoplates serrées, pieds au sol.",
+            "Shoulder blades retracted, feet planted.",
+            "Rebond sur le sternum.",
+            "Bouncing off the chest.",
+            "poussee",
+            "barre",
+            ["pectoraux"],
+            ["triceps"],
+            false,
+            2.5m,
+            ["epaule"],
+            EstPersonnalise: false,
+            Marquages: []
+        );
+
+        Assert.Equal("developpe-couche-barre", rendu.Slug);
+        Assert.Equal("Développé couché", rendu.NomFr);
+        Assert.Equal("Bench press", rendu.NomEn);
+        Assert.Equal("Omoplates serrées, pieds au sol.", rendu.ConsignesFr);
+        Assert.Equal("Shoulder blades retracted, feet planted.", rendu.ConsignesEn);
+        Assert.Equal("Rebond sur le sternum.", rendu.ErreursFr);
+        Assert.Equal("Bouncing off the chest.", rendu.ErreursEn);
+        Assert.Equal("poussee", rendu.RoleDuMouvement);
+        Assert.False(rendu.EstPersonnalise);
+    }
+
+    [Fact]
+    public void Un_exercice_PERSONNALISE_n_a_ni_slug_ni_traduction()
+    {
+        // L'autre moitié de D70 : les champs du catalogue sont NULLABLES parce
+        // qu'un utilisateur n'écrit ni consignes ni traduction. La contrainte
+        // `CHECK` du schéma ne les exige que du catalogue public — et le
+        // contrat le reflète, plutôt que de forcer le front à inventer des
+        // valeurs vides.
+        var sien = new ExerciceRendu(
+            Guid.NewGuid(),
+            null,
+            "Mon curl maison",
+            null,
+            null,
+            null,
+            null,
+            null,
+            "aucun",
+            null,
+            ["biceps"],
+            [],
+            false,
+            2.5m,
+            [],
+            EstPersonnalise: true,
+            Marquages: []
+        );
+
+        Assert.Null(sien.Slug);
+        Assert.Null(sien.NomEn);
+        Assert.Null(sien.ConsignesFr);
+        Assert.Null(sien.ConsignesEn);
+        Assert.Null(sien.ErreursFr);
+        Assert.Null(sien.ErreursEn);
+        Assert.Equal("Mon curl maison", sien.NomFr);
+        Assert.True(sien.EstPersonnalise);
     }
 
     [Fact]
@@ -369,7 +460,14 @@ public sealed class EntrainementCatalogueTests
         Assert.Empty(
             new ExerciceRendu(
                 Guid.NewGuid(),
+                "developpe-couche",
                 "Développé couché",
+                "Bench press",
+                "Omoplates serrées, pieds au sol.",
+                "Shoulder blades retracted, feet planted.",
+                "Rebond sur le sternum.",
+                "Bouncing off the chest.",
+                "poussee",
                 null,
                 ["pectoraux"],
                 [],
@@ -377,7 +475,7 @@ public sealed class EntrainementCatalogueTests
                 2.5m,
                 [],
                 EstPersonnalise: false,
-                []
+                Marquages: []
             ).Marquages
         );
 }

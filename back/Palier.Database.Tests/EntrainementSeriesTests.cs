@@ -432,8 +432,16 @@ public sealed class EntrainementSeriesTests(BaseFixture baseDeDonnees)
         await connexion.OpenAsync();
         await using var commande = new NpgsqlCommand(
             """
-            insert into public.exercises (name, primary_muscles, is_custom, owner_id)
-            values ($1, array['pectoraux'], $2, $3) returning id
+            insert into public.exercises (slug, name_fr, name_en, instructions_fr, instructions_en, common_errors_fr, common_errors_en, movement_role, primary_muscles, is_custom, owner_id)
+            values (case when $2 then null else $1 end,
+                    $1,
+                    case when $2 then null else $1 end,
+                    case when $2 then null else 'Consignes.' end,
+                    case when $2 then null else 'Cues.' end,
+                    case when $2 then null else 'Erreurs.' end,
+                    case when $2 then null else 'Errors.' end,
+                    'poussee', array['pectoraux'], $2, $3)
+            returning id
             """,
             connexion
         );

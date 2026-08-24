@@ -584,8 +584,12 @@ public sealed class EntrainementContraintesTests(BaseFixture baseDeDonnees)
         await using var commande = new NpgsqlCommand(
             """
             insert into public.exercises
-                   (name, primary_muscles, contraindicated_for, is_custom, owner_id)
-            values ($1, array['quadriceps'], array[$2], false, null) returning id
+                   (slug, name_fr, name_en, instructions_fr, instructions_en,
+                    common_errors_fr, common_errors_en, movement_role,
+                    primary_muscles, contraindicated_for, is_custom, owner_id)
+            values ($1, $1, $1, 'Consignes.', 'Cues.', 'Erreurs.', 'Errors.',
+                    'aucun', array['quadriceps'], array[$2], false, null)
+            returning id
             """,
             connexion
         );

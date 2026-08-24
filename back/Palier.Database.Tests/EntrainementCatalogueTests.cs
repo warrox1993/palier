@@ -94,7 +94,13 @@ public sealed class EntrainementCatalogueTests(BaseFixture baseDeDonnees)
         Assert.Equal(StatusCodes.Status201Created, code);
         var rendu = JsonDocument.Parse(corps).RootElement;
         Assert.True(rendu.GetProperty("estPersonnalise").GetBoolean());
-        Assert.Equal("Mon curl", rendu.GetProperty("nom").GetString());
+        // Le nom donné devient le nom FRANÇAIS : un exercice personnalisé
+        // n a ni traduction ni consignes, et la contrainte du schéma ne les
+        // exige que du catalogue public — D70.
+        Assert.Equal("Mon curl", rendu.GetProperty("nomFr").GetString());
+        Assert.Equal(JsonValueKind.Null, rendu.GetProperty("nomEn").ValueKind);
+        Assert.Equal(JsonValueKind.Null, rendu.GetProperty("slug").ValueKind);
+        Assert.Equal("aucun", rendu.GetProperty("roleDuMouvement").GetString());
         Assert.Equal(1.25m, rendu.GetProperty("incrementParDefaut").GetDecimal());
     }
 
@@ -410,8 +416,10 @@ public sealed class EntrainementCatalogueTests(BaseFixture baseDeDonnees)
         await connexion.OpenAsync();
         await using var commande = new NpgsqlCommand(
             """
-            insert into public.exercises (name, primary_muscles, is_custom, owner_id)
-            values ($1, array['pectoraux'], false, null) returning id
+            insert into public.exercises (slug, name_fr, name_en, instructions_fr, instructions_en, common_errors_fr, common_errors_en, movement_role, primary_muscles, is_custom, owner_id)
+            values ($1, $1, $1, 'Consignes.', 'Cues.', 'Erreurs.', 'Errors.',
+                    'poussee', array['pectoraux'], false, null)
+            returning id
             """,
             connexion
         );

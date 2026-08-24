@@ -1171,3 +1171,71 @@ D61 avait identifié le bon problème — `PerteDePoidsRapide` suppose des entr�
 **Corrigé par une migration nouvelle**, non en réécrivant les deux migrations du lot 5. Elles sont poussées sur le dépôt distant, quelqu'un a pu les appliquer, et D14 pose des migrations versionnées — les réécrire après publication casse ce contrat. Le journal git raconte alors ce qui s'est passé : livré, relu, corrigé.
 
 **Ce qui la rouvrirait :** rien. C'est un alignement sur un document qui fait autorité.
+
+---
+
+## D66 à D71 — le catalogue d'exercices
+
+**Tranchées le :** 24/08/2026. **Prises en autonomie**, sur demande du porteur d'aller chercher la meilleure solution plutôt que de lui laisser la question.
+
+**Conception :** `docs/superpowers/specs/2026-08-24-catalogue-exercices-design.md`.
+
+### Ce que l'étude a renversé
+
+J'avais signalé deux questions comme appartenant au porteur — les champs manquants au schéma, et **d'où vient le contenu**. La relecture des documents a montré que la seconde n'en était pas une : `docs/16-projet.md` § 4 nomme déjà le fichier, son dossier et sa source.
+
+| Fichier            | Contenu                                  | Source                   |
+| ------------------ | ---------------------------------------- | ------------------------ |
+| `02-exercises.sql` | 60 exercices prioritaires puis extension | Rédigé, relu par le kiné |
+
+« Rédigé » — pas importé. Et le reste de la chaîne existait déjà, posé au lot 2 sans avoir jamais servi : le dossier, `db/SOURCES.md` avec son tableau vide, la règle `source-non-attribuee`, et la politique `migrations_referentiel` sur `exercises`. **Ce lot est le premier client de ce dispositif.**
+
+### D66 — le catalogue est RÉDIGÉ, jamais importé
+
+Confirmée par le document, et pour trois raisons qui tiennent seules.
+
+**Les bases libres sont anglophones**, et le produit exige les deux langues dès la V1 : traduire 400 entrées, c'est les rédiger.
+
+**Leurs licences contaminent.** `17-donnees-sources.md` pose la règle qui tranche : « ne jamais fusionner les sources dans une table unifiée enrichie, c'est exactement ce qui créerait une base dérivée au sens de l'ODbL ». Or un catalogue enrichi de contre-indications, de consignes et d'un rôle de mouvement EST une table unifiée enrichie.
+
+**Et leurs contre-indications ne sont pas les nôtres.** `05-entrainement.md` § 4 donne quatre régions précises ; une base externe porte d'autres catégories et d'autres silences.
+
+**Ce qui la rouvrirait :** une base sous licence permissive, en français, dont les contre-indications suivent le § 4. Elle n'existe pas.
+
+### D67 — bilingue par COLONNES suffixées
+
+`name_fr`, `name_en`, `instructions_fr`, `instructions_en`, `common_errors_fr`, `common_errors_en`.
+
+Deux langues figées par `11-qualite.md` — « français et anglais dès la V1 ». Et surtout : **une contrainte rend l'oubli impossible**. Une table `exercise_translations` aurait permis un exercice sans sa ligne anglaise, silencieusement, et l'écran aurait affiché un trou. Sur une table de référence remplie à la main, cette différence est celle qui compte.
+
+**Ce qui la défait :** une troisième langue. Ce jour-là, la table de traductions vaudra sa migration.
+
+### D68 — un SLUG comme clé naturelle
+
+`slug`, unique **là où `is_custom = false`**. Il résout l'**idempotence** du référentiel — rejouable après un `db:reset` ou une correction, sans figer d'UUID dans le fichier — et les **variantes**, qui se déclarent par slug plutôt que par un identifiant qu'aucun humain ne peut vérifier.
+
+### D69 — le rôle du mouvement, qui ferme le report de D62
+
+D62 reportait `movement_role` avec un motif précis : « la colonne se pose au lot qui **remplit** le catalogue ». C'est ce lot. Liste fermée — `tirage`, `poussee`, `aucun` — et le ratio tirage/poussée du § 4 devient calculable. Le deltoïde latéral vaut `aucun`, comme le document l'exige.
+
+### D70 — les champs du catalogue sont exigés du CATALOGUE
+
+Un utilisateur qui crée son exercice donne un nom, pas une traduction ni des consignes. Les colonnes sont donc nullables, et `ck_exercises_catalogue_complet` les exige quand `is_custom = false`.
+
+**Sans cette contrainte, une entrée incomplète entrerait au catalogue public** — visible de tous, affichée sans consigne, sur un produit dont la promesse est d'éviter les blessures.
+
+### D71 — les variantes par TABLE DE LIENS
+
+`exercise_variants`, deux clés étrangères. Un `uuid[]` aurait coûté une colonne au lieu d'une table, mais PostgreSQL ne contraint pas les références dans un tableau : une variante pointant sur un exercice supprimé y resterait, et le produit proposerait un remplacement qui n'existe plus.
+
+### Et le mécanisme d'application
+
+`npm run db:referentiel` — un script, **pas une migration**. Le référentiel n'est pas du schéma : corriger une faute dans une consigne ne doit pas produire une migration versionnée que tout déploiement rejouera pour l'éternité. `16-projet.md` sépare d'ailleurs les deux physiquement ; le mécanisme suit cette séparation.
+
+Il passe par `palier_migrations` et la politique `migrations_referentiel`, jamais par `BYPASSRLS` ni par un `NO FORCE` temporaire — les deux façons d'éteindre RLS sans que rien ne le signale.
+
+### CE QUI RESTE DÛ, et qui doit se voir
+
+**Le catalogue n'est PAS relu par un professionnel de santé.** `14-contenu.md` § 2 l'exige, et cette relecture n'a pas eu lieu. Les contre-indications livrées sont **dérivées mécaniquement** du tableau de `05-entrainement.md` § 4 : une application du document, pas un avis médical.
+
+La mention figure en tête du fichier de référentiel, dans la colonne Source de `db/SOURCES.md`, et ici. C'est la seule façon honnête de livrer un contenu de santé qui attend encore sa validation.
