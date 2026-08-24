@@ -178,6 +178,52 @@ public sealed class EntrainementPoidsTests(BaseFixture baseDeDonnees)
         Assert.Equal(JsonValueKind.Null, serie.GetProperty("constat").ValueKind);
     }
 
+    [Fact]
+    public async Task Une_fenetre_COURTE_ne_desactive_PAS_le_constat()
+    {
+        // LE CAS QUE LA REVUE A TROUVÉ, et le plus grave des trois.
+        //
+        // `?jours` sert la COURBE. Il ne doit pas servir l'ANALYSE. Avant la
+        // correction, la même fenêtre faisait les deux : un client qui
+        // demandait « la dernière semaine » tronquait la série avant le
+        // constat, `MoyennesHebdomadaires` rendait deux fenêtres au lieu de
+        // quatre, et `EstDetectee` sortait sur son premier test.
+        //
+        // Le retour était `false` — INDISCERNABLE de « rien à signaler » —
+        // chez quelqu'un qui perd du poids depuis un mois. Un garde-fou de
+        // l'article 9 éteint par un paramètre de requête.
+        var proprietaire = await CompteAsync();
+        var horloge = new HorlogeFixe(new DateTimeOffset(2026, 8, 30, 10, 0, 0, TimeSpan.Zero));
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        // Vingt-huit jours de perte régulière, pesée chaque jour.
+        var poids = 80m;
+        for (var jour = 27; jour >= 0; jour--)
+        {
+            await EnregistrerAsync(
+                portee.ServiceProvider,
+                horloge,
+                new DateOnly(2026, 8, 30).AddDays(-jour),
+                poids
+            );
+            poids *= 0.997m;
+        }
+
+        // La fenêtre par défaut détecte — c'est la référence.
+        var large = await LireAsync(portee.ServiceProvider, horloge);
+        Assert.Equal("PerteRapide", large.GetProperty("constat").GetString());
+
+        // ET UNE FENÊTRE DE SEPT JOURS AUSSI. C'est l'assertion qui rougissait.
+        var courte = await LireAsync(portee.ServiceProvider, horloge, jours: 7);
+        Assert.Equal("PerteRapide", courte.GetProperty("constat").GetString());
+
+        // Mais la COURBE, elle, reste bien limitée à ce qui a été demandé :
+        // l'analyse s'élargit, l'affichage non.
+        Assert.Equal(8, courte.GetProperty("mesures").EnumerateArray().Count());
+        Assert.Equal(28, large.GetProperty("mesures").EnumerateArray().Count());
+    }
+
     // ================================================================
     // Les refus
     // ================================================================

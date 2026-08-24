@@ -72,7 +72,10 @@ internal static class ContraintesDuCompte
         var contraintes = await executeur
             .ExecuterAsync(
                 nameof(RemplacerLesContraintes),
-                j => gestionnaire.ExecuterAsync(demande, horloge, j),
+                // `Valider()` construit le type que le gestionnaire attend :
+                // la validité est acquise à la construction, plus par une
+                // convention entre deux fichiers.
+                j => gestionnaire.ExecuterAsync(demande.Valider(), horloge, j),
                 jeton
             )
             .ConfigureAwait(false);

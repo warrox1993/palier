@@ -311,6 +311,59 @@ public sealed class DetectionsDeSecuriteTests
         );
     }
 
+    [Fact]
+    public void Le_domaine_DIT_de_combien_de_jours_il_a_besoin()
+    {
+        // `JoursNecessaires` existe pour que l'appelant ne puisse pas
+        // raccourcir l'analyse sans le savoir. La valeur SUIT
+        // `SemainesConsecutives` : si le seuil passe un jour à quatre semaines,
+        // la fenêtre de lecture suit toute seule.
+        Assert.Equal(
+            (PerteDePoidsRapide.SemainesConsecutives + 1) * 7,
+            PerteDePoidsRapide.JoursNecessaires
+        );
+
+        // Et il vaut au moins ce que `EstDetectee` exige : quatre valeurs
+        // hebdomadaires, donc vingt-huit jours.
+        Assert.True(PerteDePoidsRapide.JoursNecessaires >= 28);
+    }
+
+    [Fact]
+    public void Une_serie_TRONQUEE_sous_le_seuil_ne_peut_RIEN_detecter()
+    {
+        // LA PREUVE DU SILENCE, faite au domaine. Une perte de 2 %/semaine
+        // depuis un mois, mais dont on ne garde que les sept derniers jours :
+        // deux fenêtres survivent, `EstDetectee` en exige quatre, et le retour
+        // est `false` — indiscernable de « rien à signaler ».
+        //
+        // C'est cette épreuve qui justifie que la fenêtre d'analyse ne se
+        // négocie pas avec l'appelant.
+        var fin = new DateOnly(2026, 8, 30);
+        var toutes = new List<Pesee>();
+        var poids = 80m;
+
+        for (var jour = 27; jour >= 0; jour--)
+        {
+            toutes.Add(new Pesee(fin.AddDays(-jour), Masse.DepuisKilogrammes(poids)));
+            poids *= 0.997m;
+        }
+
+        // La série COMPLÈTE détecte.
+        Assert.True(
+            PerteDePoidsRapide.EstDetectee(
+                PerteDePoidsRapide.MoyennesHebdomadaires(toutes, fin)
+            )
+        );
+
+        // La série TRONQUÉE à sept jours ne détecte plus rien.
+        var tronquee = toutes.Where(p => p.Jour >= fin.AddDays(-7)).ToArray();
+        Assert.False(
+            PerteDePoidsRapide.EstDetectee(
+                PerteDePoidsRapide.MoyennesHebdomadaires(tronquee, fin)
+            )
+        );
+    }
+
     // ================================================================
     // Masse : demander sans lever
     // ================================================================

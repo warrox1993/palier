@@ -105,10 +105,10 @@ public sealed class EntrainementContraintesTests
         // Ne rien dire est un choix légitime : le formulaire peut ne pas poser
         // la question. Refuser aurait obligé chaque client à trancher pour
         // l'utilisateur.
-        var sans = Une(severite: null);
+        var validees = new DeclarationDeContraintes([Une(severite: null)]).Valider();
 
-        Assert.Null(sans.Faute);
-        Assert.Equal(Severites.ParDefaut, sans.SeveriteLue);
+        Assert.Single(validees);
+        Assert.Equal(Severites.ParDefaut, validees[0].Severite);
     }
 
     [Fact]
@@ -196,6 +196,54 @@ public sealed class EntrainementContraintesTests
         var fautive = new DeclarationDeContraintes([Une("poignet", "urgent")]);
         Assert.Equal("ContrainteInvalide", fautive.Faute);
     }
+
+    // ================================================================
+    // Le type validé — ce que la revue n'a PAS trouvé
+    // ================================================================
+
+    [Fact]
+    public void Valider_rend_des_valeurs_d_ENUMERATION_et_non_des_chaines()
+    {
+        // Le gestionnaire recevait des chaînes brutes et les relisait avec un
+        // `!`, en comptant sur le fait que le point d'entrée avait appelé
+        // `Faute` avant. Rien ne le garantissait : ces gestionnaires sont
+        // publics, et un futur cas d'usage pouvait les appeler directement.
+        var validees = new DeclarationDeContraintes(
+            [new DeclarationDUneContrainte("GENOU", "strict", "  opérée en 2019  ")]
+        ).Valider();
+
+        Assert.Single(validees);
+        Assert.Equal(Contrainte.Genou, validees[0].Region);
+        Assert.Equal(Severite.Strict, validees[0].Severite);
+        Assert.Equal("opérée en 2019", validees[0].Note);
+    }
+
+    [Fact]
+    public void Valider_prend_le_DEFAUT_de_severite_quand_elle_manque()
+    {
+        var validees = new DeclarationDeContraintes([Une(severite: null)]).Valider();
+
+        Assert.Single(validees);
+        Assert.Equal(Severites.ParDefaut, validees[0].Severite);
+    }
+
+    [Fact]
+    public void Valider_ECARTE_ce_qui_ne_passe_pas_sans_lever()
+    {
+        // Une déclaration fautive est écartée, pas levée : c'est le point
+        // d'entrée qui refuse, avec le code qui dit lequel des contrôles a
+        // mordu. `Valider` n'est pas un second refus, c'est une conversion.
+        var validees = new DeclarationDeContraintes(
+            [Une("genou"), Une("poignet"), null!, Une("epaule", "urgent")]
+        ).Valider();
+
+        Assert.Single(validees);
+        Assert.Equal(Contrainte.Genou, validees[0].Region);
+    }
+
+    [Fact]
+    public void Valider_sur_une_liste_VIDE_rend_une_liste_vide() =>
+        Assert.Empty(new DeclarationDeContraintes([]).Valider());
 
     // ================================================================
     // La forme rendue

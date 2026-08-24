@@ -73,16 +73,45 @@ public sealed class ListerLePoids(PalierDbContext contexte)
         CancellationToken jeton
     )
     {
-        var depuis = aujourdHui.AddDays(-SerieDePoids.BornerLaFenetre(fenetreEnJours));
+        // DEUX FENÊTRES, ET C'EST LE FOND DE LA CORRECTION.
+        //
+        // Celle d'AFFICHAGE est demandée par le client : elle sert la courbe,
+        // et il est légitime de vouloir « la dernière semaine ».
+        //
+        // Celle d'ANALYSE ne se négocie pas. Le domaine dit de combien de jours
+        // il a besoin, et on lit AU MOINS cela. Sans cette distinction, un
+        // `?jours=7` tronquait la série avant le constat : `MoyennesHebdo­madaires`
+        // rendait deux fenêtres au lieu de quatre, `EstDetectee` sortait sur son
+        // premier test, et la détection retournait `false` — indiscernable de
+        // « rien à signaler » — chez quelqu'un qui perd deux pour cent par
+        // semaine. Un garde-fou de l'article 9 éteint par un paramètre de
+        // requête, ce que `CLAUDE.md` § 4 interdit en toutes lettres : « toute
+        // donnée qui vient de l'extérieur est hostile ».
+        var fenetreAffichage = SerieDePoids.BornerLaFenetre(fenetreEnJours);
+        var debutAffichage = aujourdHui.AddDays(-fenetreAffichage);
+        var debutAnalyse = aujourdHui.AddDays(
+            -Math.Max(fenetreAffichage, PerteDePoidsRapide.JoursNecessaires)
+        );
 
+        // UNE seule requête, sur la plus large des deux. Deux allers-retours
+        // coûteraient une seconde latence pour la même information, et la
+        // fenêtre d'affichage est toujours incluse dans celle d'analyse.
         var mesures = await contexte
             .BodyWeights.AsNoTracking()
-            .Where(m => m.MeasuredOn >= depuis)
+            .Where(m => m.MeasuredOn >= debutAnalyse)
             .OrderBy(m => m.MeasuredOn)
             .ToListAsync(jeton)
             .ConfigureAwait(false);
 
-        return new SerieDePoids([.. mesures.Select(m => new PoidsRendu(m.MeasuredOn, m.WeightKg))], Constater(mesures, aujourdHui));
+        return new SerieDePoids(
+            [
+                .. mesures
+                    .Where(m => m.MeasuredOn >= debutAffichage)
+                    .Select(m => new PoidsRendu(m.MeasuredOn, m.WeightKg)),
+            ],
+            // TOUTES les mesures lues, pas seulement celles qu'on affiche.
+            Constater(mesures, aujourdHui)
+        );
     }
 
     /// <summary>

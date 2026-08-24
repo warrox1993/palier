@@ -357,6 +357,18 @@ public sealed record CreationDExercice(
     /// </remarks>
     public static decimal IncrementMaximal => 50m;
 
+    /// <summary>La longueur maximale du matériel.</summary>
+    /// <remarks>
+    /// <b>Soixante et non quarante</b>, contrairement à un nom de muscle : le
+    /// matériel se décrit par une composition — « poids de corps + élastique
+    /// lourd », « barre olympique + colliers de serrage » — là où un muscle
+    /// porte un nom. Le bornage lui-même n'était pas là, et son absence
+    /// contredisait la doctrine écrite trois lignes plus haut : la colonne est
+    /// <c>text</c>, donc PostgreSQL ne borne rien, et un mégaoctet de matériel
+    /// serait renvoyé à chaque lecture du catalogue.
+    /// </remarks>
+    public const int LongueurMaximaleDuMateriel = 60;
+
     /// <summary>Le nombre maximal de muscles nommés, primaires et secondaires confondus.</summary>
     public const int MusclesMaximum = 12;
 
@@ -400,6 +412,7 @@ public sealed record CreationDExercice(
     public string? Faute =>
         string.IsNullOrWhiteSpace(Nom) ? "NomRequis"
         : Nom.Length > LongueurMaximaleDuNom ? "NomTropLong"
+        : Materiel is { Length: > LongueurMaximaleDuMateriel } ? "MaterielTropLong"
         : PrimairesOuVide.Count == 0 ? "MusclePrimaireRequis"
         : PrimairesOuVide.Count + SecondairesOuVide.Count > MusclesMaximum ? "TropDeMuscles"
         : PrimairesOuVide.Concat(SecondairesOuVide).Any(m => !MuscleValide(m)) ? "MuscleInvalide"
@@ -540,27 +553,19 @@ public sealed record DeclarationDUneContrainte(string? Region, string? Severite,
     /// </remarks>
     public const int LongueurMaximaleDeLaNote = 200;
 
-    /// <summary>La sévérité lue, le défaut si elle est absente.</summary>
-    /// <remarks>N'appeler qu'après avoir vérifié <see cref="Faute" />.</remarks>
-    public Severite SeveriteLue
-    {
-        get
-        {
-            Severites.Lire(Severite, out var lue);
-            return lue ?? Severites.ParDefaut;
-        }
-    }
-
     /// <summary>La note, vide valant absente.</summary>
     public string? NoteNettoyee =>
         string.IsNullOrWhiteSpace(Note) ? null : Note.Trim();
 
-    /// <summary>Le code du premier refus, ou <c>null</c>.</summary>
-    public string? Faute =>
-        !Contraintes.Lire(Region, out _) ? "ContrainteInvalide"
-        : !Severites.Lire(Severite, out _) ? "SeveriteInvalide"
-        : NoteNettoyee is { Length: > LongueurMaximaleDeLaNote } ? "NoteTropLongue"
-        : null;
+    /// <summary>Le code du refus, ou <c>null</c>.</summary>
+    /// <remarks>
+    /// Une PROJECTION de <see cref="ContrainteValidee.Lire" />, qui porte la
+    /// seule expression des règles. Les tester une seconde fois ici les ferait
+    /// diverger au premier changement — et c'est déjà arrivé : la première
+    /// version de ce fichier avait les deux, et la garde en double masquait une
+    /// branche que rien ne pouvait franchir.
+    /// </remarks>
+    public string? Faute => ContrainteValidee.Lire(this).Faute;
 }
 
 /// <summary>La liste COMPLÈTE des contraintes qu'on déclare.</summary>
@@ -586,8 +591,113 @@ public sealed record DeclarationDeContraintes(IReadOnlyList<DeclarationDUneContr
     /// </remarks>
     public string? Faute =>
         RegionsOuVide.Count > Contraintes.Toutes.Count ? "TropDeContraintes"
-        : RegionsOuVide.Any(c => c is null) ? "ContrainteInvalide"
-        : RegionsOuVide.Select(c => c.Faute).FirstOrDefault(f => f is not null);
+        : RegionsOuVide.Select(c => ContrainteValidee.Lire(c).Faute).FirstOrDefault(f => f is not null);
+
+    /// <summary>
+    /// Les contraintes sous une forme que le gestionnaire ne peut pas mal lire.
+    /// </summary>
+    /// <remarks>
+    /// N'appeler qu'après avoir vérifié <see cref="Faute" /> : une déclaration
+    /// fautive est simplement écartée ici, sans lever. C'est le point d'entrée
+    /// qui refuse, avec le code qui dit lequel des contrôles a mordu.
+    /// </remarks>
+    public IReadOnlyList<ContrainteValidee> Valider() =>
+        [.. RegionsOuVide.Select(c => ContrainteValidee.Lire(c).Valide).OfType<ContrainteValidee>()];
+}
+
+/// <summary>
+/// Une contrainte dont la validité est acquise À LA CONSTRUCTION.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Ce type existe pour supprimer un couplage implicite.</b> Les
+/// gestionnaires recevaient <see cref="DeclarationDUneContrainte" /> — des
+/// chaînes brutes — et relisaient leur région avec un <c>!</c>, en comptant sur
+/// le fait que le point d'entrée avait appelé <c>Faute</c> avant. Rien ne le
+/// garantissait structurellement : ces gestionnaires sont publics et
+/// enregistrés au conteneur, et un futur cas d'usage, une commande
+/// d'exploitation ou une épreuve pouvait les appeler directement et obtenir une
+/// <c>NullReferenceException</c>.
+/// </para>
+///
+/// <para>
+/// C'est la règle de <c>CLAUDE.md</c> § 4 appliquée : « valider à la frontière,
+/// une seule fois, puis faire confiance au type. L'entrée devient un type du
+/// domaine qui <b>ne peut pas être construit invalide</b>. Le reste du code n'a
+/// plus à se défendre. » Le constructeur est privé ; on n'y entre que par
+/// <see cref="DeclarationDeContraintes.Valider" />, qui a déjà refusé.
+/// </para>
+///
+/// <para>
+/// <b>Aucune revalidation dans le gestionnaire</b>, et c'est délibéré : elle
+/// créerait une branche que le chemin HTTP ne peut jamais franchir, donc du
+/// code mort que le seuil de couverture refuserait à juste titre.
+/// </para>
+/// </remarks>
+public sealed record ContrainteValidee
+{
+    private ContrainteValidee(Contrainte region, Severite severite, string? note)
+    {
+        Region = region;
+        Severite = severite;
+        Note = note;
+    }
+
+    public Contrainte Region { get; }
+
+    public Severite Severite { get; }
+
+    public string? Note { get; }
+
+    /// <summary>
+    /// Lit une déclaration : rend SOIT le type validé, SOIT le code du refus.
+    /// Jamais les deux, jamais aucun.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>UNE SEULE expression de la validation.</b> La première version
+    /// dupliquait le travail : <c>Faute</c> testait les trois règles pour
+    /// produire un code, et cette méthode les retestait pour produire un type.
+    /// Deux conséquences, toutes deux mesurées — un déréférencement de
+    /// <c>null</c> sur la première mouture, puis une branche morte à 50 % de
+    /// couverture, parce que la garde <c>Faute</c> masquait les deux lectures
+    /// qui la suivaient.
+    /// </para>
+    ///
+    /// <para>
+    /// Ici, chaque règle est écrite une fois, et chaque branche est
+    /// franchissable par une épreuve. <c>Faute</c> n'est plus qu'une projection
+    /// de ce résultat.
+    /// </para>
+    /// </remarks>
+    internal static (ContrainteValidee? Valide, string? Faute) Lire(
+        DeclarationDUneContrainte? declaree
+    )
+    {
+        if (declaree is null)
+        {
+            return (null, "ContrainteInvalide");
+        }
+
+        if (!Contraintes.Lire(declaree.Region, out var region))
+        {
+            return (null, "ContrainteInvalide");
+        }
+
+        if (!Severites.Lire(declaree.Severite, out var severite))
+        {
+            return (null, "SeveriteInvalide");
+        }
+
+        var note = declaree.NoteNettoyee;
+
+        if (note is { Length: > DeclarationDUneContrainte.LongueurMaximaleDeLaNote })
+        {
+            return (null, "NoteTropLongue");
+        }
+
+        return (new ContrainteValidee(region.Value, severite.Value, note), null);
+    }
 }
 
 /// <summary>Une contrainte déclarée, telle qu'elle sort de l'API.</summary>

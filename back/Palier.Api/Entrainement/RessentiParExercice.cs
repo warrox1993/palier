@@ -42,10 +42,16 @@ internal static class RessentiParExercice
             return Results.Json(new Reponse(faute), statusCode: StatusCodes.Status400BadRequest);
         }
 
+        // La lecture se fait ICI, à la frontière, et son résultat est passé au
+        // gestionnaire comme une VALEUR d'énumération. Lui passer la chaîne
+        // brute l'obligerait à relire, donc à poser un `!` sur une garantie
+        // qu'il n'a pas prise lui-même.
+        Ressentis.Lire(demande.Ressenti, out var ressenti);
+
         var issue = await executeur
             .ExecuterAsync(
                 nameof(NoterUnRessenti),
-                j => gestionnaire.ExecuterAsync(seanceId, demande, j),
+                j => gestionnaire.ExecuterAsync(seanceId, demande.ExerciceId, ressenti!.Value, j),
                 jeton
             )
             .ConfigureAwait(false);

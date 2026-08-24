@@ -246,6 +246,52 @@ public sealed class EntrainementCatalogueTests(BaseFixture baseDeDonnees)
     }
 
     [Fact]
+    public async Task Supprimer_un_exercice_reference_par_un_RESSENTI_SANS_serie_rend_409()
+    {
+        // LE CAS QUE LA REVUE A TROUVÉ, et qu'aucune épreuve n'exerçait.
+        //
+        // DEUX tables référencent `exercises` en `Restrict` :
+        // `FK_sets_exercises_exercise_id` (lot 2) et
+        // `FK_exercise_feedback_exercises_exercise_id` (lot 5). Le gestionnaire
+        // n'interrogeait que la première, et le commentaire qui l'accompagnait
+        // — « seules ses séries peuvent le référencer » — est devenu faux le
+        // jour même où la seconde a été posée.
+        //
+        // Un ressenti se note SANS série : `NoterUnRessenti` ne vérifie que la
+        // visibilité de la séance et de l'exercice. L'état « exercice référencé
+        // uniquement par un ressenti » est donc atteignable par l'API, et il
+        // produisait une violation de clé étrangère — un 500 — là où le contrat
+        // annonce un 409 nommé.
+        var proprietaire = await CompteAsync();
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        var sien = await CreerAsync(portee.ServiceProvider, "Noté sans série");
+        var seance = await OuvrirAsync(portee.ServiceProvider);
+
+        // AUCUNE série n'est ajoutée : c'est tout le sujet.
+        var (note, _) = await HarnaisHttp.ExecuterAsync(
+            portee.ServiceProvider,
+            RessentiParExercice.NoterAsync(
+                seance,
+                new NoteDeRessenti(sien, "pain"),
+                portee.ServiceProvider.GetRequiredService<IExecuteurDeCasDUsage>(),
+                portee.ServiceProvider.GetRequiredService<NoterUnRessenti>(),
+                CancellationToken.None
+            )
+        );
+        Assert.Equal(StatusCodes.Status204NoContent, note);
+
+        var (code, corps) = await SupprimerAsync(portee.ServiceProvider, sien);
+
+        Assert.Equal(StatusCodes.Status409Conflict, code);
+        Assert.Equal("ExerciceUtilise", HarnaisHttp.Code(corps));
+
+        // Et il est toujours là : le refus a bien empêché l'écriture.
+        Assert.Contains(sien, await ListerAsync(portee.ServiceProvider));
+    }
+
+    [Fact]
     public async Task Supprimer_un_exercice_INCONNU_est_INTROUVABLE()
     {
         var proprietaire = await CompteAsync();

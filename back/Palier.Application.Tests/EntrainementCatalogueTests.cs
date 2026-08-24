@@ -153,6 +153,56 @@ public sealed class EntrainementCatalogueTests
         Assert.Equal("NomRequis", fautif.Faute);
     }
 
+    [Fact]
+    public void Un_MATERIEL_trop_long_est_refuse() =>
+        // L'asymétrie que la revue a relevée : tous les champs texte étaient
+        // bornés SAUF celui-ci, alors que le motif écrit sur
+        // `LongueurMaximaleDuNom` vaut mot pour mot — la colonne est `text`,
+        // PostgreSQL ne borne rien, et un mégaoctet de matériel serait renvoyé
+        // à chaque lecture du catalogue.
+        Assert.Equal(
+            "MaterielTropLong",
+            new CreationDExercice(
+                "Curl",
+                new string('m', CreationDExercice.LongueurMaximaleDuMateriel + 1),
+                ["biceps"],
+                [],
+                false,
+                2.5m,
+                []
+            ).Faute
+        );
+
+    [Fact]
+    public void Un_MATERIEL_a_la_borne_passe() =>
+        Assert.Null(
+            new CreationDExercice(
+                "Curl",
+                new string('m', CreationDExercice.LongueurMaximaleDuMateriel),
+                ["biceps"],
+                [],
+                false,
+                2.5m,
+                []
+            ).Faute
+        );
+
+    [Fact]
+    public void Le_materiel_tient_une_COMPOSITION_realiste() =>
+        // Soixante et non quarante : le matériel se décrit par une composition
+        // — « poids de corps + élastique lourd » — là où un muscle porte un nom.
+        Assert.Null(
+            new CreationDExercice(
+                "Traction",
+                "poids de corps + élastique lourd + ceinture lestée",
+                ["dos"],
+                [],
+                false,
+                2.5m,
+                []
+            ).Faute
+        );
+
     // ================================================================
     // Les listes ABSENTES du corps JSON
     // ================================================================

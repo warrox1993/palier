@@ -36,14 +36,22 @@ public enum IssueDeRessenti
 [GestionnaireDeCasDUsage]
 public sealed class NoterUnRessenti(PalierDbContext contexte)
 {
+    /// <param name="seanceId">La séance notée.</param>
+    /// <param name="exerciceId">L'exercice noté.</param>
+    /// <param name="ressenti">
+    /// DÉJÀ VALIDÉ — c'est une valeur d'énumération, pas une chaîne. Le
+    /// gestionnaire n'a donc aucune lecture à faire, et aucun <c>!</c> à poser
+    /// sur son résultat. `CLAUDE.md` § 4 : « valider à la frontière, une seule
+    /// fois, puis faire confiance au type ».
+    /// </param>
+    /// <param name="jeton">Jeton d'annulation.</param>
     public async Task<IssueDeRessenti> ExecuterAsync(
         Guid seanceId,
-        NoteDeRessenti demande,
+        Guid exerciceId,
+        Ressenti ressenti,
         CancellationToken jeton
     )
     {
-        ArgumentNullException.ThrowIfNull(demande);
-
         var seanceVisible = await contexte
             .Workouts.AsNoTracking()
             .AnyAsync(s => s.Id == seanceId, jeton)
@@ -56,7 +64,7 @@ public sealed class NoterUnRessenti(PalierDbContext contexte)
 
         var exerciceVisible = await contexte
             .Exercises.AsNoTracking()
-            .AnyAsync(e => e.Id == demande.ExerciceId, jeton)
+            .AnyAsync(e => e.Id == exerciceId, jeton)
             .ConfigureAwait(false);
 
         if (!exerciceVisible)
@@ -70,18 +78,15 @@ public sealed class NoterUnRessenti(PalierDbContext contexte)
         // qui se ravise, ce qui est exactement ce qu'on veut encourager.
         var existant = await contexte
             .ExerciseFeedbacks.FirstOrDefaultAsync(
-                f => f.WorkoutId == seanceId && f.ExerciseId == demande.ExerciceId,
+                f => f.WorkoutId == seanceId && f.ExerciseId == exerciceId,
                 jeton
             )
             .ConfigureAwait(false);
 
-        // La valeur est déjà validée par `NoteDeRessenti.Faute`, appelé au
-        // point d'entrée. On la RELIT ici plutôt que de faire confiance à la
-        // chaîne brute : c'est la normalisation qui compte — « PAIN » saisi
-        // devient « pain » stocké, et la contrainte `CHECK` n'accepte que la
-        // forme minuscule.
-        Ressentis.Lire(demande.Ressenti, out var lu);
-        var valeur = Ressentis.EnBase(lu!.Value);
+        // La normalisation, et elle seule : « PAIN » saisi devient « pain »
+        // stocké, ce que la contrainte `CHECK` exige. Aucune lecture de chaîne
+        // ici — le type est déjà une valeur d'énumération.
+        var valeur = Ressentis.EnBase(ressenti);
 
         if (existant is null)
         {
@@ -89,7 +94,7 @@ public sealed class NoterUnRessenti(PalierDbContext contexte)
                 new ExerciseFeedback
                 {
                     WorkoutId = seanceId,
-                    ExerciseId = demande.ExerciceId,
+                    ExerciseId = exerciceId,
                     Rating = valeur,
                 }
             );

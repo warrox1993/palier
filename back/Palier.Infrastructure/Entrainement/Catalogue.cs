@@ -187,19 +187,35 @@ public sealed class SupprimerUnExercice(PalierDbContext contexte)
             return IssueDeSuppressionDExercice.Public;
         }
 
-        // UTILISÉ : `FK_sets_exercises_exercise_id` porte `Restrict`, donc le
-        // moteur refuserait par une violation de clé étrangère — un 500 pour un
-        // geste parfaitement compréhensible. Et le refus est le bon
-        // comportement : supprimer l'exercice effacerait des séries de
-        // l'historique, donc du volume et de la progression déjà mesurés.
+        // UTILISÉ : DEUX tables référencent `exercises` en `Restrict`, et il
+        // faut les interroger toutes les deux.
         //
-        // RLS borne cette recherche aux séries de l'appelant — ce qui suffit :
-        // un exercice personnalisé n'appartient qu'à lui, donc seules ses
-        // séries peuvent le référencer.
-        var utilise = await contexte
-            .WorkoutSets.AsNoTracking()
-            .AnyAsync(s => s.ExerciseId == identifiant, jeton)
-            .ConfigureAwait(false);
+        //   FK_sets_exercises_exercise_id              (lot 2)
+        //   FK_exercise_feedback_exercises_exercise_id (lot 5)
+        //
+        // La seconde a été ajoutée dans le même lot que ce gestionnaire, et le
+        // commentaire qui vivait ici — « seules ses séries peuvent le
+        // référencer » — est devenu faux le jour même sans que personne le
+        // relise. Un ressenti se note SANS série : `NoterUnRessenti` ne vérifie
+        // que la visibilité de la séance et de l'exercice. L'état « exercice
+        // référencé uniquement par un ressenti » est donc atteignable par
+        // l'API, et il produisait un 500 là où le contrat annonce un 409 nommé.
+        //
+        // Le refus reste le bon comportement : supprimer l'exercice effacerait
+        // de l'historique — des séries, ou un ressenti qui a peut-être motivé
+        // une orientation vers un professionnel.
+        //
+        // RLS borne les deux recherches aux données de l'appelant, ce qui
+        // suffit : un exercice personnalisé n'appartient qu'à lui.
+        var utilise =
+            await contexte
+                .WorkoutSets.AsNoTracking()
+                .AnyAsync(s => s.ExerciseId == identifiant, jeton)
+                .ConfigureAwait(false)
+            || await contexte
+                .ExerciseFeedbacks.AsNoTracking()
+                .AnyAsync(f => f.ExerciseId == identifiant, jeton)
+                .ConfigureAwait(false);
 
         if (utilise)
         {

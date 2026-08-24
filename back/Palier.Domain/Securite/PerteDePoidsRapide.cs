@@ -25,6 +25,30 @@ public static class PerteDePoidsRapide
     public static int SemainesConsecutives => 3;
 
     /// <summary>
+    /// Le nombre de jours d'historique SANS LEQUEL aucun constat n'est
+    /// possible : quatre fenêtres de sept jours.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Il existe pour que l'appelant ne puisse pas raccourcir l'analyse sans
+    /// le savoir.</b> <see cref="EstDetectee" /> exige
+    /// <see cref="SemainesConsecutives" /> + 1 valeurs ; lui passer une série
+    /// tronquée à moins de vingt-huit jours rend donc <c>false</c> QUOI QU'IL
+    /// ARRIVE — y compris chez quelqu'un qui perd deux pour cent par semaine
+    /// depuis un mois.
+    /// </para>
+    ///
+    /// <para>
+    /// Et ce <c>false</c> est indiscernable de « rien à signaler » : c'est un
+    /// SILENCE, le mode de défaillance que <c>docs/01-conformite.md</c> § 5
+    /// rend le plus coûteux, puisque l'alerte qu'il éteint oriente vers un
+    /// professionnel. Le calcul dit donc lui-même de combien il a besoin,
+    /// plutôt que de faire confiance à qui l'appelle.
+    /// </para>
+    /// </remarks>
+    public static int JoursNecessaires => (SemainesConsecutives + 1) * 7;
+
+    /// <summary>
     /// Ramène une série de pesées à UNE valeur par semaine, par MOYENNE MOBILE
     /// sur sept jours glissants, ancrée sur la dernière pesée.
     /// </summary>

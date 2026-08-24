@@ -58,24 +58,31 @@ public sealed class ListerLesContraintes(PalierDbContext contexte)
 [GestionnaireDeCasDUsage]
 public sealed class RemplacerLesContraintes(PalierDbContext contexte, IIdentiteDemandeur demandeur)
 {
+    /// <param name="declarees">
+    /// DÉJÀ VALIDÉES. Le type l'atteste : <see cref="ContrainteValidee" /> ne se
+    /// construit que par <c>DeclarationDeContraintes.Valider</c>, après refus.
+    /// Ce gestionnaire n'a donc rien à relire, et surtout aucun <c>!</c> à
+    /// poser sur une lecture qu'il n'a pas faite.
+    /// </param>
+    /// <param name="horloge">Pour dater les contraintes nouvelles.</param>
+    /// <param name="jeton">Jeton d'annulation.</param>
     public async Task<IReadOnlyList<ContrainteRendue>> ExecuterAsync(
-        DeclarationDeContraintes demande,
+        IReadOnlyList<ContrainteValidee> declarees,
         TimeProvider horloge,
         CancellationToken jeton
     )
     {
-        ArgumentNullException.ThrowIfNull(demande);
+        ArgumentNullException.ThrowIfNull(declarees);
         ArgumentNullException.ThrowIfNull(horloge);
 
         // Une région déclarée deux fois est dédupliquée sur la RÉGION : la
         // dernière sévérité donnée l'emporte. Refuser le doublon obligerait le
         // client à dédupliquer avant d'envoyer, pour zéro bénéfice.
-        var voulues = new Dictionary<string, DeclarationDUneContrainte>(StringComparer.Ordinal);
+        var voulues = new Dictionary<string, ContrainteValidee>(StringComparer.Ordinal);
 
-        foreach (var declaree in demande.RegionsOuVide)
+        foreach (var declaree in declarees)
         {
-            Contraintes.Lire(declaree.Region, out var region);
-            voulues[Contraintes.EnBase(region!.Value)] = declaree;
+            voulues[Contraintes.EnBase(declaree.Region)] = declaree;
         }
 
         // Aucun filtre sur `owner_id` : RLS mord, donc ceci ne rend que SES
@@ -107,8 +114,8 @@ public sealed class RemplacerLesContraintes(PalierDbContext contexte, IIdentiteD
                         // D36, et le `with check` de la politique le revérifie.
                         OwnerId = demandeur.Identifiant.GetValueOrDefault(),
                         Region = region,
-                        Severity = Severites.EnBase(declaree.SeveriteLue),
-                        Note = declaree.NoteNettoyee,
+                        Severity = Severites.EnBase(declaree.Severite),
+                        Note = declaree.Note,
                         DeclaredAt = horloge.GetUtcNow(),
                     }
                 );
@@ -118,8 +125,8 @@ public sealed class RemplacerLesContraintes(PalierDbContext contexte, IIdentiteD
                 // La SÉVÉRITÉ et la NOTE se mettent à jour, la DATE non : une
                 // contrainte qui passe de `modere` à `strict` reste la même
                 // contrainte, déclarée le même jour.
-                deja.Severity = Severites.EnBase(declaree.SeveriteLue);
-                deja.Note = declaree.NoteNettoyee;
+                deja.Severity = Severites.EnBase(declaree.Severite);
+                deja.Note = declaree.Note;
             }
         }
 
