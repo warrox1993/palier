@@ -23,8 +23,8 @@ namespace Palier.Database.Tests;
 public sealed class ReferentielProgrammesTests(BaseFixture baseDeDonnees)
 {
     /// <summary>
-    /// Les onze programmes, nommément — les neuf de <c>docs/14-contenu.md</c>
-    /// § 2, plus les deux de fréquence basse.
+    /// Les onze programmes FONDAMENTAUX, nommément — les neuf de
+    /// <c>docs/14-contenu.md</c> § 2, plus les deux de fréquence basse.
     /// </summary>
     /// <remarks>
     /// La liste est écrite ICI plutôt que comptée : un tableau de neuf lignes
@@ -47,16 +47,46 @@ public sealed class ReferentielProgrammesTests(BaseFixture baseDeDonnees)
     ];
 
     [Fact]
-    public async Task Le_referentiel_pose_les_ONZE_programmes()
+    public async Task Les_ONZE_programmes_FONDAMENTAUX_sont_tous_la()
     {
+        // Les neuf de `docs/14-contenu.md` § 2, plus les deux de fréquence
+        // basse — D77. Ils sont nommés un par un parce qu'ils portent la
+        // couverture par contrainte et par fréquence : un seuil global ne
+        // dirait pas lequel a disparu.
         await AppliquerAsync();
 
         var slugs = await ListerAsync(
             "select slug from public.programs where is_template = true order by slug"
         );
 
-        Assert.Equal(_attendus, slugs);
+        foreach (var attendu in _attendus)
+        {
+            Assert.Contains(attendu, slugs);
+        }
     }
+
+    [Fact]
+    public async Task Le_referentiel_atteint_la_CIBLE_de_programmes()
+    {
+        // Les onze fondamentaux plus les programmes issus des méthodes. Le
+        // seuil monte AVEC le contenu : le laisser à onze laisserait
+        // `04b-programs-methodes.sql` se vider sans que rien ne rougisse.
+        await AppliquerAsync();
+
+        var poses = await CompterAsync(
+            "select count(*) from public.programs where is_template = true"
+        );
+
+        Assert.True(poses >= _cibleDeProgrammes, $"Seulement {poses} programme(s) modèle(s).");
+    }
+
+    /// <summary>La cible, qui monte avec le contenu.</summary>
+    /// <remarks>
+    /// Onze fondamentaux au 24/08/2026, puis quarante-neuf programmes issus des
+    /// méthodes — trois tours de composition, vérification et correction, sur
+    /// cinquante-neuf composés.
+    /// </remarks>
+    private const int _cibleDeProgrammes = 55;
 
     [Fact]
     public async Task AUCUN_programme_de_contrainte_ne_contient_un_mouvement_CONTRE_INDIQUE()
@@ -103,15 +133,22 @@ public sealed class ReferentielProgrammesTests(BaseFixture baseDeDonnees)
         // dirait pas laquelle manque le jour où l'un d'eux disparaît.
         await AppliquerAsync();
 
+        // DISTINCT, et non la liste brute : plusieurs programmes peuvent
+        // ménager la même contrainte, et c'est une richesse, pas un défaut. Ce
+        // que l'épreuve garde, c'est qu'aucune des quatre ne reste sans
+        // réponse.
         var couvertes = await ListerAsync(
             """
-            select targets_constraint from public.programs
+            select distinct targets_constraint from public.programs
              where is_template = true and targets_constraint is not null
              order by 1
             """
         );
 
-        Assert.Equal(["cervicale", "epaule", "genou", "lombaire"], couvertes);
+        foreach (var region in new[] { "cervicale", "epaule", "genou", "lombaire" })
+        {
+            Assert.Contains(region, couvertes);
+        }
     }
 
     [Fact]

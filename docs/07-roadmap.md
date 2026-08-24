@@ -245,22 +245,25 @@ En dessous de la moitié, ne pas ouvrir le paiement — corriger d'abord.
 
 Les **étapes** sont des jalons produit, avec leurs critères de sortie. Les **lots** sont des unités d'exécution. **Elles divergent déjà** — l'étape 1 exigeait le harnais _et_ le socle, le lot 1 n'a livré que le harnais.
 
-| Étape      | Lot                                                        | Début      | Fin        | Durée constatée |
-| ---------- | ---------------------------------------------------------- | ---------- | ---------- | --------------- |
-| 1a         | **Lot 1 — harnais** (livré)                                | 19/08/2026 | 20/08/2026 | 2 jours         |
-| 1b         | **Lot 2 — socle de données** + les 3 livrables D31 (livré) | 20/08/2026 | 20/08/2026 | 1 jour          |
-| 1b         | **Lot 3 — domaine** (livré)                                | 21/08/2026 | 21/08/2026 | 1 jour          |
-| 1b         | **Lot 4 — socle de session** (livré)                       | 21/08/2026 | 21/08/2026 | 1 jour          |
-| 1b         | **Lot 4b — fin du socle de session** (livré)               | 23/08/2026 | 23/08/2026 | 1 nuit          |
-| 1b · 2 · 3 | **Lot 5 — API de l'entraînement** (livré, 2 tables sur 13) | 23/08/2026 | 24/08/2026 | 1 nuit          |
-| 1b · 2     | **Lot 6 — socle d'écran complet et PWA**                   | —          | —          | —               |
-| 1b         | **Lot 7 — résilience front** (Dexie, file de retry)        | —          | —          | —               |
-| 6          | **Lot 8 — couche modèle**                                  | —          | —          | —               |
-| 7          | **Lot 9 — déploiement**                                    | —          | —          | —               |
+| Étape      | Lot                                                               | Début      | Fin        | Durée constatée |
+| ---------- | ----------------------------------------------------------------- | ---------- | ---------- | --------------- |
+| 1a         | **Lot 1 — harnais** (livré)                                       | 19/08/2026 | 20/08/2026 | 2 jours         |
+| 1b         | **Lot 2 — socle de données** + les 3 livrables D31 (livré)        | 20/08/2026 | 20/08/2026 | 1 jour          |
+| 1b         | **Lot 3 — domaine** (livré)                                       | 21/08/2026 | 21/08/2026 | 1 jour          |
+| 1b         | **Lot 4 — socle de session** (livré)                              | 21/08/2026 | 21/08/2026 | 1 jour          |
+| 1b         | **Lot 4b — fin du socle de session** (livré)                      | 23/08/2026 | 23/08/2026 | 1 nuit          |
+| 1b · 2 · 3 | **Lot 5 — API de l'entraînement** (livré, 2 tables sur 13)        | 23/08/2026 | 24/08/2026 | 1 nuit          |
+| 1 bis      | **Catalogue d'exercices** (livré) — 255 mouvements, 216 variantes | 24/08/2026 | 24/08/2026 | 1 jour          |
+| 1 bis · 2  | **Programmes** (livré) — 3 tables, 7 routes, 11 modèles           | 24/08/2026 | 24/08/2026 | 1 jour          |
+| 1 bis      | **Deux études en fan-out** (livré) — méthodes, et sexe            | 24/08/2026 | 24/08/2026 | 2 heures        |
+| 1b · 2     | **Lot 6 — socle d'écran complet et PWA**                          | —          | —          | —               |
+| 1b         | **Lot 7 — résilience front** (Dexie, file de retry)               | —          | —          | —               |
+| 6          | **Lot 8 — couche modèle**                                         | —          | —          | —               |
+| 7          | **Lot 9 — déploiement**                                           | —          | —          | —               |
 
 **À remplir à chaque fin de lot, depuis le rapport de lot.** Un tableau ne se remplit pas tout seul : c'est un instrument, pas un verrou. Sans lui, les conditions de réouverture de D9 et D17 n'ont rien qui puisse les déclencher.
 
-Les lignes sont remplies **par mesure et non par souvenir**. `git log` compte, au 23/08/2026 :
+Les lignes sont remplies **par mesure et non par souvenir**. `git log` compte, au 24/08/2026 :
 
 | Jour       | Commits | Ce qui y a été livré                              |
 | ---------- | ------: | ------------------------------------------------- |
@@ -268,9 +271,16 @@ Les lignes sont remplies **par mesure et non par souvenir**. `git log` compte, a
 | 20/08/2026 |      99 | fin du lot 1, lot 2                               |
 | 21/08/2026 |      45 | lot 3, lot 4                                      |
 | 22/08/2026 |      21 | audit de sécurité, coffre des secrets (D59)       |
-| 23/08/2026 |       7 | lot 4b — Google, courriel, fusion, administration |
+| 23/08/2026 |      14 | lot 4b — Google, courriel, fusion, administration |
+| 24/08/2026 |      14 | lot 5, catalogue, programmes, deux études         |
 
 La colonne « durée constatée » ne reçoit jamais une estimation. **Le lot 4b porte « 1 nuit » et non « 1 jour »** : il a été exécuté en autonomie entre le 22/08 au soir et le 23/08 au matin, et arrondir à la journée effacerait précisément ce que ce tableau existe pour mesurer.
+
+**Ce que ce tableau ne dit pas, et qu'il faut lire à côté.** Au 24/08/2026, le
+backend porte 21 tables, 35 routes et 971 épreuves ; le front porte **759 lignes
+et un seul écran**, celui de l'état du socle. Le déséquilibre est voulu — le lot
+6 est précisément le socle d'écran — mais il doit se voir : l'API livrée n'a
+aujourd'hui aucun consommateur.
 
 **Deux écarts à la spec d'architecture § 14, à valider par le porteur du projet :**
 
