@@ -134,7 +134,17 @@ public sealed class CloturerUneSeance(PalierDbContext contexte)
             return null;
         }
 
-        seance.EndedAt = demande.Fin ?? horloge.GetUtcNow();
+        // TROIS niveaux, et l'ordre se lit de gauche à droite :
+        //   1. une fin donnée gagne — c'est une correction volontaire ;
+        //   2. sinon la fin DÉJÀ POSÉE est préservée ;
+        //   3. sinon seulement, l'horloge fait foi.
+        //
+        // Le second niveau manquait, et l'asymétrie avec la ligne suivante
+        // sautait aux yeux : `Energy15` préservait sa valeur, `EndedAt` non.
+        // Sur un PATCH partiel, rejouer `{ energie: 4 }` sur une séance close
+        // à 10 h la faisait finir à l'heure du rejeu — une séance d'une heure
+        // devenue une séance de six heures, sans erreur et sans trace.
+        seance.EndedAt = demande.Fin ?? seance.EndedAt ?? horloge.GetUtcNow();
 
         // `?? seance.Energy15` et non une affectation sèche : clore une séance
         // sans redonner l'énergie ne doit pas EFFACER celle qui était notée.

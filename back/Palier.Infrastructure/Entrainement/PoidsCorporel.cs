@@ -34,32 +34,44 @@ public sealed class EnregistrerLePoids(PalierDbContext contexte, IIdentiteDemand
 
         var jour = demande.Jour ?? aujourdHui;
 
-        // Aucun filtre sur `owner_id` : RLS mord, donc cette recherche ne peut
-        // trouver que SA pesée du jour. C'est ce qui rend l'idempotence sûre —
-        // sans RLS, elle écraserait la pesée d'un autre.
-        var existante = await contexte
-            .BodyWeights.FirstOrDefaultAsync(m => m.MeasuredOn == jour, jeton)
+        // UN UPSERT ATOMIQUE, et non un lire-puis-décider.
+        //
+        // La version précédente cherchait la pesée du jour, puis insérait ou
+        // mettait à jour selon ce qu'elle avait trouvé. Entre les deux, une
+        // fenêtre : le pipeline ouvre sa transaction en READ COMMITTED — le
+        // défaut de PostgreSQL — donc deux requêtes simultanées ne voyaient
+        // pas l'insertion l'une de l'autre. Toutes deux inséraient, la seconde
+        // heurtait `ux_body_weight_owner_id_measured_on` et remontait un 23505
+        // en 500.
+        //
+        // Le déclencheur n'a rien d'exotique : un double appui sur
+        // « Enregistrer » quand le réseau traîne, un rejeu automatique après
+        // un délai perçu, deux onglets ouverts. Et le commentaire en tête de
+        // ce fichier promettait exactement l'inverse — l'idempotence tenait en
+        // séquentiel et cédait en concurrence.
+        //
+        // `on conflict ... do update` supprime la fenêtre : le moteur tranche
+        // lui-même, en une instruction. Les valeurs sont LIÉES, jamais
+        // concaténées — `CLAUDE.md` § 4.
+        //
+        // L'identité vient du demandeur, jamais de la requête — D36 — et le
+        // `with check` de la politique la revérifie sur l'insertion comme sur
+        // la mise à jour.
+        var proprietaire = demandeur.Identifiant.GetValueOrDefault();
+
+        await contexte
+            .Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                insert into public.body_weight (owner_id, measured_on, weight_kg)
+                values ({proprietaire}, {jour}, {demande.PoidsKg})
+                on conflict (owner_id, measured_on)
+                do update set weight_kg = excluded.weight_kg
+                """,
+                jeton
+            )
             .ConfigureAwait(false);
 
-        if (existante is null)
-        {
-            existante = new BodyWeight
-            {
-                // L'identité vient du demandeur, jamais de la requête — D36.
-                // Le moteur le vérifie une seconde fois par le `with check`.
-                OwnerId = demandeur.Identifiant.GetValueOrDefault(),
-                MeasuredOn = jour,
-                WeightKg = demande.PoidsKg,
-            };
-            contexte.BodyWeights.Add(existante);
-        }
-        else
-        {
-            existante.WeightKg = demande.PoidsKg;
-        }
-
-        await contexte.SaveChangesAsync(jeton).ConfigureAwait(false);
-        return new PoidsRendu(existante.MeasuredOn, existante.WeightKg);
+        return new PoidsRendu(jour, demande.PoidsKg);
     }
 }
 

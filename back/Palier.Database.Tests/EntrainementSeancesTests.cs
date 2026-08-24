@@ -194,6 +194,92 @@ public sealed class EntrainementSeancesTests(BaseFixture baseDeDonnees)
         Assert.Equal("SeanceIntrouvable", HarnaisHttp.Code(corps));
     }
 
+    [Fact]
+    public async Task Rejouer_la_CLOTURE_sans_Fin_PRESERVE_la_fin_deja_posee()
+    {
+        // LE CAS QUE LA REVUE A TROUVÉ. `PATCH` est une mise à jour PARTIELLE :
+        // rejouer `{ energie: 4 }` sur une séance déjà close ne doit pas la
+        // faire finir à l'heure du rejeu.
+        //
+        // Avant la correction, une séance d'une heure close à 10 h devenait
+        // une séance de six heures dès qu'on notait son énergie à 15 h — sans
+        // erreur, sans trace, et avec une durée fausse dans l'historique.
+        var proprietaire = await CompteAsync();
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        var seance = await OuvrirAsync(
+            portee.ServiceProvider,
+            new DateTimeOffset(2026, 8, 24, 9, 0, 0, TimeSpan.Zero)
+        );
+
+        // Première clôture : la fin est donnée explicitement.
+        var fin = new DateTimeOffset(2026, 8, 24, 10, 0, 0, TimeSpan.Zero);
+        await HarnaisHttp.ExecuterAsync(
+            portee.ServiceProvider,
+            Seances.CloturerAsync(
+                seance,
+                new ClotureDeSeance(fin, null),
+                portee.ServiceProvider.GetRequiredService<IExecuteurDeCasDUsage>(),
+                portee.ServiceProvider.GetRequiredService<CloturerUneSeance>(),
+                TimeProvider.System,
+                CancellationToken.None
+            )
+        );
+
+        // Cinq heures plus tard, l'utilisateur note son énergie. L'horloge du
+        // rejeu est explicitement DIFFÉRENTE : c'est ce qui rendrait le défaut
+        // visible.
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(
+            portee.ServiceProvider,
+            Seances.CloturerAsync(
+                seance,
+                new ClotureDeSeance(null, 4),
+                portee.ServiceProvider.GetRequiredService<IExecuteurDeCasDUsage>(),
+                portee.ServiceProvider.GetRequiredService<CloturerUneSeance>(),
+                new HorlogeFixe(new DateTimeOffset(2026, 8, 24, 15, 0, 0, TimeSpan.Zero)),
+                CancellationToken.None
+            )
+        );
+
+        Assert.Equal(StatusCodes.Status200OK, code);
+
+        var rendue = JsonDocument.Parse(corps).RootElement;
+        Assert.Equal(4, rendue.GetProperty("energie").GetInt32());
+        Assert.Equal(fin, rendue.GetProperty("fin").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task Cloturer_SANS_Fin_une_seance_JAMAIS_close_prend_l_horloge()
+    {
+        // L'autre bord : la préservation ne doit pas empêcher la PREMIÈRE
+        // clôture de dater la séance. Sans cette épreuve, un `?? seance.EndedAt`
+        // mal placé laisserait `Fin` à null indéfiniment.
+        var proprietaire = await CompteAsync();
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+        var seance = await OuvrirAsync(portee.ServiceProvider);
+
+        var maintenant = new DateTimeOffset(2026, 8, 24, 11, 0, 0, TimeSpan.Zero);
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(
+            portee.ServiceProvider,
+            Seances.CloturerAsync(
+                seance,
+                new ClotureDeSeance(null, 3),
+                portee.ServiceProvider.GetRequiredService<IExecuteurDeCasDUsage>(),
+                portee.ServiceProvider.GetRequiredService<CloturerUneSeance>(),
+                new HorlogeFixe(maintenant),
+                CancellationToken.None
+            )
+        );
+
+        Assert.Equal(StatusCodes.Status200OK, code);
+        Assert.Equal(
+            maintenant,
+            JsonDocument.Parse(corps).RootElement.GetProperty("fin").GetDateTimeOffset()
+        );
+    }
+
     // ================================================================
     // Supprimer
     // ================================================================

@@ -81,6 +81,56 @@ public sealed class EntrainementPoidsTests(BaseFixture baseDeDonnees)
         Assert.Equal("2026-08-23", mesures[1].GetProperty("jour").GetString());
     }
 
+    [Fact]
+    public async Task DEUX_pesees_SIMULTANEES_le_meme_jour_ne_rendent_pas_500()
+    {
+        // LA COURSE QUE LA REVUE A TROUVÉE. Le gestionnaire lisait la pesée du
+        // jour, puis insérait ou mettait à jour selon ce qu'il avait trouvé.
+        // Entre les deux, une fenêtre : le pipeline ouvre sa transaction en
+        // READ COMMITTED, donc deux requêtes simultanées ne voyaient pas
+        // l'insertion l'une de l'autre. Toutes deux inséraient, la seconde
+        // heurtait `ux_body_weight_owner_id_measured_on` et remontait un 23505
+        // en 500.
+        //
+        // Le déclencheur n'a rien d'exotique : un double appui sur
+        // « Enregistrer » quand le réseau traîne, ou un rejeu automatique.
+        //
+        // L'épreuve lance DIX écritures en parallèle. Une seule doit survivre
+        // en base, et AUCUNE ne doit échouer.
+        var proprietaire = await CompteAsync();
+        var horloge = new HorlogeFixe(new DateTimeOffset(2026, 8, 23, 10, 0, 0, TimeSpan.Zero));
+        await using var hote = Hote(proprietaire);
+
+        var jour = new DateOnly(2026, 8, 23);
+
+        var ecritures = Enumerable
+            .Range(0, 10)
+            .Select(async rang =>
+            {
+                // UNE PORTÉE PAR ÉCRITURE : le contexte EF n'est pas conçu pour
+                // un usage concurrent, et les partager mesurerait ce défaut-là
+                // plutôt que la course en base.
+                using var portee = hote.Services.CreateScope();
+                return await EnregistrerAsync(
+                    portee.ServiceProvider,
+                    horloge,
+                    jour,
+                    80m + rang
+                );
+            })
+            .ToArray();
+
+        var resultats = await Task.WhenAll(ecritures);
+
+        Assert.All(resultats, r => Assert.Equal(StatusCodes.Status200OK, r.Code));
+
+        // ET une seule ligne en base : la contrainte d'unicité a tenu, et
+        // l'upsert a tranché sans qu'aucune requête n'échoue.
+        using var lecture = hote.Services.CreateScope();
+        var serie = await LireAsync(lecture.ServiceProvider, horloge);
+        Assert.Single(serie.GetProperty("mesures").EnumerateArray());
+    }
+
     // ================================================================
     // Le constat de sécurité
     // ================================================================

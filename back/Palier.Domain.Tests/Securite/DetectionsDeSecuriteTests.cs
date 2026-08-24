@@ -364,6 +364,61 @@ public sealed class DetectionsDeSecuriteTests
         );
     }
 
+    [Fact]
+    public void Des_pesees_MENSUELLES_ne_declenchent_PAS_le_constat()
+    {
+        // LE FAUX POSITIF SYMÉTRIQUE, et la preuve qu'il est fermé.
+        //
+        // Une revue l'a signalé sur la version à semaines ISO : quatre pesées
+        // mensuelles — 80, 78, 76, 74 kg — donnaient quatre valeurs
+        // consécutives dans la série réduite, et `EstDetectee` les comparait
+        // comme si une semaine les séparait. Chaque écart de 2 kg dépassait le
+        // seuil de 1 %, et le constat tombait sur une perte RÉELLE de
+        // 0,59 %/semaine — bien SOUS le seuil.
+        //
+        // Les fenêtres glissantes ferment ce cas sans règle nouvelle : une
+        // fenêtre sans pesée interrompt la série, et une cadence mensuelle en
+        // laisse trois vides sur quatre. Cette épreuve garde le comportement,
+        // parce que la prochaine réécriture de la réduction pourrait le
+        // rouvrir sans que rien d'autre ne le montre.
+        var fin = new DateOnly(2026, 4, 5);
+        var mensuelles = new[]
+        {
+            new Pesee(new DateOnly(2026, 1, 5), Masse.DepuisKilogrammes(80m)),
+            new Pesee(new DateOnly(2026, 2, 4), Masse.DepuisKilogrammes(78m)),
+            new Pesee(new DateOnly(2026, 3, 6), Masse.DepuisKilogrammes(76m)),
+            new Pesee(fin, Masse.DepuisKilogrammes(74m)),
+        };
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(mensuelles, fin);
+
+        // Une seule fenêtre survit : les trois autres sont vides.
+        Assert.Single(reduites);
+        Assert.False(PerteDePoidsRapide.EstDetectee(reduites));
+    }
+
+    [Fact]
+    public void Une_cadence_HEBDOMADAIRE_reste_detectee()
+    {
+        // L'autre bord du même sujet : le `Clear()` sur fenêtre vide ne doit
+        // pas casser le cas que la détection existe pour servir. Une pesée par
+        // semaine, à −2 % chacune, doit parler.
+        var fin = new DateOnly(2026, 8, 30);
+        var poids = 80m;
+        var hebdomadaires = new List<Pesee>();
+
+        for (var rang = 3; rang >= 0; rang--)
+        {
+            hebdomadaires.Add(new Pesee(fin.AddDays(-7 * rang), Masse.DepuisKilogrammes(poids)));
+            poids *= 0.98m;
+        }
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(hebdomadaires, fin);
+
+        Assert.Equal(4, reduites.Count);
+        Assert.True(PerteDePoidsRapide.EstDetectee(reduites));
+    }
+
     // ================================================================
     // Masse : demander sans lever
     // ================================================================

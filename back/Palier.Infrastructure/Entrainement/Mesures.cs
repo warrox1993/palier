@@ -124,11 +124,23 @@ public sealed class LireLeVolume(PalierDbContext contexte)
     {
         var nombre = BilanDeVolume.BornerLesSemaines(semaines);
 
-        // La borne basse est calculée sur les JOURS plutôt que soustraite en
-        // semaines : `AddDays` est exact, là où une arithmétique de semaines
-        // devrait décider quoi faire de la semaine en cours.
+        // ON RAISONNE EN LUNDIS, parce que la vue rend des lundis :
+        // `date_trunc('week', ...)` de PostgreSQL ramène chaque ligne au lundi
+        // de sa semaine ISO, à minuit UTC.
+        //
+        // La version précédente soustrayait `7 × nombre` jours à la date du
+        // jour, ce qui préserve le jour de la semaine : un lundi, la borne
+        // tombait sur un lundi, donc SUR une valeur de la vue, donc incluse par
+        // le `>=`. La même requête rendait N+1 semaines les lundis et N les
+        // autres jours — et le plafond de cent quatre semaines en valait cent
+        // cinq un jour sur sept.
+        //
+        // En partant du lundi courant, le compte est le même quel que soit le
+        // jour de l'appel. L'invariance est vraie par construction, pas par
+        // coïncidence avec l'opérateur de comparaison.
+        var lundiCourant = aujourdHui.AddDays(-(((int)aujourdHui.DayOfWeek + 6) % 7));
         var depuis = new DateTimeOffset(
-            aujourdHui.AddDays(-7 * nombre).ToDateTime(TimeOnly.MinValue),
+            lundiCourant.AddDays(-7 * (nombre - 1)).ToDateTime(TimeOnly.MinValue),
             TimeSpan.Zero
         );
 

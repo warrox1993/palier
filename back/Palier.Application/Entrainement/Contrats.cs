@@ -255,9 +255,19 @@ public sealed record SerieDePoids(IReadOnlyList<PoidsRendu> Mesures, string? Con
 /// « signale, SANS prescrire de solution ».
 /// </param>
 /// <param name="SeriesRetenues">
-/// Combien de séries dures ont servi. Zéro dit « je n'ai pas encore de
-/// donnée » — l'état vide que `11-qualite.md` exige de traiter, et qui n'est
-/// pas une erreur.
+/// Combien de séries dures ont été VUES — pas combien ont produit une
+/// estimation.
+///
+/// La nuance porte l'information : zéro dit « je n'ai pas encore de donnée »,
+/// l'état vide que `11-qualite.md` exige de traiter ; un nombre non nul avec
+/// <paramref name="UnRepetitionMaximumKg" /> absent dit « vos séries sont trop
+/// longues pour qu'une estimation ait un sens » — au-delà de quinze
+/// répétitions effectives, <c>ForceEstimee</c> refuse de rendre une charge
+/// plutôt que d'en rendre une fausse.
+///
+/// Compter les séries RETENUES par Epley confondrait les deux cas, et l'écran
+/// ne saurait plus s'il doit inviter à saisir une première série ou expliquer
+/// pourquoi l'estimation manque.
 /// </param>
 public sealed record ProgressionRendue(
     Guid ExerciceId,

@@ -281,6 +281,73 @@ public sealed class EntrainementMesuresTests(BaseFixture baseDeDonnees)
         Assert.Empty(bilan.GetProperty("semaines").EnumerateArray());
     }
 
+    [Theory]
+    // Un LUNDI, puis un mardi, puis un dimanche. Le compte doit être le même.
+    [InlineData("2026-08-24")]
+    [InlineData("2026-08-25")]
+    [InlineData("2026-08-30")]
+    public async Task Le_nombre_de_semaines_rendues_NE_DEPEND_PAS_du_jour_de_la_requete(
+        string jourDeLaRequete
+    )
+    {
+        // L'OFF-BY-ONE QUE LA REVUE A TROUVÉ. La borne basse était calculée en
+        // retirant `7 × nombre` jours à la date du jour, ce qui préserve le
+        // jour de la semaine : un lundi, elle tombait SUR un lundi, donc sur
+        // une valeur de la vue — que le `>=` incluait. La même requête rendait
+        // N+1 semaines les lundis et N les autres jours.
+        //
+        // Trois séances, sur trois semaines distinctes. On demande DEUX
+        // semaines : il doit en sortir deux, quel que soit le jour de l'appel.
+        var proprietaire = await CompteAsync();
+        var exercice = await ExercicePublicAsync();
+        var aujourdHui = DateOnly.Parse(jourDeLaRequete, CultureInfo.InvariantCulture);
+        var horloge = new HorlogeFixe(
+            new DateTimeOffset(aujourdHui.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero)
+        );
+
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        // Une séance par semaine, sur les trois dernières semaines. C'est la
+        // SÉRIE qu'on date : `weekly_volume` groupe sur `sets.logged_at`, pas
+        // sur `workouts.started_at`.
+        foreach (var recul in new[] { 0, 7, 14 })
+        {
+            var quand = new DateTimeOffset(
+                aujourdHui.AddDays(-recul).ToDateTime(new TimeOnly(9, 0)),
+                TimeSpan.Zero
+            );
+            var seance = await OuvrirAsync(portee.ServiceProvider, quand);
+            await AjouterAsync(
+                portee.ServiceProvider,
+                seance,
+                exercice,
+                1,
+                60m,
+                8,
+                false,
+                new HorlogeFixe(quand)
+            );
+        }
+
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(
+            portee.ServiceProvider,
+            Mesures.VolumeAsync(
+                2,
+                portee.ServiceProvider.GetRequiredService<IExecuteurDeCasDUsage>(),
+                portee.ServiceProvider.GetRequiredService<LireLeVolume>(),
+                horloge,
+                CancellationToken.None
+            )
+        );
+
+        Assert.Equal(StatusCodes.Status200OK, code);
+        Assert.Equal(
+            2,
+            JsonDocument.Parse(corps).RootElement.GetProperty("semaines").EnumerateArray().Count()
+        );
+    }
+
     // ================================================================
     // Le harnais
     // ================================================================
@@ -348,6 +415,10 @@ public sealed class EntrainementMesuresTests(BaseFixture baseDeDonnees)
         return JsonDocument.Parse(corps).RootElement.GetProperty("id").GetGuid();
     }
 
+    // L horloge date la SÉRIE, pas la séance — et c est ce qui compte pour le
+    // volume : la vue groupe sur sets.logged_at, jamais sur
+    // workouts.started_at. Une épreuve qui daterait les séances et lirait le
+    // volume mesurerait deux choses différentes.
     private static async Task AjouterAsync(
         IServiceProvider services,
         Guid seance,
@@ -355,7 +426,8 @@ public sealed class EntrainementMesuresTests(BaseFixture baseDeDonnees)
         int rang,
         decimal charge,
         int repetitions,
-        bool echauffement
+        bool echauffement,
+        TimeProvider? horloge = null
     )
     {
         var (code, _) = await HarnaisHttp.ExecuterAsync(
@@ -365,7 +437,7 @@ public sealed class EntrainementMesuresTests(BaseFixture baseDeDonnees)
                 new AjoutDeSerie(exercice, rang, charge, repetitions, 2, echauffement),
                 services.GetRequiredService<IExecuteurDeCasDUsage>(),
                 services.GetRequiredService<AjouterUneSerie>(),
-                TimeProvider.System,
+                horloge ?? TimeProvider.System,
                 CancellationToken.None
             )
         );
