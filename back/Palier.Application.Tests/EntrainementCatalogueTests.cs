@@ -272,7 +272,7 @@ public sealed class EntrainementCatalogueTests
     // ================================================================
 
     [Fact]
-    public void Un_exercice_rendu_conserve_ses_neuf_champs()
+    public void Un_exercice_rendu_conserve_ses_dix_champs()
     {
         var identifiant = Guid.NewGuid();
         var rendu = new ExerciceRendu(
@@ -284,7 +284,8 @@ public sealed class EntrainementCatalogueTests
             true,
             2.5m,
             ["lombaire"],
-            EstPersonnalise: true
+            EstPersonnalise: true,
+            [new MarquageDeContrainte("lombaire", "strict")]
         );
 
         Assert.Equal(identifiant, rendu.Id);
@@ -296,5 +297,37 @@ public sealed class EntrainementCatalogueTests
         Assert.Equal(2.5m, rendu.IncrementParDefaut);
         Assert.Equal(["lombaire"], rendu.ContreIndicationsPour);
         Assert.True(rendu.EstPersonnalise);
+        Assert.Single(rendu.Marquages);
     }
+
+    [Fact]
+    public void Un_marquage_porte_la_region_ET_la_severite_declaree()
+    {
+        // Les DEUX, toujours. La région seule ne dirait pas à l'écran comment
+        // présenter — et c'est la sévérité, réglée par l'utilisateur, qui
+        // pilote cette présentation.
+        var marquage = new MarquageDeContrainte("genou", "leger");
+
+        Assert.Equal("genou", marquage.Region);
+        Assert.Equal("leger", marquage.Severite);
+    }
+
+    [Fact]
+    public void Un_exercice_SANS_marquage_est_l_etat_ordinaire() =>
+        // La plupart des exercices ne recoupent aucune contrainte déclarée, et
+        // la plupart des utilisateurs n'en déclarent aucune.
+        Assert.Empty(
+            new ExerciceRendu(
+                Guid.NewGuid(),
+                "Développé couché",
+                null,
+                ["pectoraux"],
+                [],
+                false,
+                2.5m,
+                [],
+                EstPersonnalise: false,
+                []
+            ).Marquages
+        );
 }

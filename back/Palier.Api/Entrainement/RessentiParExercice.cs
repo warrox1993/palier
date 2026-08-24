@@ -30,7 +30,6 @@ internal static class RessentiParExercice
         NoteDeRessenti demande,
         IExecuteurDeCasDUsage executeur,
         NoterUnRessenti gestionnaire,
-        TimeProvider horloge,
         CancellationToken jeton
     )
     {
@@ -46,7 +45,7 @@ internal static class RessentiParExercice
         var issue = await executeur
             .ExecuterAsync(
                 nameof(NoterUnRessenti),
-                j => gestionnaire.ExecuterAsync(seanceId, demande, horloge, j),
+                j => gestionnaire.ExecuterAsync(seanceId, demande, j),
                 jeton
             )
             .ConfigureAwait(false);

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Microsoft.EntityFrameworkCore;
 using Palier.Application.Entrainement;
 using Palier.Application.Pipeline;
@@ -27,7 +28,16 @@ namespace Palier.Infrastructure.Entrainement;
 /// <summary>La traduction d'une ligne en réponse. UN seul endroit.</summary>
 internal static class RenduDExercice
 {
-    public static ExerciceRendu Depuis(Exercise exercice) =>
+    /// <param name="exercice">La ligne du catalogue.</param>
+    /// <param name="declarees">
+    /// Les contraintes de l'appelant, par région. VIDE hors du catalogue — la
+    /// création d'un exercice n'a rien à marquer, puisque l'utilisateur vient
+    /// de choisir lui-même ses contre-indications.
+    /// </param>
+    public static ExerciceRendu Depuis(
+        Exercise exercice,
+        IReadOnlyDictionary<string, string> declarees
+    ) =>
         new(
             exercice.Id,
             exercice.Name,
@@ -37,7 +47,15 @@ internal static class RenduDExercice
             exercice.IsUnilateral,
             exercice.DefaultIncrement,
             exercice.ContraindicatedFor,
-            exercice.IsCustom
+            exercice.IsCustom,
+            // L'INTERSECTION, et rien de plus. Aucune ligne n'est retirée :
+            // c'est le marquage qui informe, et l'écran qui présente.
+            [
+                .. exercice
+                    .ContraindicatedFor.Where(declarees.ContainsKey)
+                    .OrderBy(region => region, StringComparer.Ordinal)
+                    .Select(region => new MarquageDeContrainte(region, declarees[region])),
+            ]
         );
 }
 
@@ -74,7 +92,16 @@ public sealed class ListerLeCatalogue(PalierDbContext contexte)
             .ToListAsync(jeton)
             .ConfigureAwait(false);
 
-        return [.. exercices.Select(RenduDExercice.Depuis)];
+        // Les contraintes de l'appelant, dans la MÊME transaction, donc sous la
+        // même identité. RLS les borne aux siennes.
+        var declarees = await contexte
+            .UserConstraints.AsNoTracking()
+            .ToDictionaryAsync(c => c.Region, c => c.Severity, StringComparer.Ordinal, jeton)
+            .ConfigureAwait(false);
+
+        // ET LE CATALOGUE SORT ENTIER. Le marquage informe ; il ne retire
+        // rien. Voir le doc de `MarquageDeContrainte` pour ce qui l'impose.
+        return [.. exercices.Select(e => RenduDExercice.Depuis(e, declarees))];
     }
 }
 
@@ -124,7 +151,11 @@ public sealed class CreerUnExercice(PalierDbContext contexte, IIdentiteDemandeur
 
         contexte.Exercises.Add(exercice);
         await contexte.SaveChangesAsync(jeton).ConfigureAwait(false);
-        return RenduDExercice.Depuis(exercice);
+
+        // AUCUN marquage à la création : l'utilisateur vient de choisir
+        // lui-même les contre-indications de son exercice. Les lui renvoyer
+        // marquées lui apprendrait ce qu'il vient de taper.
+        return RenduDExercice.Depuis(exercice, ImmutableDictionary<string, string>.Empty);
     }
 }
 

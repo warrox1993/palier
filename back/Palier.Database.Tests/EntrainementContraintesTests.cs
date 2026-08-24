@@ -239,62 +239,213 @@ public sealed class EntrainementContraintesTests(BaseFixture baseDeDonnees)
         using var porteeA2 = hoteA2.Services.CreateScope();
         Assert.Equal(["cervicale", "lombaire"], await ListerAsync(porteeA2.ServiceProvider));
 
-        // ET la table porte bien les trois lignes : ce que seul le rôle des
-        // migrations peut voir.
-        Assert.Equal(3, await CompterToutAsync());
+        // ET les trois lignes sont bien là, ce que seul le rôle des migrations
+        // peut voir : deux pour A, une pour B.
+        Assert.Equal(3, await CompterPourAsync(a, b));
     }
 
     // ================================================================
-    // Ce que ce lot ne fait PAS — l'épreuve INVERSÉE
+    // L'adaptation par contrainte — le MARQUAGE, jamais le filtrage
     // ================================================================
 
     [Fact]
-    public async Task Declarer_une_contrainte_ne_FILTRE_PAS_encore_le_catalogue()
+    public async Task Le_catalogue_rend_TOUT_et_MARQUE_ce_qui_est_contre_indique()
     {
-        // ÉPREUVE INVERSÉE, et son rôle est de ROUGIR le jour où le filtrage
-        // arrivera.
+        // D63, et c'est la conformité qui l'impose, pas le goût.
         //
-        // `docs/05-entrainement.md` § 4 décrit un filtrage automatique par
-        // intersection avec `exercises.contraindicated_for`. Mais il laisse
-        // ouvert ce qu'on fait d'un exercice contre-indiqué : l'EXCLURE du
-        // catalogue, ou l'AFFICHER MARQUÉ. C'est une décision de produit
-        // visible par l'utilisateur — `CLAUDE.md` § 6 — donc elle appartient au
-        // porteur du projet.
+        // `05-entrainement.md` § 4 emploie le mot « filtrent » ;
+        // `00-produit.md` tranche ce qu'il peut vouloir dire — « voici ta
+        // valeur, voici la référence, voici l'écart » est une information,
+        // tandis que décider à la place de l'utilisateur « place l'éditeur en
+        // conseiller, ce qui est réglementé ». Et `01-conformite.md` § 2 pose
+        // la formule canonique : « un chiffre, une référence, un écart. JAMAIS
+        // une action. »
         //
-        // Sans cette épreuve, le filtrage s'installerait un jour au détour
-        // d'une implémentation, dans la forme que quelqu'un aura trouvée
-        // évidente, et personne n'aurait jamais posé la question. Elle force à
-        // venir ici et à décider.
+        // Retirer un exercice du catalogue EST une action. Cette épreuve garde
+        // les DEUX moitiés : l'exercice est là, ET il est marqué.
         var proprietaire = await CompteAsync();
         var contreIndique = await ExerciceContreIndiqueAsync("genou");
         await using var hote = Hote(proprietaire);
         using var portee = hote.Services.CreateScope();
 
+        await RemplacerAsync(portee.ServiceProvider, ["genou"], severite: "strict");
+
+        var catalogue = await CatalogueAsync(portee.ServiceProvider);
+        var exercice = catalogue.SingleOrDefault(e =>
+            e.GetProperty("id").GetGuid() == contreIndique
+        );
+
+        // PREMIÈRE MOITIÉ : il est là. Un catalogue qui l'aurait retiré
+        // mentirait sur son contenu, n'apprendrait rien, et prendrait une
+        // décision médicale en silence pour quelqu'un qui a peut-être un avis
+        // contraire de son kinésithérapeute.
+        Assert.True(
+            exercice.ValueKind is not JsonValueKind.Undefined,
+            "L'exercice contre-indiqué a disparu du catalogue : l'API FILTRE, "
+                + "ce que D63 interdit. Le marquage informe ; il ne retire rien. "
+                + "La présentation — replier, signaler — appartient à l'écran, "
+                + "et se déduit de la sévérité."
+        );
+
+        // SECONDE MOITIÉ : il est marqué, avec la sévérité déclarée. Sans elle,
+        // l'écran n'aurait aucun moyen de présenter autre chose qu'une liste
+        // plate, et le § 4 serait lettre morte.
+        var marquages = exercice.GetProperty("marquages").EnumerateArray().ToList();
+        Assert.Single(marquages);
+        Assert.Equal("genou", marquages[0].GetProperty("region").GetString());
+        Assert.Equal("strict", marquages[0].GetProperty("severite").GetString());
+    }
+
+    [Fact]
+    public async Task Un_exercice_SANS_recoupement_ne_porte_AUCUN_marquage()
+    {
+        // L'autre bord. Sans lui, un marquage qui décorerait TOUT le catalogue
+        // passerait l'épreuve précédente, et l'écran replierait tout.
+        var proprietaire = await CompteAsync();
+        var neutre = await ExerciceContreIndiqueAsync("epaule");
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
         await RemplacerAsync(portee.ServiceProvider, ["genou"]);
 
-        var (code, corps) = await HarnaisHttp.ExecuterAsync(
+        var catalogue = await CatalogueAsync(portee.ServiceProvider);
+        var exercice = catalogue.Single(e => e.GetProperty("id").GetGuid() == neutre);
+
+        Assert.Empty(exercice.GetProperty("marquages").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task SANS_contrainte_declaree_RIEN_n_est_marque()
+    {
+        // L'état de la plupart des utilisateurs. Le marquage ne doit pas
+        // apparaître par défaut : il dit un recoupement, et sans contrainte
+        // déclarée il n'y a rien à recouper.
+        var proprietaire = await CompteAsync();
+        var contreIndique = await ExerciceContreIndiqueAsync("genou");
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        var catalogue = await CatalogueAsync(portee.ServiceProvider);
+        var exercice = catalogue.Single(e => e.GetProperty("id").GetGuid() == contreIndique);
+
+        Assert.Empty(exercice.GetProperty("marquages").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Le_marquage_de_B_ne_porte_PAS_les_contraintes_de_A()
+    {
+        // Le marquage lit les contraintes de l'APPELANT. Sans RLS, il lirait
+        // celles de tout le monde — et le catalogue de B se couvrirait de
+        // marquages tirés des données de santé de A.
+        var a = await CompteAsync();
+        var b = await CompteAsync();
+        var contreIndique = await ExerciceContreIndiqueAsync("genou");
+
+        await using (var hoteA = Hote(a))
+        {
+            using var porteeA = hoteA.Services.CreateScope();
+            await RemplacerAsync(porteeA.ServiceProvider, ["genou"], severite: "strict");
+        }
+
+        await using var hoteB = Hote(b);
+        using var porteeB = hoteB.Services.CreateScope();
+
+        var catalogue = await CatalogueAsync(porteeB.ServiceProvider);
+        var exercice = catalogue.Single(e => e.GetProperty("id").GetGuid() == contreIndique);
+
+        Assert.Empty(exercice.GetProperty("marquages").EnumerateArray());
+    }
+
+    // ================================================================
+    // La sévérité, bout à bout
+    // ================================================================
+
+    [Fact]
+    public async Task La_severite_ABSENTE_est_stockee_a_MODERE()
+    {
+        var proprietaire = await CompteAsync();
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        await RemplacerAsync(portee.ServiceProvider, ["genou"]);
+
+        var rendue = await UneAsync(portee.ServiceProvider, "genou");
+        Assert.Equal("modere", rendue.GetProperty("severite").GetString());
+    }
+
+    [Fact]
+    public async Task Changer_la_SEVERITE_ne_change_pas_la_DATE()
+    {
+        // Une contrainte qui passe de `modere` à `strict` reste la MÊME
+        // contrainte, déclarée le même jour. Remettre la date à zéro ferait
+        // dire à `declared_at` « depuis le dernier réglage » au lieu de
+        // « depuis quand ».
+        var proprietaire = await CompteAsync();
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        await RemplacerAsync(
             portee.ServiceProvider,
-            Catalogue.ListerAsync(
+            ["genou"],
+            new HorlogeFixe(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)),
+            severite: "leger"
+        );
+
+        await RemplacerAsync(
+            portee.ServiceProvider,
+            ["genou"],
+            new HorlogeFixe(new DateTimeOffset(2026, 8, 23, 0, 0, 0, TimeSpan.Zero)),
+            severite: "strict"
+        );
+
+        var rendue = await UneAsync(portee.ServiceProvider, "genou");
+
+        Assert.Equal("strict", rendue.GetProperty("severite").GetString());
+        Assert.Equal(1, rendue.GetProperty("declareeLe").GetDateTimeOffset().Month);
+    }
+
+    [Fact]
+    public async Task Une_severite_INCONNUE_est_refusee_avant_toute_ecriture()
+    {
+        var proprietaire = await CompteAsync();
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        var (code, corps) = await RemplacerAsync(
+            portee.ServiceProvider,
+            ["genou"],
+            severite: "urgent"
+        );
+
+        Assert.Equal(StatusCodes.Status400BadRequest, code);
+        Assert.Equal("SeveriteInvalide", HarnaisHttp.Code(corps));
+        Assert.Empty(await ListerAsync(portee.ServiceProvider));
+    }
+
+    [Fact]
+    public async Task Une_NOTE_se_relit_telle_qu_elle_a_ete_saisie()
+    {
+        var proprietaire = await CompteAsync();
+        await using var hote = Hote(proprietaire);
+        using var portee = hote.Services.CreateScope();
+
+        var (code, _) = await HarnaisHttp.ExecuterAsync(
+            portee.ServiceProvider,
+            ContraintesDuCompte.RemplacerAsync(
+                new DeclarationDeContraintes(
+                    [new DeclarationDUneContrainte("lombaire", "strict", "  hernie L5-S1  ")]
+                ),
                 portee.ServiceProvider.GetRequiredService<IExecuteurDeCasDUsage>(),
-                portee.ServiceProvider.GetRequiredService<ListerLeCatalogue>(),
+                portee.ServiceProvider.GetRequiredService<RemplacerLesContraintes>(),
+                TimeProvider.System,
                 CancellationToken.None
             )
         );
 
         Assert.Equal(StatusCodes.Status200OK, code);
-        var identifiants = JsonDocument
-            .Parse(corps)
-            .RootElement.EnumerateArray()
-            .Select(e => e.GetProperty("id").GetGuid())
-            .ToHashSet();
 
-        Assert.True(
-            identifiants.Contains(contreIndique),
-            "L'exercice contre-indiqué a disparu du catalogue : le filtrage du § 4 a été "
-                + "implémenté. C'est peut-être la bonne décision — mais elle appartient au "
-                + "porteur du projet (exclure, ou afficher marqué), et cette épreuve existe "
-                + "pour qu'elle soit prise plutôt que subie. Voir le § 8 de la conception."
-        );
+        var rendue = await UneAsync(portee.ServiceProvider, "lombaire");
+        Assert.Equal("hernie L5-S1", rendue.GetProperty("note").GetString());
     }
 
     // ================================================================
@@ -311,12 +462,15 @@ public sealed class EntrainementContraintesTests(BaseFixture baseDeDonnees)
     private static Task<(int Code, string Corps)> RemplacerAsync(
         IServiceProvider services,
         IReadOnlyList<string> regions,
-        TimeProvider? horloge = null
+        TimeProvider? horloge = null,
+        string? severite = null
     ) =>
         HarnaisHttp.ExecuterAsync(
             services,
             ContraintesDuCompte.RemplacerAsync(
-                new DeclarationDeContraintes(regions),
+                new DeclarationDeContraintes(
+                    [.. regions.Select(r => new DeclarationDUneContrainte(r, severite, null))]
+                ),
                 services.GetRequiredService<IExecuteurDeCasDUsage>(),
                 services.GetRequiredService<RemplacerLesContraintes>(),
                 horloge ?? TimeProvider.System,
@@ -359,14 +513,67 @@ public sealed class EntrainementContraintesTests(BaseFixture baseDeDonnees)
         ];
     }
 
-    private async Task<long> CompterToutAsync()
+    private static async Task<IReadOnlyList<JsonElement>> CatalogueAsync(IServiceProvider services)
+    {
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(
+            services,
+            Catalogue.ListerAsync(
+                services.GetRequiredService<IExecuteurDeCasDUsage>(),
+                services.GetRequiredService<ListerLeCatalogue>(),
+                CancellationToken.None
+            )
+        );
+
+        Assert.Equal(StatusCodes.Status200OK, code);
+        return [.. JsonDocument.Parse(corps).RootElement.EnumerateArray().Select(e => e.Clone())];
+    }
+
+    private static async Task<JsonElement> UneAsync(IServiceProvider services, string region)
+    {
+        var (code, corps) = await HarnaisHttp.ExecuterAsync(
+            services,
+            ContraintesDuCompte.ListerAsync(
+                services.GetRequiredService<IExecuteurDeCasDUsage>(),
+                services.GetRequiredService<ListerLesContraintes>(),
+                CancellationToken.None
+            )
+        );
+
+        Assert.Equal(StatusCodes.Status200OK, code);
+        return JsonDocument
+            .Parse(corps)
+            .RootElement.EnumerateArray()
+            .Single(c => c.GetProperty("region").GetString() == region)
+            .Clone();
+    }
+
+    /// <summary>
+    /// Compte les contraintes de DEUX comptes nommés, sous
+    /// <c>palier_migrations</c> qui voit tout.
+    /// </summary>
+    /// <remarks>
+    /// <b>Bornée aux deux comptes, et pas à la table entière.</b> La base est
+    /// partagée par toutes les épreuves de la collection : un
+    /// <c>count(*)</c> nu compterait aussi les lignes des voisines, et
+    /// l'assertion passerait ou échouerait selon l'ordre d'exécution. Mesuré —
+    /// l'épreuve attendait 3 et trouvait 5 dès que d'autres épreuves de ce
+    /// fichier ont déclaré des contraintes.
+    ///
+    /// Sous <c>palier_migrations</c> parce que la question est « la ligne
+    /// existe-t-elle en base », pas « l'appelant la voit-il » : sous
+    /// <c>palier_app</c>, les lignes de A seraient invisibles depuis la session
+    /// de B et l'assertion passerait pour la mauvaise raison.
+    /// </remarks>
+    private async Task<long> CompterPourAsync(Guid a, Guid b)
     {
         await using var connexion = new NpgsqlConnection(baseDeDonnees.ChaineMigrations);
         await connexion.OpenAsync();
         await using var commande = new NpgsqlCommand(
-            "select count(*) from public.user_constraints",
+            "select count(*) from public.user_constraints where owner_id = $1 or owner_id = $2",
             connexion
         );
+        commande.Parameters.AddWithValue(a);
+        commande.Parameters.AddWithValue(b);
         return (long)(await commande.ExecuteScalarAsync())!;
     }
 

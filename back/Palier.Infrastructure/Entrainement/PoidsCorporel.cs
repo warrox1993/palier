@@ -82,7 +82,7 @@ public sealed class ListerLePoids(PalierDbContext contexte)
             .ToListAsync(jeton)
             .ConfigureAwait(false);
 
-        return new SerieDePoids([.. mesures.Select(m => new PoidsRendu(m.MeasuredOn, m.WeightKg))], Constater(mesures));
+        return new SerieDePoids([.. mesures.Select(m => new PoidsRendu(m.MeasuredOn, m.WeightKg))], Constater(mesures, aujourdHui));
     }
 
     /// <summary>
@@ -105,13 +105,13 @@ public sealed class ListerLePoids(PalierDbContext contexte)
     /// ne calcule rien, et ne rédige aucune phrase.
     /// </para>
     /// </remarks>
-    private static string? Constater(List<BodyWeight> mesures)
+    private static string? Constater(List<BodyWeight> mesures, DateOnly aujourdHui)
     {
         var pesees = mesures
             .Select(m => new Pesee(m.MeasuredOn, Masse.DepuisKilogrammes(m.WeightKg)))
             .ToArray();
 
-        var hebdomadaires = PerteDePoidsRapide.MoyennesHebdomadaires(pesees);
+        var hebdomadaires = PerteDePoidsRapide.MoyennesHebdomadaires(pesees, aujourdHui);
         return PerteDePoidsRapide.EstDetectee(hebdomadaires) ? SerieDePoids.PerteRapide : null;
     }
 }

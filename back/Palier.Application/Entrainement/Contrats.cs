@@ -424,6 +424,7 @@ public sealed record CreationDExercice(
 /// <param name="Unilateral">Vrai quand le mouvement se fait un côté à la fois.</param>
 /// <param name="IncrementParDefaut">Le pas de progression proposé, en kilogrammes.</param>
 /// <param name="ContreIndicationsPour">Les régions sur lesquelles il est contre-indiqué.</param>
+/// <param name="Marquages">Le recoupement avec les contraintes DÉCLARÉES par l appelant. Vide s il n en a pas.</param>
 /// <param name="EstPersonnalise">
 /// Vrai pour les siens, faux pour le catalogue public. C'est ce drapeau qui dit
 /// au front s'il peut proposer la suppression — et l'API le refuse de toute
@@ -438,8 +439,45 @@ public sealed record ExerciceRendu(
     bool Unilateral,
     decimal IncrementParDefaut,
     IReadOnlyList<string> ContreIndicationsPour,
-    bool EstPersonnalise
+    bool EstPersonnalise,
+    IReadOnlyList<MarquageDeContrainte> Marquages
 );
+
+/// <summary>
+/// Le recoupement entre une contre-indication de l'exercice et une contrainte
+/// que l'appelant a DÉCLARÉE.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>C'est ce que « filtrer automatiquement le catalogue » veut dire ici, et
+/// c'est un choix de conformité, pas de goût.</b>
+/// <c>docs/05-entrainement.md</c> § 4 emploie le mot « filtrent » ;
+/// <c>docs/00-produit.md</c> tranche ce qu'il peut vouloir dire : « voici ta
+/// valeur, voici la référence, voici l'écart » est une information, tandis que
+/// décider à la place de l'utilisateur « place l'éditeur en conseiller, ce qui
+/// est réglementé ». Et <c>docs/01-conformite.md</c> § 2 pose la formule
+/// canonique : « un chiffre, une référence, un écart. <b>Jamais une
+/// action.</b> »
+/// </para>
+///
+/// <para>
+/// <b>Retirer un exercice du catalogue EST une action.</b> Elle ment sur le
+/// contenu du catalogue, elle n'apprend rien, et elle prend une décision
+/// médicale en silence pour quelqu'un qui a peut-être un avis contraire de son
+/// kinésithérapeute. Le marquage dit la même chose sans décider : voici
+/// l'exercice, voici votre contrainte, voici le recoupement.
+/// </para>
+///
+/// <para>
+/// <b>L'API ne filtre donc JAMAIS.</b> La présentation — replier, signaler,
+/// laisser passer — se déduit de <paramref name="Severite" /> et appartient à
+/// l'écran. Une épreuve garde ce partage dans les deux sens : le catalogue rend
+/// tout, et le marquage est présent.
+/// </para>
+/// </remarks>
+/// <param name="Region">La région contre-indiquée, déclarée par l'appelant.</param>
+/// <param name="Severite">La sévérité qu'il lui a donnée — son réglage.</param>
+public sealed record MarquageDeContrainte(string Region, string Severite);
 
 /// <summary>Ce qu'on donne pour noter le ressenti d'un exercice.</summary>
 /// <param name="ExerciceId">L'exercice noté. Il doit avoir été travaillé dans la séance.</param>
@@ -457,7 +495,11 @@ public sealed record NoteDeRessenti(Guid ExerciceId, string? Ressenti)
 /// <param name="SeanceId">La séance où il a été noté — c'est elle qui l'ordonne dans le temps.</param>
 /// <param name="ExerciceId">L'exercice concerné.</param>
 /// <param name="Ressenti">La forme stockée : <c>good</c>, <c>meh</c> ou <c>pain</c>.</param>
-/// <param name="Instant">Quand il a été noté.</param>
+/// <param name="Instant">
+/// Le DÉBUT DE LA SÉANCE, et non le moment de la saisie. Le § 5 raisonne sur
+/// des séances consécutives : noter après coup le ressenti d'une séance
+/// ancienne ne doit pas la faire passer en tête.
+/// </param>
 public sealed record RessentiRendu(
     Guid SeanceId,
     Guid ExerciceId,
@@ -480,13 +522,53 @@ public sealed record RessentiRendu(
         Math.Clamp(demande ?? HistoriqueParDefaut, 1, HistoriqueMaximal);
 }
 
+/// <summary>Une contrainte, telle qu'on la déclare.</summary>
+/// <param name="Region">Une des quatre régions de la liste fermée.</param>
+/// <param name="Severite">
+/// <c>leger</c>, <c>modere</c> ou <c>strict</c>. ABSENTE vaut <c>modere</c> —
+/// le formulaire peut ne pas poser la question, et ne rien dire est un choix
+/// légitime.
+/// </param>
+/// <param name="Note">Un aide-mémoire libre, facultatif. Il n'atteint aucun calcul.</param>
+public sealed record DeclarationDUneContrainte(string? Region, string? Severite, string? Note)
+{
+    /// <summary>La longueur maximale de la note.</summary>
+    /// <remarks>
+    /// La colonne est <c>text</c>, donc PostgreSQL ne borne rien. Deux cents
+    /// signes tiennent « douleur à la flexion complète, opérée en 2019 » avec
+    /// de la marge, et refusent le mégaoctet.
+    /// </remarks>
+    public const int LongueurMaximaleDeLaNote = 200;
+
+    /// <summary>La sévérité lue, le défaut si elle est absente.</summary>
+    /// <remarks>N'appeler qu'après avoir vérifié <see cref="Faute" />.</remarks>
+    public Severite SeveriteLue
+    {
+        get
+        {
+            Severites.Lire(Severite, out var lue);
+            return lue ?? Severites.ParDefaut;
+        }
+    }
+
+    /// <summary>La note, vide valant absente.</summary>
+    public string? NoteNettoyee =>
+        string.IsNullOrWhiteSpace(Note) ? null : Note.Trim();
+
+    /// <summary>Le code du premier refus, ou <c>null</c>.</summary>
+    public string? Faute =>
+        !Contraintes.Lire(Region, out _) ? "ContrainteInvalide"
+        : !Severites.Lire(Severite, out _) ? "SeveriteInvalide"
+        : NoteNettoyee is { Length: > LongueurMaximaleDeLaNote } ? "NoteTropLongue"
+        : null;
+}
+
 /// <summary>La liste COMPLÈTE des contraintes qu'on déclare.</summary>
 /// <param name="Regions">
-/// Zéro à quatre régions, prises dans la liste fermée. Une liste vide est
-/// LÉGITIME : c'est ainsi qu'on déclare n'avoir aucune contrainte, ou qu'on
-/// retire la dernière.
+/// Zéro à quatre contraintes. Une liste vide est LÉGITIME : c'est ainsi qu'on
+/// déclare n'avoir aucune contrainte, ou qu'on retire la dernière.
 /// </param>
-public sealed record DeclarationDeContraintes(IReadOnlyList<string>? Regions)
+public sealed record DeclarationDeContraintes(IReadOnlyList<DeclarationDUneContrainte>? Regions)
 {
     /// <summary>La liste, une absence valant une liste vide.</summary>
     /// <remarks>
@@ -494,26 +576,32 @@ public sealed record DeclarationDeContraintes(IReadOnlyList<string>? Regions)
     /// il mentait. C'est la même réalité — un corps JSON qui omet le champ
     /// donne <c>null</c> — écrite honnêtement.
     /// </remarks>
-    public IReadOnlyList<string> RegionsOuVide => Regions ?? [];
+    public IReadOnlyList<DeclarationDUneContrainte> RegionsOuVide => Regions ?? [];
 
-    /// <summary>Le code du refus, ou <c>null</c>.</summary>
+    /// <summary>Le code du premier refus, ou <c>null</c>.</summary>
     /// <remarks>
     /// <b>Les doublons sont TOLÉRÉS et dédupliqués</b>, pas refusés : déclarer
-    /// deux fois « genou » dit la même chose que le déclarer une fois, et un
-    /// refus obligerait le client à dédupliquer avant d'envoyer. La contrainte
-    /// <c>unique (owner_id, region)</c> reste le dernier mot.
+    /// deux fois « genou » dit la même chose, et la dernière sévérité donnée
+    /// l'emporte. Un refus obligerait le client à dédupliquer avant d'envoyer.
     /// </remarks>
     public string? Faute =>
         RegionsOuVide.Count > Contraintes.Toutes.Count ? "TropDeContraintes"
-        : RegionsOuVide.Any(r => !Contraintes.Lire(r, out _)) ? "ContrainteInvalide"
-        : null;
+        : RegionsOuVide.Any(c => c is null) ? "ContrainteInvalide"
+        : RegionsOuVide.Select(c => c.Faute).FirstOrDefault(f => f is not null);
 }
 
 /// <summary>Une contrainte déclarée, telle qu'elle sort de l'API.</summary>
 /// <param name="Region">La forme stockée : <c>cervicale</c>, <c>lombaire</c>, <c>epaule</c> ou <c>genou</c>.</param>
+/// <param name="Severite">La forme stockée : <c>leger</c>, <c>modere</c> ou <c>strict</c>.</param>
+/// <param name="Note">L'aide-mémoire, ou <c>null</c>.</param>
 /// <param name="DeclareeLe">
 /// Depuis quand elle est déclarée. Elle NE CHANGE PAS quand on renvoie une
-/// liste qui la contient déjà — sans quoi la date dirait « depuis le dernier
-/// enregistrement » au lieu de « depuis quand ».
+/// liste qui la contient déjà, ni quand sa sévérité change — une contrainte qui
+/// passe de <c>modere</c> à <c>strict</c> reste la même contrainte.
 /// </param>
-public sealed record ContrainteRendue(string Region, DateTimeOffset DeclareeLe);
+public sealed record ContrainteRendue(
+    string Region,
+    string Severite,
+    string? Note,
+    DateTimeOffset DeclareeLe
+);

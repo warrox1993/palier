@@ -1050,6 +1050,8 @@ Et un garde-fou qui crie sans motif est un garde-fou qu'on finit par ignorer, pu
 
 **Tranchés le :** 24/08/2026. **Pris en autonomie**, le porteur du projet ayant demandé que le lot 5 soit exécuté pendant son sommeil. Chacun porte ce qui le défait ; deux d'entre eux ne sont pas des choix.
 
+> **Amendé le 24/08/2026**, sur demande du porteur : « tu dois aller [chercher] la meilleure solution ; si tu n'arrives pas à trancher, tu dois en faire une option et l'utilisateur ira cocher l'option dans ses paramètres. » Le dernier point de cette décision — le filtrage du catalogue, laissé ouvert — est donc **fermé par D63**, et il l'est par la conformité, pas par arbitrage. D39 est fermée ci-dessous.
+
 ### La pagination va au CURSEUR, et le curseur est un couple
 
 `GET /api/v1/seances?avant={instant}&avantId={guid}&limite={n}`.
@@ -1094,4 +1096,78 @@ Le § 4 décrit un filtrage automatique par intersection. Il laisse ouvert ce qu
 
 Elle portait « arbitrage à confirmer par le porteur du projet ». Trois lots s'appuient dessus, et la défaire coûterait treize tables et treize épreuves RLS que rien n'exercerait. Le lot 5 l'a appliquée à la lettre : **deux** tables nouvelles, chacune avec sa politique, ses trois rôles et son épreuve d'isolation.
 
-**Ce qui la défait :** un mot du porteur. Le coût de revenir en arrière augmente à chaque lot ; il est aujourd'hui plus élevé qu'hier.
+**FERMÉE le 24/08/2026.** Ce n'était pas un arbitrage de goût, et le relire l'a montré : poser les treize tables d'un coup produirait treize politiques RLS qu'aucun cas d'usage n'exerce. `CLAUDE.md` § 4 refuse cela en toutes lettres — « un garde-fou non éprouvé ment », « une branche jamais franchie est une branche qui ment ». La question se tranchait donc par une règle déjà écrite, pas par une préférence.
+
+**Ce qui la rouvrirait :** un besoin de voir le schéma complet d'un coup — pour une AIPD, un audit, une migration de masse. Ce besoin se sert d'un document, pas de treize tables vides.
+
+---
+
+## D63 — L'adaptation par contrainte MARQUE le catalogue, elle ne le filtre jamais
+
+**Tranché le :** 24/08/2026, sur demande du porteur d'aller chercher la meilleure solution plutôt que de lui laisser la question. **Ce n'est pas un arbitrage de goût : trois documents le tranchent, et ils disent la même chose.**
+
+D62 laissait ouvert ce qu'on fait d'un exercice contre-indiqué — l'exclure du catalogue, ou l'afficher marqué. La relecture des documents a montré que la question était déjà répondue ailleurs.
+
+**Ce que disent les documents.**
+
+`docs/05-entrainement.md` § 4 emploie le mot « filtrent », qui est ambigu — trier ou retirer. Mais `docs/00-produit.md` tranche ce qu'il peut vouloir dire : « "Voici ta valeur, voici la référence, voici l'écart" est une information. Même écran, même donnée, **régime juridique opposé**. » Et `docs/01-conformite.md` § 2 pose la formule canonique : « un chiffre, une référence, un écart. **Jamais une action.** »
+
+**Retirer un exercice du catalogue EST une action.** Elle ment sur le contenu du catalogue ; elle n'apprend rien ; et elle prend une décision médicale en silence pour quelqu'un qui a peut-être un avis contraire de son kinésithérapeute — précisément la population que `00-produit.md` décrit en ouverture, « sortie de kinésithérapie, retour après grossesse, prothèse ».
+
+**Ce qui est livré.** Le catalogue sort **entier**, et chaque exercice porte le recoupement entre ses contre-indications et les contraintes que l'appelant a déclarées : `MarquageDeContrainte(Region, Severite)`. L'API ne retire jamais une ligne. La présentation — replier, signaler, laisser passer — se déduit de la sévérité et appartient à l'écran, donc au lot 6.
+
+**Le réglage de l'utilisateur est la SÉVÉRITÉ, et il est par contrainte.**
+
+`docs/03-donnees.md` la prévoyait depuis toujours — `severity text check (severity in ('leger','modere','strict'))` — et le lot 5 l'avait **omise**, faute d'avoir relu ce document. C'est elle, le réglage que le porteur demandait : l'utilisateur coche la gravité de chaque contrainte, à la déclaration.
+
+**Par contrainte, et non global**, parce qu'une épaule strictement contre-indiquée et un genou légèrement sensible n'appellent pas le même traitement. Un réglage global aurait forcé un seul comportement pour les deux, et l'utilisateur aurait choisi le pire des deux compromis. Un second réglage d'affichage aurait créé des combinaisons contradictoires — `strict` + « tout afficher » — pour zéro information nouvelle : KISS gagne.
+
+**Le défaut est `modere`.** Pas `leger` : le défaut d'un produit dont la promesse est d'éviter les blessures ne peut pas être le moins protecteur des trois, et quelqu'un qui prend la peine de déclarer une contrainte signale déjà qu'elle compte. Pas `strict` non plus, qui replierait des exercices pour une gêne passagère.
+
+**Les voies écartées.**
+
+- **Exclure du catalogue** — la plus « protectrice » en apparence. Elle place l'éditeur en conseiller, ce qui est réglementé, et se fait contourner dès que l'utilisateur remarque qu'un exercice a disparu.
+- **Marquer sans sévérité** — l'écran n'aurait alors qu'un booléen, donc un seul comportement possible, et le § 4 serait lettre morte.
+- **Un réglage d'affichage global** — redondant avec la sévérité, et générateur de combinaisons contradictoires.
+
+**Ce qui la rouvrirait :** un avis du kinésithérapeute que `docs/14-contenu.md` prévoit, disant qu'une contre-indication stricte doit être rendue inaccessible et non repliée. Ce serait alors une décision de santé documentée, pas un défaut d'interface.
+
+---
+
+## D64 — La perte de poids se lit en fenêtres GLISSANTES, non en semaines calendaires
+
+**Tranché le :** 24/08/2026. **Corrige D61**, prise la nuit précédente.
+
+D61 avait identifié le bon problème — `PerteDePoidsRapide` suppose des entrées hebdomadaires, la série réelle est quotidienne — et posé une réduction par **semaines ISO**. En la relisant, cette réduction porte un défaut mesurable.
+
+**Le défaut.** Quelqu'un qui commence à peser un jeudi a une première « semaine » de quatre jours. L'écart entre sa moyenne et celle de la semaine suivante porte alors sur environ cinq jours, pas sept — et le seuil de 1 % appliqué à cinq jours est **plus strict qu'il ne devrait**. C'est un faux positif, sur une alerte dont `docs/01-conformite.md` § 5 dit qu'elle oriente vers un professionnel.
+
+**Ce qui est livré.** Une moyenne mobile sur sept jours glissants, ancrée sur le dernier jour observé, comparée à J−7, J−14 et J−21. Chaque comparaison porte sur exactement sept jours, quel que soit le jour où l'utilisateur a commencé. C'est aussi plus fidèle au texte, où « par semaine » désigne un intervalle et non une case du calendrier.
+
+**Une fenêtre vide interrompt la série**, elle ne s'interpole pas : inventer une valeur pour une semaine sans pesée reviendrait à conclure sur une mesure qui n'existe pas.
+
+**Une seule pesée par fenêtre suffit**, et c'est un changement par rapport à ce que D61 envisageait. Exiger deux pesées aurait retardé la détection chez qui pèse une fois par semaine — la plupart des gens — et la règle des **trois baisses consécutives** fait déjà le travail anti-bruit : il faut que chaque comparaison dépasse le seuil, ce qu'un bruit aléatoire produit rarement trois fois de suite.
+
+**Ce qui reste vrai de D61 :** la moyenne plutôt que la dernière pesée. Le poids varie de 1 à 2 % d'un jour à l'autre, soit plus que le seuil lui-même.
+
+**Ce qui la rouvrirait :** un avis clinique sur la bonne façon de lire une série de poids. Le kinésithérapeute de `docs/14-contenu.md` reste la source à interroger — mais la question porte désormais sur le SEUIL, qui vient de `01-conformite.md`, et non sur la méthode de mesure, qui est un fait de statistique.
+
+---
+
+## D65 — Le schéma livré au lot 5 s'aligne sur `03-donnees.md`
+
+**Tranché le :** 24/08/2026. **Correction**, découverte en relisant le document de référence pour répondre à D63.
+
+`CLAUDE.md` § 5 pose que le document spécialisé fait autorité — `03-donnees.md` sur le schéma. Le lot 5 s'en est écarté sur trois points, tous par inattention à ce document plutôt que par décision.
+
+| Écart                                   | Ce qui était livré | Ce que le document dit |
+| --------------------------------------- | ------------------ | ---------------------- |
+| `exercise_feedback` — nom de la colonne | `feeling`          | `rating`               |
+| `user_constraints` — gravité déclarée   | absente            | `severity` (3 valeurs) |
+| `user_constraints` — aide-mémoire       | absente            | `note`                 |
+
+**Et un quatrième point, qui est un défaut et non un écart de nommage.** `exercise_feedback` portait une colonne `noted_at` que le document n'a pas, et **l'historique était trié dessus**. Or le § 5 raisonne sur des séances CONSÉCUTIVES : trier sur la date de saisie fait passer en tête le ressenti d'une séance ancienne noté après coup, et « deux `pain` consécutifs » désigne alors deux séances qui ne se suivent pas — une orientation vers un professionnel sur une suite inventée. La colonne est retirée ; l'ordre vient de `workouts.started_at`.
+
+**Corrigé par une migration nouvelle**, non en réécrivant les deux migrations du lot 5. Elles sont poussées sur le dépôt distant, quelqu'un a pu les appliquer, et D14 pose des migrations versionnées — les réécrire après publication casse ce contrat. Le journal git raconte alors ce qui s'est passé : livré, relu, corrigé.
+
+**Ce qui la rouvrirait :** rien. C'est un alignement sur un document qui fait autorité.

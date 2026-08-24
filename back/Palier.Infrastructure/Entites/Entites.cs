@@ -199,6 +199,15 @@ public sealed class WeeklyVolume
 /// est un remplacement, pas un second avis. Les seuils du § 5 — « 2 pain
 /// consécutifs », « 3 meh consécutifs » — compteraient faux sur des doublons.
 /// </para>
+///
+/// <para>
+/// <b>AUCUNE date de saisie</b>, et c'est une correction. La table en portait
+/// une à la livraison du lot 5, et l'ordre du § 5 s'en servait — à tort : la
+/// chronologie qui compte est celle des SÉANCES, pas celle du moment où l'on a
+/// tapé la note. Noter après coup le ressenti d'une séance ancienne l'aurait
+/// placée en tête, et « deux <c>pain</c> consécutifs » aurait désigné deux
+/// séances qui ne se suivent pas.
+/// </para>
 /// </remarks>
 public sealed class ExerciseFeedback
 {
@@ -213,9 +222,12 @@ public sealed class ExerciseFeedback
     /// dans la migration : la contrainte applicative refuse déjà, mais elle ne
     /// protège pas d'une écriture faite hors de l'API.
     /// </summary>
-    public required string Feeling { get; set; }
-
-    public DateTimeOffset NotedAt { get; set; }
+    /// <remarks>
+    /// Le nom vient de <c>docs/03-donnees.md</c>, qui fait autorité sur le
+    /// schéma — <c>CLAUDE.md</c> § 5. Il s'appelait <c>feeling</c> à la
+    /// livraison du lot 5, par inattention à ce document.
+    /// </remarks>
+    public required string Rating { get; set; }
 }
 
 /// <summary>
@@ -250,6 +262,39 @@ public sealed class UserConstraint
     /// protège aussi d'une écriture faite hors de l'API.
     /// </summary>
     public required string Region { get; set; }
+
+    /// <summary>
+    /// <c>leger</c>, <c>modere</c> ou <c>strict</c> — <c>docs/03-donnees.md</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>C'est le réglage de l'utilisateur, et il est PAR CONTRAINTE.</b> Une
+    /// épaule strictement contre-indiquée et un genou légèrement sensible
+    /// n'appellent pas le même traitement, et un réglage global d'affichage
+    /// aurait forcé à choisir un seul comportement pour les deux.
+    /// </para>
+    ///
+    /// <para>
+    /// Elle ne fait RIEN filtrer. Elle voyage avec le marquage du catalogue, et
+    /// c'est l'écran qui décide de la présentation — un exercice contre-indiqué
+    /// pour une contrainte <c>stricte</c> se replie par défaut, un
+    /// <c>leger</c> s'affiche marqué. Voir le doc de <c>ExerciceRendu</c>.
+    /// </para>
+    /// </remarks>
+    public required string Severity { get; set; }
+
+    /// <summary>
+    /// Un aide-mémoire libre — « douleur à la flexion complète ».
+    /// </summary>
+    /// <remarks>
+    /// <b>Il n'atteint AUCUN calcul et AUCUN modèle.</b> C'est une donnée de
+    /// santé au sens de l'article 9, en texte libre : la faire voyager vers un
+    /// fournisseur de modèle demanderait la base légale que
+    /// <c>docs/13-juridique.md</c> § 2 encadre, pour un bénéfice nul — le
+    /// raisonnement se fait sur la région et la sévérité, qui sont des valeurs
+    /// fermées.
+    /// </remarks>
+    public string? Note { get; set; }
 
     public DateTimeOffset DeclaredAt { get; set; }
 }

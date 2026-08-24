@@ -39,12 +39,10 @@ public sealed class NoterUnRessenti(PalierDbContext contexte)
     public async Task<IssueDeRessenti> ExecuterAsync(
         Guid seanceId,
         NoteDeRessenti demande,
-        TimeProvider horloge,
         CancellationToken jeton
     )
     {
         ArgumentNullException.ThrowIfNull(demande);
-        ArgumentNullException.ThrowIfNull(horloge);
 
         var seanceVisible = await contexte
             .Workouts.AsNoTracking()
@@ -92,15 +90,13 @@ public sealed class NoterUnRessenti(PalierDbContext contexte)
                 {
                     WorkoutId = seanceId,
                     ExerciseId = demande.ExerciceId,
-                    Feeling = valeur,
-                    NotedAt = horloge.GetUtcNow(),
+                    Rating = valeur,
                 }
             );
         }
         else
         {
-            existant.Feeling = valeur;
-            existant.NotedAt = horloge.GetUtcNow();
+            existant.Rating = valeur;
         }
 
         await contexte.SaveChangesAsync(jeton).ConfigureAwait(false);
@@ -128,27 +124,27 @@ public sealed class ListerLesRessentis(PalierDbContext contexte)
             return null;
         }
 
-        // DU PLUS RÉCENT AU PLUS ANCIEN, et l'ordre n'est pas cosmétique : les
-        // seuils du § 5 parlent de valeurs CONSÉCUTIVES — « 2 pain
-        // consécutifs », « 3 meh consécutifs ». Un historique rendu dans le
-        // désordre ferait conclure sur des suites qui n'ont pas eu lieu.
-        var lignes = await contexte
-            .ExerciseFeedbacks.AsNoTracking()
-            .Where(f => f.ExerciseId == exerciceId)
-            .OrderByDescending(f => f.NotedAt)
-            .ThenByDescending(f => f.Id)
+        // L'ORDRE VIENT DE LA SÉANCE, et c'est une correction de fond.
+        //
+        // Le § 5 raisonne sur des séances CONSÉCUTIVES — « 2 pain consécutifs »,
+        // « 3 meh consécutifs », « sur les 3 dernières séances ». La chronologie
+        // qui compte est donc celle de l'ENTRAÎNEMENT, pas celle du moment où
+        // l'on a tapé la note. Le lot 5 triait sur une date de saisie : noter
+        // après coup le ressenti d'une séance ancienne l'aurait placée en tête,
+        // et « deux `pain` consécutifs » aurait désigné deux séances qui ne se
+        // suivent pas — une orientation vers un professionnel sur une suite
+        // inventée.
+        var lignes = await (
+            from note in contexte.ExerciseFeedbacks.AsNoTracking()
+            join seance in contexte.Workouts.AsNoTracking() on note.WorkoutId equals seance.Id
+            where note.ExerciseId == exerciceId
+            orderby seance.StartedAt descending, seance.Id descending
+            select new RessentiRendu(note.WorkoutId, note.ExerciseId, note.Rating, seance.StartedAt)
+        )
             .Take(RessentiRendu.BornerLHistorique(combien))
             .ToListAsync(jeton)
             .ConfigureAwait(false);
 
-        return
-        [
-            .. lignes.Select(f => new RessentiRendu(
-                f.WorkoutId,
-                f.ExerciseId,
-                f.Feeling,
-                f.NotedAt
-            )),
-        ];
+        return lignes;
     }
 }

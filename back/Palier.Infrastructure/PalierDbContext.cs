@@ -84,8 +84,7 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
             t.Property(x => x.WorkoutId).HasColumnName("workout_id");
             t.Property(x => x.ExerciseId).HasColumnName("exercise_id");
-            t.Property(x => x.Feeling).HasColumnName("feeling").IsRequired();
-            t.Property(x => x.NotedAt).HasColumnName("noted_at").HasDefaultValueSql("now()");
+            t.Property(x => x.Rating).HasColumnName("rating").IsRequired();
 
             // UN ressenti par exercice et par séance. Changer d'avis en cours
             // de séance est un remplacement, pas un second avis : les seuils du
@@ -116,6 +115,8 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
             t.Property(x => x.OwnerId).HasColumnName("owner_id");
             t.Property(x => x.Region).HasColumnName("region").IsRequired();
+            t.Property(x => x.Severity).HasColumnName("severity").IsRequired().HasDefaultValue("modere");
+            t.Property(x => x.Note).HasColumnName("note");
             t.Property(x => x.DeclaredAt).HasColumnName("declared_at").HasDefaultValueSql("now()");
 
             // UNE ligne par région. Déclarer deux fois la même contrainte est

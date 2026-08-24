@@ -25,8 +25,8 @@ public static class PerteDePoidsRapide
     public static int SemainesConsecutives => 3;
 
     /// <summary>
-    /// Ramène une série de pesées quotidiennes à UNE valeur par semaine : la
-    /// MOYENNE des pesées de la semaine, datée de sa dernière pesée.
+    /// Ramène une série de pesées à UNE valeur par semaine, par MOYENNE MOBILE
+    /// sur sept jours glissants, ancrée sur la dernière pesée.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -34,49 +34,82 @@ public static class PerteDePoidsRapide
     /// <see cref="EstDetectee" /> compare des valeurs CONSÉCUTIVES et suppose
     /// qu'une semaine les sépare — c'est ce que <c>docs/01-conformite.md</c>
     /// § 5 décrit : « plus de 1 % du poids par semaine sur trois semaines ».
-    /// Lui passer quatre pesées quotidiennes lui ferait mesurer quatre JOURS et
-    /// conclure sur trois semaines qui n'ont pas eu lieu.
+    /// Lui passer des pesées quotidiennes lui ferait mesurer des JOURS en
+    /// croyant mesurer des semaines, et la variation d'un jour à l'autre reste
+    /// sous le seuil : la détection serait restée MUETTE chez les utilisateurs
+    /// qui pèsent tous les jours.
     /// </para>
     ///
     /// <para>
-    /// <b>La MOYENNE, et non la dernière pesée de la semaine.</b> Le poids
+    /// <b>Une moyenne MOBILE, et non un découpage par semaine calendaire.</b>
+    /// C'est la correction de D64 sur D61. Le découpage ISO livré au lot 5
+    /// avait un défaut mesurable : quelqu'un qui commence à peser un jeudi a
+    /// une première « semaine » de quatre jours, et l'écart entre sa moyenne et
+    /// celle de la semaine suivante porte sur environ cinq jours, pas sept. Le
+    /// seuil de 1 % appliqué à cinq jours est plus strict qu'il ne devrait —
+    /// donc un faux positif, sur une alerte qui oriente vers un professionnel.
+    /// </para>
+    ///
+    /// <para>
+    /// Les fenêtres glissantes n'ont pas ce défaut : chaque comparaison porte
+    /// sur exactement sept jours, quel que soit le jour où l'utilisateur a
+    /// commencé. C'est aussi plus fidèle au texte, où « par semaine » désigne
+    /// un intervalle et non une case du calendrier.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>La MOYENNE, et non la dernière pesée de la fenêtre.</b> Le poids
     /// corporel varie de 1 à 2 % d'un jour à l'autre — eau, glycogène, contenu
-    /// digestif — soit PLUS que le seuil de 1 % lui-même. Un échantillon
-    /// hebdomadaire unique ferait donc du seuil un générateur de faux
-    /// positifs : deux jours de rétention d'eau suffiraient à déclencher, puis
-    /// à taire, l'alerte. Et un garde-fou qui crie tout le temps est un
-    /// garde-fou qu'on finit par ignorer — ou par désactiver.
+    /// digestif — soit PLUS que le seuil lui-même. Un échantillon unique ferait
+    /// du seuil un générateur de faux positifs.
     /// </para>
     ///
     /// <para>
-    /// <b>Une semaine incomplète compte quand même.</b> La moyenne d'une seule
-    /// pesée vaut cette pesée : refuser les semaines partielles retarderait la
-    /// détection de sept jours au pire moment, celui où quelqu'un vient de
-    /// commencer à perdre vite.
-    /// </para>
-    ///
-    /// <para>
-    /// La semaine est celle du lundi, par
-    /// <see cref="System.Globalization.ISOWeek" /> : elle ne dépend ni de la
-    /// culture du serveur ni du fuseau de l'utilisateur, contrairement au
-    /// premier jour de semaine du calendrier, qui change de pays en pays.
+    /// <b>Une fenêtre VIDE interrompt la série</b>, elle ne s'interpole pas :
+    /// inventer une valeur pour une semaine sans pesée reviendrait à conclure
+    /// sur une mesure qui n'existe pas. Une seule pesée dans une fenêtre suffit
+    /// en revanche — la règle des trois baisses consécutives fait déjà le
+    /// travail anti-bruit, et exiger plus retarderait la détection chez qui
+    /// pèse une fois par semaine, c'est-à-dire la plupart des gens.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<Pesee> MoyennesHebdomadaires(IReadOnlyList<Pesee> pesees)
+    /// <param name="pesees">Les pesées, dans n'importe quel ordre.</param>
+    /// <param name="finDeFenetre">
+    /// Le dernier jour observé. Les fenêtres remontent à partir de lui.
+    /// </param>
+    public static IReadOnlyList<Pesee> MoyennesHebdomadaires(
+        IReadOnlyList<Pesee> pesees,
+        DateOnly finDeFenetre
+    )
     {
         ArgumentNullException.ThrowIfNull(pesees);
 
-        return
-        [
-            .. pesees
-                .GroupBy(p => System.Globalization.ISOWeek.GetYear(p.Jour.ToDateTime(TimeOnly.MinValue)) * 100
-                    + System.Globalization.ISOWeek.GetWeekOfYear(p.Jour.ToDateTime(TimeOnly.MinValue)))
-                .Select(semaine => new Pesee(
-                    semaine.Max(p => p.Jour),
-                    Masse.DepuisKilogrammes(semaine.Average(p => p.Poids.Kilogrammes))
-                ))
-                .OrderBy(p => p.Jour),
-        ];
+        var fenetres = new List<Pesee>();
+
+        // De la plus ancienne à la plus récente, pour que `EstDetectee` reçoive
+        // la série dans l'ordre où elle compare.
+        for (var rang = SemainesConsecutives; rang >= 0; rang--)
+        {
+            var fin = finDeFenetre.AddDays(-7 * rang);
+            var debut = fin.AddDays(-6);
+
+            var dedans = pesees.Where(p => p.Jour >= debut && p.Jour <= fin).ToArray();
+
+            if (dedans.Length == 0)
+            {
+                // La fenêtre est vide : la série est interrompue, et ce qui
+                // précède ne peut plus être comparé à ce qui suit. On repart de
+                // zéro plutôt que d'accoler deux morceaux séparés par un trou.
+                fenetres.Clear();
+                continue;
+            }
+
+            fenetres.Add(
+                new Pesee(fin, Masse.DepuisKilogrammes(dedans.Average(p => p.Poids.Kilogrammes)))
+            );
+        }
+
+        return fenetres;
     }
 
     public static bool EstDetectee(IReadOnlyList<Pesee> pesees)

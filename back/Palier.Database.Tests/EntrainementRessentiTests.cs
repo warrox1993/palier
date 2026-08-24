@@ -167,29 +167,30 @@ public sealed class EntrainementRessentiTests(BaseFixture baseDeDonnees)
     [Fact]
     public async Task L_historique_sort_du_PLUS_RECENT_au_plus_ancien()
     {
-        // L'ordre n'est pas cosmétique : les seuils du § 5 parlent de valeurs
-        // CONSÉCUTIVES — « 2 pain consécutifs », « 3 meh consécutifs ». Un
-        // historique rendu dans le désordre ferait conclure sur des suites qui
-        // n'ont pas eu lieu, et l'une de ces conclusions oriente vers un
-        // professionnel.
+        // L'ORDRE VIENT DE LA SÉANCE, PAS DE LA SAISIE — la correction de fond
+        // apportée après relecture de `03-donnees.md`.
+        //
+        // Les seuils du § 5 parlent de séances CONSÉCUTIVES. Trier sur une date
+        // de saisie ferait passer en tête le ressenti d'une séance ancienne
+        // noté après coup, et « deux `pain` consécutifs » désignerait deux
+        // séances qui ne se suivent pas — une orientation vers un professionnel
+        // sur une suite inventée.
         var proprietaire = await CompteAsync();
         var exercice = await ExercicePublicAsync();
         await using var hote = Hote(proprietaire);
         using var portee = hote.Services.CreateScope();
 
-        foreach (var (jour, valeur) in new[] { (1, "good"), (8, "meh"), (15, "pain") })
+        // LES SÉANCES sont datées, les notes ne le sont pas — c'est justement
+        // le point. Elles sont saisies dans le DÉSORDRE chronologique : la
+        // séance du 15 est notée en premier, celle du 1er en dernier. Si
+        // l'ordre venait de la saisie, la sortie serait exactement inversée.
+        foreach (var (jour, valeur) in new[] { (15, "pain"), (8, "meh"), (1, "good") })
         {
             var seance = await OuvrirAsync(
                 portee.ServiceProvider,
                 new DateTimeOffset(2026, 8, jour, 9, 0, 0, TimeSpan.Zero)
             );
-            await NoterAsync(
-                portee.ServiceProvider,
-                seance,
-                exercice,
-                valeur,
-                new HorlogeFixe(new DateTimeOffset(2026, 8, jour, 10, 0, 0, TimeSpan.Zero))
-            );
+            await NoterAsync(portee.ServiceProvider, seance, exercice, valeur);
         }
 
         var historique = await ListerAsync(portee.ServiceProvider, exercice);
@@ -311,8 +312,7 @@ public sealed class EntrainementRessentiTests(BaseFixture baseDeDonnees)
         IServiceProvider services,
         Guid seance,
         Guid exercice,
-        string valeur,
-        TimeProvider? horloge = null
+        string valeur
     ) =>
         HarnaisHttp.ExecuterAsync(
             services,
@@ -321,7 +321,6 @@ public sealed class EntrainementRessentiTests(BaseFixture baseDeDonnees)
                 new NoteDeRessenti(exercice, valeur),
                 services.GetRequiredService<IExecuteurDeCasDUsage>(),
                 services.GetRequiredService<NoterUnRessenti>(),
-                horloge ?? TimeProvider.System,
                 CancellationToken.None
             )
         );

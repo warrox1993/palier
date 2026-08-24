@@ -139,8 +139,9 @@ public sealed class SchemaTests(BaseFixture baseDeDonnees)
         foreach (
             var (table, contrainte) in new[]
             {
-                ("exercise_feedback", "ck_exercise_feedback_feeling"),
+                ("exercise_feedback", "ck_exercise_feedback_rating"),
                 ("user_constraints", "ck_user_constraints_region"),
+                ("user_constraints", "ck_user_constraints_severity"),
             }
         )
         {
