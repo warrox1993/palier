@@ -115,9 +115,9 @@ Le point 7 est structurant : il conditionne l'architecture de la couche IA et do
 
 En parallèle du développement, car c'est le poste le plus long et le plus sous-estimé :
 
-- Catalogue de 250 à 400 exercices avec contre-indications
+- Catalogue de 250 à 400 exercices avec contre-indications — **255 livrés ; la relecture reste due**
 - Schémas vectoriels des mouvements — commencer par les 60 exercices les plus utilisés
-- Programmes modèles, relus par le kinésithérapeute
+- Programmes modèles, relus par le kinésithérapeute — **les 9 sont écrits et en base ; la relecture reste due**
 - Pages éducatives
 - Emails transactionnels, français et anglais
 
@@ -130,7 +130,7 @@ Compter 6 à 10 semaines de travail, étalées. Voir `14-contenu.md`.
 ## Étape 2 — Onboarding et entraînement
 
 - Catalogue d'exercices avec contre-indications — **API livrée au lot 5**
-- Programmes modèles par contrainte
+- Programmes modèles par contrainte — **API et référentiel livrés au jalon des programmes** : 9 modèles, 36 séances, 157 poses, plus la copie vers un programme personnel (D72 à D75). **Reste dû : la relecture par un kinésithérapeute**
 - **Écran de séance**, selon la structure imposée de `02-design.md`
 - Suggestion de progression, détection de plateau — **API livrée au lot 5**
 - Ressenti par exercice — **API livrée au lot 5** ; les seuils du § 5 restent à écrire, avec l'écran qui les montre

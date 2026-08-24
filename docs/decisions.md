@@ -1239,3 +1239,56 @@ Il passe par `palier_migrations` et la politique `migrations_referentiel`, jamai
 **Le catalogue n'est PAS relu par un professionnel de santé.** `14-contenu.md` § 2 l'exige, et cette relecture n'a pas eu lieu. Les contre-indications livrées sont **dérivées mécaniquement** du tableau de `05-entrainement.md` § 4 : une application du document, pas un avis médical.
 
 La mention figure en tête du fichier de référentiel, dans la colonne Source de `db/SOURCES.md`, et ici. C'est la seule façon honnête de livrer un contenu de santé qui attend encore sa validation.
+
+---
+
+## D72 à D75 — le système de programmes
+
+_24/08/2026. `03-donnees.md` fixait déjà les trois tables ; aucune n'existait en base. Ce lot les pose, livre les neuf programmes modèles de `14-contenu.md` § 2, et ouvre la construction d'un programme personnel._
+
+### D72 — les modèles vivent dans la MÊME table que les programmes personnels
+
+`16-projet.md` § 4 signalait le point comme non tranché, et interdisait au lot 2 de le trancher seul : « `04-programs.sql` livre **9 programmes modèles**, mais `programs.owner_id` est `not null references auth.users` ». **Le porteur du projet a tranché le 24/08/2026.**
+
+`owner_id` devient NULLABLE, et `is_template` sépare les deux populations. C'est la forme « catalogue mixte » déjà en vigueur sur `exercises` — deux politiques permissives **séparées**, jamais un `OR` dans une seule, pour la raison que la migration du socle explique déjà : aucun ordre d'évaluation n'est garanti entre les branches d'un `OR`.
+
+**Ce que les deux autres formes coûtaient.** Une table `program_templates` distincte dupliquait l'arbre entier — jours et exercices compris, six tables au lieu de trois — et toute évolution se serait faite deux fois, avec la certitude qu'un jour l'une des deux serait oubliée. Un utilisateur système propriétaire des neuf modèles gardait le schéma intact, mais faisait entrer une identité qui n'est celle de personne dans `AspNetUsers` — que D38 tient délibérément hors des politiques RLS.
+
+**Ce que la forme retenue donne en plus, et qui a emporté la décision :** copier un modèle vers un programme personnel ne traduit rien. C'est la même forme, avec un propriétaire au lieu de nul.
+
+### D73 — la recherche par nom NORMALISE les accents, sans extension
+
+Le catalogue compte 255 mouvements. Les lister tous pour que le navigateur filtre était tenable à soixante ; ça ne l'est plus, et surtout ça ne répond pas à la demande — construire un programme en **tapant des noms d'exercices**.
+
+`GET /api/v1/exercices?recherche=` cherche donc au serveur, dans les deux langues. Le problème réel est français : qui tape `developpe couche` sans accent ne doit pas rester bredouille devant `Développé couché`.
+
+**Une colonne générée `search_key`, et aucune extension.** `unaccent` aurait demandé un `create extension` sur chaque environnement — un privilège de plus à négocier là où D37 pose « aucun superutilisateur ».
+
+Une collation ICU non déterministe était le candidat sérieux : elle ignore accents ET casse d'un seul geste, sans colonne supplémentaire. **Mesuré sur le cluster du projet — PostgreSQL 18.6 — `LIKE` fonctionne dessus**, la restriction des versions antérieures ayant été levée. Elle est écartée pour deux autres raisons :
+
+- Elle changerait le sens de `=` sur `name_fr` **partout**, pas seulement dans la recherche. Une collation s'applique à la colonne, pas à un usage : les comparaisons, les jointures et les contraintes d'unicité en hériteraient toutes, pour un besoin qui ne concerne qu'un écran.
+- Elle repose sur un comportement de PostgreSQL 18. Le moteur est hébergé chez un fournisseur dont ce dépôt ne fige pas la version, et `CLAUDE.md` § 3 exige qu'un changement d'hébergeur reste possible en une journée.
+
+Reste `translate()` sur la colonne minuscule, stockée en colonne générée : du SQL portable, aucune dépendance, aucun effet hors de la recherche.
+
+**Aucun index sur cette colonne, et c'est délibéré.** Un `LIKE '%terme%'` n'est ancré à gauche ni à droite : mesuré, un btree ne produit qu'un `Filter` sur un parcours complet, jamais un `Index Cond`. Poser un index aurait donné l'apparence d'une optimisation sans en être une. À 255 lignes le parcours est immédiat ; si le catalogue atteint un jour la taille où cela pèse, c'est un index trigramme qu'il faudra — et une décision datée pour l'extension qu'il demande.
+
+### D74 — un modèle se COPIE, il ne se référence pas
+
+`POST /api/v1/programmes/{id}/copie` duplique le modèle en programme personnel. L'alternative — un programme personnel qui pointe vers son modèle et n'enregistre que ses écarts — économisait des lignes et coûtait la seule chose qui compte : **l'utilisateur ne pourrait plus rien changer sans que le sens de son programme dépende d'une ligne qu'il ne possède pas.** Corriger un modèle aurait modifié, sans prévenir, le programme de tous ceux qui en étaient partis.
+
+Une copie est figée le jour où elle est prise. C'est ce qu'on attend d'un programme d'entraînement, et c'est aussi ce que le RGPD attend d'une donnée dont l'utilisateur est responsable.
+
+### D75 — un exercice contre-indiqué est MARQUÉ à la construction, jamais refusé
+
+D63 posait la règle pour le catalogue : « le catalogue se marque, ne se filtre jamais ». Elle vaut identiquement quand on bâtit un programme. Ajouter à son programme un mouvement contre-indiqué pour une contrainte qu'on a déclarée est **permis**, et signalé.
+
+Refuser serait plus simple à écrire, et ce serait une faute : `01-conformite.md` sépare informer de prescrire, et un logiciel qui interdit un mouvement à quelqu'un dont il ignore le dossier prescrit. L'utilisateur, lui, sait ce que son kinésithérapeute lui a dit.
+
+### CE QUI RESTE DÛ, et qui doit se voir
+
+**Les neuf programmes ne sont PAS relus par un kinésithérapeute.** `14-contenu.md` § 2 l'exige explicitement — « relus par un kinésithérapeute pour la partie contraintes […] tout aussi nécessaire » que la relecture du diététicien pour la nutrition.
+
+La réserve pèse plus lourd sur cinq d'entre eux : **Reprise cervicale, Reprise lombaire, Épaule ménagée, Genou ménagé, Reprise**. Ce sont ceux qu'on propose à quelqu'un qui revient de blessure, c'est-à-dire exactement la population que `00-produit.md` place au cœur de la cible.
+
+Comme pour le catalogue, la mention figure en tête du fichier de référentiel, dans `db/SOURCES.md`, et ici.

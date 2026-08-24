@@ -234,21 +234,24 @@ chiffre pas et ne supervise pas.
 
 ### Le référentiel
 
-| Fichier                | Contenu                                      | Source                   |
-| ---------------------- | -------------------------------------------- | ------------------------ |
-| `01-nutrient-refs.sql` | Références et limites hautes, ~40 nutriments | EFSA DRV                 |
-| `02-exercises.sql`     | 60 exercices prioritaires puis extension     | Rédigé, relu par le kiné |
-| `03-foods.sql`         | 300 aliments courants                        | CIQUAL                   |
-| `04-programs.sql`      | 9 programmes modèles                         | Rédigés, relus           |
+| Fichier                | Contenu                                      | Source                 |
+| ---------------------- | -------------------------------------------- | ---------------------- |
+| `01-nutrient-refs.sql` | Références et limites hautes, ~40 nutriments | EFSA DRV               |
+| `02*-exercises*.sql`   | 255 exercices, en trois fichiers             | Rédigé, **NON relu**   |
+| `03-foods.sql`         | 300 aliments courants                        | CIQUAL                 |
+| `04-programs.sql`      | 9 programmes modèles, 36 séances, 157 poses  | Rédigés, **NON relus** |
 
-**Deux de ces quatre lignes ne sont PAS tranchées, et le lot 2 n'a pas le droit de les trancher
-seul** — signalées ici plutôt que devinées :
+**Une de ces quatre lignes n'est PAS tranchée, et aucun lot n'a le droit de la trancher
+seul** — signalée ici plutôt que devinée. La seconde l'a été le 24/08/2026 :
 
 - `03-foods.sql` est-il du **référentiel de production** ou un jeu de développement ? La réponse
   change le dossier qui le porte et le moment où il s'applique.
-- `04-programs.sql` livre **9 programmes modèles**, mais `programs.owner_id` est
+- ~~`04-programs.sql` livre **9 programmes modèles**, mais `programs.owner_id` est
   `not null references auth.users` : le schéma n'a **aucune place pour un programme sans
-  propriétaire**.
+  propriétaire**.~~ **TRANCHÉ le 24/08/2026 par le porteur du projet — D72.** `owner_id`
+  devient nullable et `is_template` sépare les deux populations : c'est la forme « catalogue
+  mixte » déjà en vigueur sur `exercises`, avec ses deux politiques RLS séparées. Une seule
+  ligne du tableau ci-dessus reste donc ouverte.
 
 ### La démonstration
 

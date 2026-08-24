@@ -90,6 +90,18 @@ public sealed class Exercise
     /// </remarks>
     public string? Slug { get; set; }
 
+    /// <summary>
+    /// Les deux noms, en minuscules et sans accents. ENGENDRÉE PAR LE MOTEUR —
+    /// D73 : rien ne l'écrit, et donc rien ne peut oublier de la mettre à jour.
+    /// </summary>
+    /// <remarks>
+    /// Elle existe pour que <c>developpe couche</c> trouve « Développé
+    /// couché ». Sans elle, la recherche par nom ne servirait que ceux qui
+    /// tapent leurs accents — et le clavier d'un téléphone ne les propose pas
+    /// spontanément.
+    /// </remarks>
+    public string? SearchKey { get; private set; }
+
     /// <summary>Le nom français.</summary>
     public required string NameFr { get; set; }
 
@@ -398,3 +410,141 @@ public sealed class ExerciseVariant
 }
 
 #pragma warning restore CA1819
+
+/// <summary>
+/// Un programme d'entraînement — un modèle du catalogue, ou celui d'un
+/// utilisateur.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Le type ne s'appelle pas <c>Program</c></b>, bien que la table s'appelle
+/// <c>programs</c> et que toutes les autres entités suivent le nom de leur
+/// table. <c>Program</c> est le type d'entrée engendré par les instructions de
+/// premier niveau de <c>Palier.Api</c>, et <c>ArchitectureTests</c> s'en sert
+/// déjà pour désigner cet assemblage — <c>typeof(Program).Assembly</c>. Deux
+/// types de ce nom rendraient cette ligne ambiguë le jour où un fichier
+/// importerait les deux espaces de noms.
+/// </para>
+///
+/// <para>
+/// <b>Les modèles et les programmes personnels partagent cette table</b> —
+/// D72. <c>OwnerId</c> est NUL pour un modèle, <c>IsTemplate</c> les sépare, et
+/// deux politiques RLS permissives séparées gardent chacune sa population.
+/// C'est la forme « catalogue mixte » déjà en vigueur sur <see cref="Exercise"/>.
+/// </para>
+/// </remarks>
+public sealed class TrainingProgram
+{
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// La clé naturelle d'un modèle — <c>reprise-lombaire</c>. NULLE pour le
+    /// programme d'un utilisateur.
+    /// </summary>
+    /// <remarks>
+    /// Même rôle que sur <see cref="Exercise"/> — D68 : elle rend
+    /// <c>04-programs.sql</c> rejouable par <c>on conflict (slug)</c>, sans
+    /// figer dans le fichier des UUID que personne ne pourrait relire.
+    /// </remarks>
+    public string? Slug { get; set; }
+
+    /// <summary>Le propriétaire. NUL pour un modèle du catalogue — D72.</summary>
+    public Guid? OwnerId { get; set; }
+
+    /// <summary>Vrai pour les neuf modèles de <c>14-contenu.md</c> § 2.</summary>
+    public bool IsTemplate { get; set; }
+
+    /// <summary>Le nom français.</summary>
+    public required string NameFr { get; set; }
+
+    /// <summary>Le nom anglais. NUL pour un programme personnel, EXIGÉ d'un modèle.</summary>
+    public string? NameEn { get; set; }
+
+    /// <summary>À qui ce programme s'adresse, en français. Exigé d'un modèle.</summary>
+    public string? DescriptionFr { get; set; }
+
+    /// <summary>À qui ce programme s'adresse, en anglais. Exigé d'un modèle.</summary>
+    public string? DescriptionEn { get; set; }
+
+    /// <summary>Pourquoi ces choix, en français. Exigé d'un modèle.</summary>
+    /// <remarks>
+    /// <c>14-contenu.md</c> § 2 en fait une obligation, avec son motif : « Un
+    /// utilisateur qui comprend pourquoi un exercice est absent l'accepte ;
+    /// sinon il le rajoute et se blesse. » La colonne porte cette explication,
+    /// et <c>ck_programs_modele_complet</c> interdit qu'un modèle en manque.
+    /// </remarks>
+    public string? NotesFr { get; set; }
+
+    /// <summary>Pourquoi ces choix, en anglais. Exigé d'un modèle.</summary>
+    public string? NotesEn { get; set; }
+
+    /// <summary>Le nombre de séances hebdomadaires visé, borne basse.</summary>
+    public int? FrequencyMin { get; set; }
+
+    /// <summary>La borne haute. Égale à la basse quand le modèle en fixe une seule.</summary>
+    public int? FrequencyMax { get; set; }
+
+    /// <summary>
+    /// La contrainte que ce modèle ménage — <c>cervicale</c>, <c>lombaire</c>,
+    /// <c>epaule</c>, <c>genou</c> — ou NUL quand il n'en vise aucune.
+    /// </summary>
+    /// <remarks>
+    /// Les valeurs sont celles de <c>user_constraints.region</c>, et la
+    /// contrainte <c>CHECK</c> les reprend. Ce champ ne FILTRE rien : il
+    /// permet de proposer d'abord ce qui correspond à ce que l'utilisateur a
+    /// déclaré, sans jamais cacher le reste — D63, D75.
+    /// </remarks>
+    public string? TargetsConstraint { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>Une séance type dans un programme — « Jour A », « Haut du corps ».</summary>
+public sealed class ProgramDay
+{
+    public Guid Id { get; set; }
+
+    public Guid ProgramId { get; set; }
+
+    /// <summary>Le libellé français.</summary>
+    public required string LabelFr { get; set; }
+
+    /// <summary>Le libellé anglais. NUL pour un programme personnel.</summary>
+    public string? LabelEn { get; set; }
+
+    /// <summary>Le rang dans le programme, à partir de 1.</summary>
+    public int Position { get; set; }
+}
+
+/// <summary>Un exercice posé dans une séance type, avec ses cibles.</summary>
+public sealed class ProgramExercise
+{
+    public Guid Id { get; set; }
+
+    public Guid ProgramDayId { get; set; }
+
+    public Guid ExerciseId { get; set; }
+
+    /// <summary>Le rang dans la séance, à partir de 1.</summary>
+    public int Position { get; set; }
+
+    public int TargetSets { get; set; }
+
+    public int TargetRepsMin { get; set; }
+
+    /// <summary>La borne haute. NULLE quand la cible est un nombre exact.</summary>
+    public int? TargetRepsMax { get; set; }
+
+    /// <summary>
+    /// Les répétitions gardées en réserve, telles que <c>05-entrainement.md</c>
+    /// les définit.
+    /// </summary>
+    public int TargetRir { get; set; }
+
+    public int RestSeconds { get; set; }
+
+    /// <summary>Une consigne propre à ce programme. Libre, et jamais obligatoire.</summary>
+    public string? Note { get; set; }
+}

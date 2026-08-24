@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Palier.Domain.Entrainement;
 using Palier.Infrastructure.Coffre;
 using Palier.Infrastructure.Entites;
 using Palier.Infrastructure.Identite;
@@ -60,6 +61,18 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
     /// n'en écrit jamais : <c>palier_app</c> n'a que <c>select</c> sur cette
     /// table, et c'est une commande d'exploitation qui pose la première.
     /// </summary>
+    /// <summary>
+    /// Les programmes — les neuf modèles du catalogue ET ceux des utilisateurs,
+    /// dans la même table. D72.
+    /// </summary>
+    public DbSet<TrainingProgram> Programs => Set<TrainingProgram>();
+
+    /// <summary>Les séances types d'un programme.</summary>
+    public DbSet<ProgramDay> ProgramDays => Set<ProgramDay>();
+
+    /// <summary>Les exercices posés dans une séance type, avec leurs cibles.</summary>
+    public DbSet<ProgramExercise> ProgramExercises => Set<ProgramExercise>();
+
     public DbSet<CleDeDonnees> ClesDeDonnees => Set<CleDeDonnees>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -253,6 +266,19 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
                 .HasFilter("is_custom = false")
                 .HasDatabaseName("ux_exercises_slug");
 
+            // La clé de recherche — D73. Une colonne GÉNÉRÉE et stockée : le
+            // moteur la tient à jour, et aucun chemin d'écriture ne peut
+            // l'oublier. Un déclencheur aurait fait le même travail en laissant
+            // la possibilité de le contourner.
+            //
+            // L'EXPRESSION VIENT DU DOMAINE, elle n'est pas écrite ici. La même
+            // règle sert à normaliser le terme tapé par l'utilisateur, et les
+            // deux doivent changer ensemble : deux listes de caractères à tenir
+            // identiques à la main auraient divergé.
+            t.Property(x => x.SearchKey)
+                .HasColumnName("search_key")
+                .HasComputedColumnSql(CleDeRecherche.ExpressionSql, stored: true);
+
             t.Property(x => x.Equipment).HasColumnName("equipment");
             t.Property(x => x.PrimaryMuscles).HasColumnName("primary_muscles").IsRequired();
             t.Property(x => x.SecondaryMuscles)
@@ -339,6 +365,171 @@ public class PalierDbContext(DbContextOptions<PalierDbContext> options)
             t.HasIndex(x => new { x.OwnerId, x.MeasuredOn })
                 .HasDatabaseName("ux_body_weight_owner_id_measured_on")
                 .IsUnique();
+        });
+
+        builder.Entity<TrainingProgram>(t =>
+        {
+            t.ToTable(
+                "programs",
+                b =>
+                {
+                    // Un MODÈLE doit être complet. Les mêmes colonnes restent
+                    // libres pour le programme d'un utilisateur, qui donne un
+                    // nom et rien d'autre — c'est D70, transposé mot pour mot
+                    // du catalogue d'exercices.
+                    //
+                    // Sans cette contrainte, un modèle sans note entrerait au
+                    // catalogue public, et `14-contenu.md` § 2 dit précisément
+                    // ce que ça coûte : « Un utilisateur qui comprend pourquoi
+                    // un exercice est absent l'accepte ; sinon il le rajoute et
+                    // se blesse. »
+                    b.HasCheckConstraint(
+                        "ck_programs_modele_complet",
+                        "not is_template or (slug is not null and name_en is not null "
+                            + "and description_fr is not null and description_en is not null "
+                            + "and notes_fr is not null and notes_en is not null "
+                            + "and frequency_min is not null and frequency_max is not null)"
+                    );
+
+                    // Les deux populations de D72, dites au moteur : un modèle
+                    // n'a PAS de propriétaire, un programme personnel en a un.
+                    // La règle vit ici et non dans le code applicatif, parce
+                    // qu'une restauration ou une écriture directe la rencontre
+                    // aussi.
+                    b.HasCheckConstraint(
+                        "ck_programs_proprietaire",
+                        "(is_template and owner_id is null) or (not is_template and owner_id is not null)"
+                    );
+
+                    // La liste fermée des régions de `user_constraints`. NUL
+                    // est permis : la plupart des modèles ne visent aucune
+                    // contrainte.
+                    b.HasCheckConstraint(
+                        "ck_programs_targets_constraint",
+                        "targets_constraint is null or targets_constraint in "
+                            + "('cervicale', 'lombaire', 'epaule', 'genou', 'hanche', 'poignet', 'cheville')"
+                    );
+
+                    b.HasCheckConstraint(
+                        "ck_programs_frequence",
+                        "frequency_min is null or (frequency_min between 1 and 7 "
+                            + "and frequency_max between frequency_min and 7)"
+                    );
+                }
+            );
+            t.HasKey(x => x.Id);
+            t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            t.Property(x => x.Slug).HasColumnName("slug");
+            t.Property(x => x.OwnerId).HasColumnName("owner_id");
+            t.Property(x => x.IsTemplate).HasColumnName("is_template").HasDefaultValue(false);
+            t.Property(x => x.NameFr).HasColumnName("name_fr").IsRequired();
+            t.Property(x => x.NameEn).HasColumnName("name_en");
+            t.Property(x => x.DescriptionFr).HasColumnName("description_fr");
+            t.Property(x => x.DescriptionEn).HasColumnName("description_en");
+            t.Property(x => x.NotesFr).HasColumnName("notes_fr");
+            t.Property(x => x.NotesEn).HasColumnName("notes_en");
+            t.Property(x => x.FrequencyMin).HasColumnName("frequency_min");
+            t.Property(x => x.FrequencyMax).HasColumnName("frequency_max");
+            t.Property(x => x.TargetsConstraint).HasColumnName("targets_constraint");
+            t.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            t.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+
+            // Unicité PARTIELLE, comme sur les exercices : elle ne porte que
+            // sur les modèles. Un utilisateur n'écrit pas de slug, et deux
+            // programmes personnels sans slug ne doivent pas se gêner.
+            t.HasIndex(x => x.Slug)
+                .IsUnique()
+                .HasFilter("is_template = true")
+                .HasDatabaseName("ux_programs_slug");
+
+            t.HasIndex(x => x.OwnerId).HasDatabaseName("ix_programs_owner_id");
+
+            t.HasOne<Utilisateur>()
+                .WithMany()
+                .HasForeignKey(x => x.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ProgramDay>(t =>
+        {
+            t.ToTable(
+                "program_days",
+                b => b.HasCheckConstraint("ck_program_days_position", "position >= 1")
+            );
+            t.HasKey(x => x.Id);
+            t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            t.Property(x => x.ProgramId).HasColumnName("program_id");
+            t.Property(x => x.LabelFr).HasColumnName("label_fr").IsRequired();
+            t.Property(x => x.LabelEn).HasColumnName("label_en");
+            t.Property(x => x.Position).HasColumnName("position");
+
+            // Deux séances ne partagent pas un rang. La contrainte tient la
+            // promesse que l'écran fait en les numérotant.
+            t.HasIndex(x => new { x.ProgramId, x.Position })
+                .IsUnique()
+                .HasDatabaseName("ux_program_days_program_id_position");
+
+            t.HasOne<TrainingProgram>()
+                .WithMany()
+                .HasForeignKey(x => x.ProgramId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ProgramExercise>(t =>
+        {
+            t.ToTable(
+                "program_exercises",
+                b =>
+                {
+                    b.HasCheckConstraint("ck_program_exercises_position", "position >= 1");
+
+                    // Les bornes du raisonnable, posées au moteur. Elles ne
+                    // remplacent pas la validation applicative — elles la
+                    // doublent sur le chemin qu'une écriture directe emprunte.
+                    b.HasCheckConstraint(
+                        "ck_program_exercises_series",
+                        "target_sets between 1 and 20"
+                    );
+                    b.HasCheckConstraint(
+                        "ck_program_exercises_repetitions",
+                        "target_reps_min between 1 and 100 "
+                            + "and (target_reps_max is null or target_reps_max between target_reps_min and 100)"
+                    );
+                    b.HasCheckConstraint("ck_program_exercises_rir", "target_rir between 0 and 10");
+                    b.HasCheckConstraint(
+                        "ck_program_exercises_repos",
+                        "rest_seconds between 0 and 900"
+                    );
+                }
+            );
+            t.HasKey(x => x.Id);
+            t.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            t.Property(x => x.ProgramDayId).HasColumnName("program_day_id");
+            t.Property(x => x.ExerciseId).HasColumnName("exercise_id");
+            t.Property(x => x.Position).HasColumnName("position");
+            t.Property(x => x.TargetSets).HasColumnName("target_sets");
+            t.Property(x => x.TargetRepsMin).HasColumnName("target_reps_min");
+            t.Property(x => x.TargetRepsMax).HasColumnName("target_reps_max");
+            t.Property(x => x.TargetRir).HasColumnName("target_rir");
+            t.Property(x => x.RestSeconds).HasColumnName("rest_seconds");
+            t.Property(x => x.Note).HasColumnName("note");
+
+            t.HasIndex(x => new { x.ProgramDayId, x.Position })
+                .IsUnique()
+                .HasDatabaseName("ux_program_exercises_day_id_position");
+
+            t.HasOne<ProgramDay>()
+                .WithMany()
+                .HasForeignKey(x => x.ProgramDayId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // `Restrict`, comme partout où le catalogue est référencé : un
+            // exercice cité par un programme ne disparaît pas sous lui. La
+            // route de suppression traduit ce refus en 409 nommé.
+            t.HasOne<Exercise>()
+                .WithMany()
+                .HasForeignKey(x => x.ExerciseId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

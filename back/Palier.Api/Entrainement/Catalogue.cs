@@ -26,21 +26,52 @@ internal static class Catalogue
         groupe.MapDelete("/exercices/{identifiant:guid}", SupprimerAsync);
     }
 
+    /// <summary>
+    /// Rend le catalogue visible. Le paramètre de requête <c>recherche</c> le
+    /// borne à un fragment de nom, français ou anglais, accents optionnels ;
+    /// absent, la route rend le catalogue entier.
+    /// </summary>
+    /// <remarks>
+    /// La recherche existe pour la construction d'un programme — D73 : sur deux
+    /// cent cinquante mouvements, taper un nom est le seul geste praticable au
+    /// doigt. Elle est bornée pour la même raison que tout le reste : un terme
+    /// d'un mégaoctet est une entrée hostile ordinaire.
+    /// </remarks>
     public static async Task<IResult> ListerAsync(
         IExecuteurDeCasDUsage executeur,
         ListerLeCatalogue gestionnaire,
-        CancellationToken jeton
+        CancellationToken jeton,
+        string? recherche = null
     )
     {
         ArgumentNullException.ThrowIfNull(executeur);
         ArgumentNullException.ThrowIfNull(gestionnaire);
 
+        if (recherche is { Length: > LongueurMaximaleDeLaRecherche })
+        {
+            return Results.Json(
+                new Reponse("RechercheTropLongue"),
+                statusCode: StatusCodes.Status400BadRequest
+            );
+        }
+
         var exercices = await executeur
-            .ExecuterAsync(nameof(ListerLeCatalogue), gestionnaire.ExecuterAsync, jeton)
+            .ExecuterAsync(
+                nameof(ListerLeCatalogue),
+                j => gestionnaire.ExecuterAsync(recherche, j),
+                jeton
+            )
             .ConfigureAwait(false);
 
         return Results.Ok(exercices);
     }
+
+    /// <summary>La longueur maximale du terme cherché.</summary>
+    /// <remarks>
+    /// Aussi longue que le plus long nom d'exercice acceptable : chercher plus
+    /// long que ce qui peut exister ne trouverait rien par construction.
+    /// </remarks>
+    internal const int LongueurMaximaleDeLaRecherche = CreationDExercice.LongueurMaximaleDuNom;
 
     public static async Task<IResult> CreerAsync(
         CreationDExercice demande,

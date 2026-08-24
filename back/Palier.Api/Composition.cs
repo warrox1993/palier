@@ -394,6 +394,12 @@ internal static class Composition
         constructeur.Services.AddScoped<ListerLesContraintes>();
         constructeur.Services.AddScoped<RemplacerLesContraintes>();
         constructeur.Services.AddScoped<RetirerUneContrainte>();
+        constructeur.Services.AddScoped<ListerLesProgrammes>();
+        constructeur.Services.AddScoped<LireUnProgramme>();
+        constructeur.Services.AddScoped<CreerUnProgramme>();
+        constructeur.Services.AddScoped<RemplacerUnProgramme>();
+        constructeur.Services.AddScoped<CopierUnProgramme>();
+        constructeur.Services.AddScoped<SupprimerUnProgramme>();
 
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();

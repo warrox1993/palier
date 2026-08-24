@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.EntityFrameworkCore;
 using Palier.Application.Entrainement;
 using Palier.Application.Pipeline;
+using Palier.Domain.Entrainement;
 using Palier.Infrastructure.Entites;
 
 namespace Palier.Infrastructure.Entrainement;
@@ -86,15 +87,40 @@ public enum IssueDeSuppressionDExercice
 [GestionnaireDeCasDUsage]
 public sealed class ListerLeCatalogue(PalierDbContext contexte)
 {
-    public async Task<IReadOnlyList<ExerciceRendu>> ExecuterAsync(CancellationToken jeton)
+    /// <summary>
+    /// Rend le catalogue visible, éventuellement borné à un fragment de nom —
+    /// dans l'une ou l'autre langue. Un terme nul rend le catalogue entier.
+    /// </summary>
+    public async Task<IReadOnlyList<ExerciceRendu>> ExecuterAsync(
+        string? recherche,
+        CancellationToken jeton
+    )
     {
-        // AUCUN filtre. Les deux politiques font le travail : le public sort
-        // par `catalogue_public`, les siens par `proprietaire`, et ceux des
-        // autres ne sortent pas. Écrire `where is_custom == false || owner_id
-        // == moi` ici serait une troisième expression de la même règle — celle
-        // qui divergerait le jour où les politiques changent.
-        var exercices = await contexte
-            .Exercises.AsNoTracking()
+        // AUCUN filtre D'APPARTENANCE. Les deux politiques font ce travail : le
+        // public sort par `catalogue_public`, les siens par `proprietaire`, et
+        // ceux des autres ne sortent pas. Écrire `where is_custom == false ||
+        // owner_id == moi` ici serait une troisième expression de la même règle
+        // — celle qui divergerait le jour où les politiques changent.
+        var lignes = contexte.Exercises.AsNoTracking();
+
+        // Le terme est normalisé par la MÊME règle que la colonne — D73. Sans
+        // cela, `Développé` chercherait un accent que la clé ne contient pas,
+        // et ne trouverait jamais rien.
+        var motif = CleDeRecherche.MotifPourLike(recherche);
+        if (motif.Length > 0)
+        {
+            // `EF.Functions.Like` et non `Contains` : `Contains` engendre
+            // `strpos(...) > 0`, dont la sémantique de casse dépend du
+            // fournisseur. Ici les deux côtés sont déjà normalisés par la même
+            // règle, et `Like` dit exactement ce qu'on veut.
+            //
+            // Le motif est un PARAMÈTRE LIÉ, et ses jokers sont ÉCHAPPÉS. Un
+            // utilisateur qui tape `%` cherche un pour-cent : il ne pilote pas
+            // la requête.
+            lignes = lignes.Where(e => e.SearchKey != null && EF.Functions.Like(e.SearchKey, motif));
+        }
+
+        var exercices = await lignes
             .OrderBy(e => e.NameFr)
             .ToListAsync(jeton)
             .ConfigureAwait(false);
