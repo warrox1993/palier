@@ -1408,3 +1408,61 @@ Pour une personne trans sous hormonothérapie, la masse maigre se déplace réel
 ### Ce qui reste dû
 
 Le dossier complet vit dans `.superpowers/sdd/2026-08-24-etude-sexe/`. Il porte des sections que ce journal ne résume pas — étapes de vie, plancher pelvien, signaux d'orientation vers un professionnel — et **elles attendent la même relecture que le catalogue**.
+
+---
+
+## D79 — la nutrition corrigée à la source, et un défaut qui plantait déjà
+
+_25/08/2026. Audit de `04-nutrition.md` par trente agents — 230 constats — puis neuf agents supplémentaires pour trancher les trois points que le porteur a contestés._
+
+### Ce qui était cassé DANS LE CODE, pas seulement dans le document
+
+`Palier.Domain/Objectifs/CibleMacronutriments.cs` levait un `ArgumentOutOfRangeException` quand l'énergie ne couvrait pas les protéines et les lipides demandés. **Provoqué le 25/08/2026 sur un profil ordinaire** — femme de 100 kg, 155 cm, 55 ans, sédentaire, déficit de 20 %, aux seules valeurs par défaut du document.
+
+Et le cas juste au-dessus du seuil était pire : le calcul rendait **12,6 g de glucides pour la journée**, soit 3 % de l'énergie, **sans rien signaler**. Une exception se voit ; une cible absurde s'affiche.
+
+**Aucun poste n'est plus le reste.** La méthode par soustraction n'est pas seulement fautive, elle est **supersédée** : l'ANSES décrit ainsi ses propres références antérieures — « la contribution des glucides à l'AET a été définie pour compléter les apports énergétiques au-delà des apports en lipides et protéines » — et les a remplacées en 2016. L'EFSA écrit que les valeurs glucidiques « cannot be made without considering other energy delivering macronutrients ».
+
+`Repartir` rend désormais une issue : **honorée**, **demande réduite** — les lipides cèdent d'abord, les protéines ensuite, pour protéger la masse maigre — ou **impossible**, un état nommé qui renvoie vers l'énergie et n'émet aucun nombre. La non-négativité est un **théorème**, pas une garde : jamais de `Math.Max(0, reste)`, qui masquerait la brèche en livrant un plan dont les macros ne somment plus aux calories.
+
+### Le magnésium — le porteur avait raison sur le nombre, l'audit sur la grandeur
+
+**« La limite est aux alentours de 400 mg » : le nombre est réel, la grandeur est fausse.** 400 mg/j est la **RDA** du FNB/IOM (1997), homme de 19 à 30 ans, apport **total** — une quantité à atteindre, l'inverse d'un plafond.
+
+**250 mg est vrai aussi, et ne le contredit pas.** C'est l'UL du SCF (2001), et son texte est sans ambiguïté :
+
+> « the UL for Mg **cannot be derived for the intake from all sources** […] **This UL does not include Mg normally present in foods and beverages.** »
+
+Un homme peut manger 420 mg de magnésium alimentaire tout en étant à **0 mg** sur le compteur de la limite haute. **Un plafond inférieur à un apport recommandé n'est une absurdité que si l'on croit qu'ils portent sur la même chose.**
+
+Le défaut du document n'était donc ni la valeur ni le principe : c'était **un seul compteur pour deux questions**. Sans correction, un homme mangeant exactement les 380 mg que l'ANSES lui recommande aurait été signalé à **152 % d'une « limite haute de sécurité »** — une alerte qui pousse au déficit, sur une application qui promet d'éviter les excès.
+
+### L'hydratation — la cible dépassait d'un tiers ce que l'EFSA pose
+
+`35 ml × poids` se réclamait des apports adéquats de l'EFSA. Le raisonnement était faux à sa racine : **ces valeurs portent sur l'eau TOTALE**, boissons et aliments confondus, alors que le produit ne compte que les boissons.
+
+La seule table qui publie ce coefficient est la table D-A-CH, dont l'intitulé de colonne dit mot pour mot « Wasserzufuhr durch Getränke **und feste Nahrung** » — et qui le dérive de la **dépense énergétique**, pas de la masse corporelle.
+
+Pour 73 kg, l'ancien calcul demandait 2 555 ml de boissons quand l'apport adéquat masculin est de 2 500 ml **tout compris**.
+
+**Et une cible gonflée n'est pas une prudence du côté de la sécurité.** Le consensus international sur l'hyponatrémie d'effort nomme les « inappropriate hydration recommendations » parmi les causes de l'apport excessif, et désigne comme les plus exposés le sportif **récréatif** et la **femme** — exactement le public de cette application.
+
+La cible passe donc aux boissons — 1,4 à 1,6 L pour la femme, 1,75 à 2,0 L pour l'homme — et **la limite haute devient un débit**, 0,7 L/h, parce qu'il n'existe aucune limite journalière : « No maximum daily amount of water that can be tolerated by a population group can be defined » (EFSA).
+
+### Les deux niveaux de source, et c'est le porteur qui les a posés
+
+> « Cite ANSES 2016 pour poser le socle réglementaire européen, puis Morton 2018 et l'ISSN pour l'apport spécifique à l'entraînement. Les deux niveaux ne se contredisent pas, ils répondent à des questions différentes, et le dire explicitement est ce qui rend l'argumentaire propre. »
+
+C'est la même distinction de grandeur que celle qui résout le magnésium, appliquée un cran plus haut. Le **socle** gouverne la contrainte — `PartGlucidiqueMinimale` vient de l'ANSES. La **littérature** gouverne la demande — les fourchettes protéiques viennent de Morton. La contrainte peut réduire la demande, jamais l'inverse.
+
+**La position de l'ISSN n'a PAS été vérifiée à la source** : le budget de recherche de la session était épuisé. Elle est nommée comme source à ajouter, et **aucune valeur ne lui est attribuée** tant qu'elle n'a pas été lue. C'est écrit dans le document lui-même.
+
+### Ce qui N'A PAS été tranché, et pourquoi
+
+Le § 7 du document porte **quatorze points** qui demandent un diététicien ou une décision du porteur. Les trois plus structurants :
+
+- **Le référentiel qui gouverne.** EFSA et ANSES divergent frontalement — lipides 20-35 % contre 35-40 %, qui ne se recoupent qu'au point unique de 35. Le choix est consigné, jamais moyenné.
+- **Les lipides à 0,8-1,2 g/kg n'ont aucune source.** Et la forme par kilogramme fait dériver silencieusement la part d'énergie : 1,0 g/kg vaut 33,7 % à 1 949 kcal et 24 % à 3 000 kcal **pour la même personne**.
+- **`nutrient_refs` manque trois colonnes** — `perimetre`, `forme_chimique` et surtout `statut`. Sans ce dernier, toute ligne dont `ul` est non nul devient une limite haute établie, et les niveaux sûrs du fer et du manganèse produiraient un vocabulaire de dépassement que l'EFSA interdit.
+
+**Aucune valeur de micronutriment n'a été corrigée en base** : l'audit en signale quatre périmées — B6, sélénium, fer, niacine — et chacune demande sa propre passe de vérification avant d'entrer.
