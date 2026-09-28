@@ -65,11 +65,20 @@ public sealed class ArchitectureTests
     /// coffre. Il LIT et n'écrit jamais : `palier_app` n'a que <c>select</c> sur
     /// cette table, aucune politique d'écriture n'existe, et deux épreuves de
     /// <see cref="CleDeDonneesTests" /> l'exigent en code 42501.
+    /// <c>Palier.Api.Outils.PreparerLaBase</c> — D81. La commande
+    /// d'exploitation qui migre et charge le référentiel, SOUS
+    /// <c>palier_migrations</c>, dans un processus qui ne sert aucune requête :
+    /// il n'y a donc aucune identité à poser, et le rôle propriétaire n'est
+    /// jamais celui de l'API. Elle ne tient le contexte que dans une variable
+    /// locale, que ce parcours par réflexion ne voit pas : elle est nommée ici
+    /// quand même, parce qu'une exemption qui ne s'écrit pas est une porte
+    /// qu'on n'a pas vue s'ouvrir.
     private static readonly string[] _exemptionsNommees =
     [
         "Palier.Api.Socle.LecteurDeSocle",
         "Palier.Infrastructure.Identite.MagasinDeSessions",
         "Palier.Infrastructure.Coffre.AmorcageDuTrousseau",
+        "Palier.Api.Outils.PreparerLaBase",
     ];
 
     [Fact]

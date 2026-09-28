@@ -30,7 +30,8 @@ internal static class RoutesDEntrainement
 
         var groupe = application
             .MapGroup(_prefixe)
-            .RequireAuthorization(PolitiquesDAutorisation.Entrainement);
+            .RequireAuthorization(PolitiquesDAutorisation.Entrainement)
+            .WithTags("Entraînement");
 
         Seances.Router(groupe);
         Series.Router(groupe);

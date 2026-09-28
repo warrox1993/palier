@@ -10,6 +10,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- `dotnet user-secrets` en développement, comme `back/.env.example` le
+         prescrit depuis le lot 2 : sans cet identifiant, `CreateBuilder` ne
+         charge AUCUN secret utilisateur, et la consigne ne s'appliquait pas. -->
+    <UserSecretsId>palier-api</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,6 +31,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <!-- D82 : le document OpenAPI intégré à ASP.NET Core 10, et l'interface
+         Scalar pour l'essayer. Les deux ne sont exposés qu'en Development. -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.17.6" />
   </ItemGroup>
 
 </Project>

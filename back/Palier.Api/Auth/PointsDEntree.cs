@@ -116,7 +116,7 @@ internal static class PointsDEntree
         ArgumentNullException.ThrowIfNull(application);
 
 
-        var groupe = application.MapGroup(Prefixe);
+        var groupe = application.MapGroup(Prefixe).WithTags("Authentification");
 
         // `AllowAnonymous` est EXPLICITE. Il n'est pas redondant : le jour où
         // une politique de repli exigera un jeton par défaut, ces deux routes

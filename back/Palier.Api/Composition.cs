@@ -404,6 +404,10 @@ internal static class Composition
         constructeur.Services.AddScoped<LecteurDeSocle>();
         constructeur.Services.AddScoped<AssertionDIsolation>();
         constructeur.Services.AddHostedService<AssertionAuDemarrage>();
+
+        // D82 : la génération du document OpenAPI. L'enregistrer ne sert rien ;
+        // seul `Router` décide de l'exposer, et il ne le fait qu'en Development.
+        DocumentationOpenApi.Composer(constructeur.Services);
     }
 
     /// <summary>Attache les routes. Une seule à ce lot.</summary>
@@ -455,10 +459,13 @@ internal static class Composition
         // administrateur suffirait à en devenir un.
         application
             .MapGet(CheminDeSante, RepondreAsync)
-            .RequireAuthorization(PolitiquesDAutorisation.Administration);
+            .RequireAuthorization(PolitiquesDAutorisation.Administration)
+            .WithTags("Socle");
 
         PointsDEntree.Router(application);
         RoutesDEntrainement.Router(application);
+
+        DocumentationOpenApi.Router(application);
     }
 
     private static async Task<IResult> RepondreAsync(
