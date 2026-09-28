@@ -19,19 +19,34 @@ namespace Palier.Database.Tests;
 public sealed class PreparerLaBaseTests(BaseFixture baseDeDonnees)
 {
     [Fact]
-    public async Task Sur_une_base_VIDE_la_commande_migre_puis_charge_le_referentiel()
+    public async Task Sur_une_base_VIDE_la_commande_migre_charge_le_referentiel_et_se_REJOUE_sans_doublon()
     {
+        // UNE base pour les trois constats, et ce n'est pas une économie de
+        // plume. Chaque préparation copie une base, applique vingt et une
+        // tables et plusieurs milliers de lignes : quatre préparations
+        // séparées faisaient écrire au moteur de quoi provoquer des points de
+        // reprise pendant les épreuves suivantes, et l'épreuve du temps égalisé
+        // de `PointsDEntreeTests`, dont une branche écrit, a rougi trois fois
+        // sur la CI du 28/09/2026.
         await using var neuve = await BaseNeuve.CreerAsync(baseDeDonnees);
         using var sortie = new StringWriter(CultureInfo.InvariantCulture);
 
-        var code = await PreparerLaBase.ExecuterAsync(
-            neuve.ChaineMigrations,
-            Referentiel(),
-            sortie,
-            CancellationToken.None
-        );
+        // 1. Le chemin de la ligne de commande, moins la lecture de
+        //    l'environnement du processus : les mêmes clés, lues au même endroit.
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:PalierMigrations"] = neuve.ChaineMigrations,
+                    [PreparerLaBase.CleDuReferentiel] = Referentiel(),
+                }
+            )
+            .Build();
 
-        Assert.Equal(0, code);
+        Assert.Equal(
+            0,
+            await PreparerLaBase.DepuisLaConfigurationAsync(configuration, sortie, CancellationToken.None)
+        );
 
         // Toutes les migrations du code, et pas une de moins.
         await using (var contexte = BaseFixture.Contexte(neuve.ChaineMigrations))
@@ -41,6 +56,8 @@ public sealed class PreparerLaBaseTests(BaseFixture baseDeDonnees)
 
         // Les mêmes cibles que les épreuves du référentiel : elles sont des
         // promesses des documents, pas des constats du contenu.
+        var exercices = await neuve.CompterAsync("select count(*) from public.exercises");
+        var programmes = await neuve.CompterAsync("select count(*) from public.programs");
         Assert.True(
             await neuve.CompterAsync("select count(*) from public.exercises where is_custom = false") >= 250
         );
@@ -50,19 +67,12 @@ public sealed class PreparerLaBaseTests(BaseFixture baseDeDonnees)
 
         Assert.Contains("Migrations appliquées.", sortie.ToString(), StringComparison.Ordinal);
         Assert.Contains("04b-programs-methodes.sql", sortie.ToString(), StringComparison.Ordinal);
-    }
 
-    [Fact]
-    public async Task La_commande_est_REJOUABLE_sans_doublon()
-    {
-        // La démonstration la relance à chaque démarrage.
-        await using var neuve = await BaseNeuve.CreerAsync(baseDeDonnees);
-
-        await PreparerLaBase.ExecuterAsync(neuve.ChaineMigrations, Referentiel(), TextWriter.Null, CancellationToken.None);
-        var exercices = await neuve.CompterAsync("select count(*) from public.exercises");
-        var programmes = await neuve.CompterAsync("select count(*) from public.programs");
-
-        await PreparerLaBase.ExecuterAsync(neuve.ChaineMigrations, Referentiel(), TextWriter.Null, CancellationToken.None);
+        // 2. Rejouée — la démonstration la relance à chaque démarrage.
+        Assert.Equal(
+            0,
+            await PreparerLaBase.ExecuterAsync(neuve.ChaineMigrations, Referentiel(), TextWriter.Null, CancellationToken.None)
+        );
 
         Assert.Equal(exercices, await neuve.CompterAsync("select count(*) from public.exercises"));
         Assert.Equal(programmes, await neuve.CompterAsync("select count(*) from public.programs"));
@@ -121,29 +131,6 @@ public sealed class PreparerLaBaseTests(BaseFixture baseDeDonnees)
         {
             dossier.Delete(recursive: true);
         }
-    }
-
-    [Fact]
-    public async Task Depuis_la_configuration_la_commande_lit_ses_deux_reglages()
-    {
-        // Le chemin de la ligne de commande, moins la lecture de
-        // l'environnement du processus : les mêmes clés, lues au même endroit.
-        await using var neuve = await BaseNeuve.CreerAsync(baseDeDonnees);
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:PalierMigrations"] = neuve.ChaineMigrations,
-                    [PreparerLaBase.CleDuReferentiel] = Referentiel(),
-                }
-            )
-            .Build();
-
-        Assert.Equal(
-            0,
-            await PreparerLaBase.DepuisLaConfigurationAsync(configuration, TextWriter.Null, CancellationToken.None)
-        );
-        Assert.True(await neuve.CompterAsync("select count(*) from public.exercises") > 0);
     }
 
     [Theory]
