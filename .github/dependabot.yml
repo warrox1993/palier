@@ -84,6 +84,30 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 3
 
+  # La démonstration de la racine — D83. `docker` suit les images du
+  # `Dockerfile` (SDK et runtime .NET) ; `docker-compose` suit celle de Mailpit
+  # dans `compose.yaml`. Le tag PostgreSQL n'y figure pas : il est ÉTENDU depuis
+  # `db/compose.yaml`, que le bloc précédent suit déjà.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

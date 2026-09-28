@@ -69,8 +69,17 @@ services:
       # Troisième effet, plus prosaïque : `en_US.utf8` doit EXISTER dans l'image.
       # ICU n'a pas cette dépendance.
       POSTGRES_INITDB_ARGS: --locale-provider=icu --icu-locale=fr-BE --encoding=UTF8
+    # Bornée à la boucle locale, et non au `0.0.0.0` que Compose prend par
+    # défaut — D83. Les mots de passe de `amorcage/` sont écrits en clair dans
+    # le dépôt : publiée sur toutes les interfaces, la base était joignable
+    # depuis le réseau local avec des identifiants que n'importe qui peut lire
+    # sur GitHub. Même règle que l'attrape-courriel de `compose.outils.yaml`.
+    #
+    # Le port reste 5432 par défaut. La démonstration de la racine, qui étend
+    # ce service au lieu de redéclarer son tag (D34), le déplace par
+    # `PALIER_PORT_BASE` pour ne pas heurter une base de développement levée.
     ports:
-      - '5432:5432'
+      - '127.0.0.1:${PALIER_PORT_BASE:-5432}:5432'
     # Le montage est sur `/var/lib/postgresql`, PAS sur son sous-dossier
     # `/data`. PostgreSQL 18 a changé cette convention : monter directement sur
     # `/data` fait refuser le démarrage — « There appears to be PostgreSQL data
