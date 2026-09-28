@@ -70,6 +70,16 @@ jobs:
             --label 'main-rouge' --state open --limit 1 --json number \
             --jq '.[0].number // empty')"
 
+          # Une exécution ANNULÉE n'est pas une exécution rouge : la
+          # concurrence de ci.yml annule l'exécution d'un commit dès qu'un
+          # commit plus récent arrive sur main, et c'est ce dernier qui
+          # jugera. Le 28/09/2026, trois fusions rapprochées ont ainsi ouvert
+          # l'alerte #22 sans qu'aucun job n'ait échoué.
+          if [ "$CONCLUSION" = "cancelled" ]; then
+            echo "Exécution annulée par une plus récente : rien à signaler."
+            exit 0
+          fi
+
           if [ "$CONCLUSION" = "success" ]; then
             if [ -n "$existante" ]; then
               gh issue comment "$existante" --repo "$DEPOT" \
