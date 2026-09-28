@@ -408,9 +408,16 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         using var portee = hote.Services.CreateScope();
         var connue = await InscritAsync(portee.ServiceProvider);
 
-        // Un tour à blanc : la première connexion paie la mise en route d'EF et
-        // du pool, et fausserait la comparaison.
+        // Un tour à blanc PAR CHEMIN : la première connexion paie la mise en
+        // route d'EF et du pool, et fausserait la comparaison.
+        //
+        // Le chemin de l'adresse inconnue n'en avait pas, et la CI de la PR #21
+        // l'a payé le 28/09/2026 : 708 ms contre 402, sur un exécuteur partagé,
+        // alors que le même état passait deux fois de suite ailleurs. Son
+        // premier passage porte des coûts que le second n'a plus ; le mesurer
+        // sans tour à blanc comparait un démarrage à un régime établi.
         await MesurerAsync(portee.ServiceProvider, connue, "un-tout-autre-mot-de-passe-42");
+        await MesurerAsync(portee.ServiceProvider, EmailNeuf(), _motDePasseSolide);
 
         var inconnue = new List<double>();
         var mauvaise = new List<double>();
