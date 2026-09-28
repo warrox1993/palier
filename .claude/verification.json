@@ -1,0 +1,6 @@
+{
+  "stop": true,
+  "commande": "dotnet test back/Palier.Domain.Tests/Palier.Domain.Tests.csproj -nologo -m:2 && dotnet test back/Palier.Application.Tests/Palier.Application.Tests.csproj -nologo -m:2",
+  "commande_complete": "dotnet test back/Palier.sln -nologo -m:2",
+  "delai": 300
+}
