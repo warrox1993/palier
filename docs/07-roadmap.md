@@ -96,7 +96,7 @@ Le point 7 est structurant : il conditionne l'architecture de la couche IA et do
 - **Schéma, RLS dès la création, migrations versionnées.** Valable ; le mécanisme change. Migrations EF Core dans `back/Palier.Infrastructure/Migrations/` (D14, D32) ; vues, politiques et contraintes `CHECK` par `migrationBuilder.Sql(...)`. **RLS devient une défense en profondeur** : l'autorisation se décide dans `Palier.Application`, cas d'usage par cas d'usage (D9), et les tests de politiques comptent double, puisque **plus aucun test fonctionnel ne franchira RLS**
   - **Critère de sortie, et non note de bas de page** — le mode de défaillance que `03-donnees.md` nomme : « une migration générée sans ces trois blocs produit un schéma qui compile, qui démarre, et qui n'applique ni les vues, ni RLS, ni les bornes. Rien ne le signale au démarrage. »
   - **Trois tables absentes du schéma** sont à ajouter : le journal versionné des libellés, le journal des appels au modèle, et les tables d'identité ASP.NET
-  - **« Schéma complet » est remplacé par la tranche de six tables de D39** — une représentante de chacune des cinq formes du schéma, les treize autres arrivant avec le cas d'usage qui les exige. **Cet écart est un arbitrage soumis au porteur du projet** : sans sa validation, D39 n'est pas prise et cette ligne reprend sa forme d'origine
+  - **« Schéma complet » est remplacé par la tranche de six tables de D39** — une représentante de chacune des cinq formes du schéma, les treize autres arrivant avec le cas d'usage qui les exige. **Cet écart est un arbitrage soumis au porteur du projet** : sans sa validation, D39 n'est pas prise et cette ligne reprend sa forme d'origine. **Le lot 5 l'a appliquée à la lettre** — deux tables nouvelles, `exercise_feedback` et `user_constraints`, chacune avec sa politique, ses trois rôles et son épreuve d'isolation ; onze restent à venir. D62 la considère prise, et dit ce qui la défait
   - Les deux points laissés ouverts par `03-donnees.md` sont désormais **fermés** : le type de la clé d'`AspNetUsers` par D35, le mécanisme d'identité par D36
 - **Auth : Google OAuth et email/mot de passe**, vérification d'email, limitation de débit, 2FA optionnelle. **Aucune de ces exigences ne baisse** — mais ce n'est plus une puce, c'est un lot entier (**lot 4**), et le relevé de `09-comptes.md` § 1 le chiffre exigence par exigence. Deux points qui n'apparaissaient pas : la règle du produit n'est pas « pas de connexion sans email vérifié » mais « **pas de nutrition** sans email vérifié », qui n'a aucun équivalent dans Identity ; et le QR code TOTP n'est pas fourni. Voir aussi la spec d'architecture § 16
 - **Squelette PWA, jetons de design de `02-design.md`, i18n français/anglais.** Valable mot pour mot. `i18next` n'est pas installé et **arrive avec le premier écran**, accompagné des deux garde-fous que D31 a reportés — une épreuve qui refuse un écran dépourvu d'état vide ou d'état d'erreur, et un parcours Playwright au clavier seul. **Tailwind n'est pas installé au lot 2** ; les jetons vivent dans `front/src/ui/jetons.ts` (D42, arbitrage soumis au porteur). Seul l'hébergement des fichiers construits change : Caddy au lieu de Vercel
@@ -115,9 +115,9 @@ Le point 7 est structurant : il conditionne l'architecture de la couche IA et do
 
 En parallèle du développement, car c'est le poste le plus long et le plus sous-estimé :
 
-- Catalogue de 250 à 400 exercices avec contre-indications
+- Catalogue de 250 à 400 exercices avec contre-indications — **255 livrés ; la relecture reste due**
 - Schémas vectoriels des mouvements — commencer par les 60 exercices les plus utilisés
-- Programmes modèles, relus par le kinésithérapeute
+- Programmes modèles, relus par le kinésithérapeute — **les 9 sont écrits et en base ; la relecture reste due**
 - Pages éducatives
 - Emails transactionnels, français et anglais
 
@@ -129,12 +129,12 @@ Compter 6 à 10 semaines de travail, étalées. Voir `14-contenu.md`.
 
 ## Étape 2 — Onboarding et entraînement
 
-- Catalogue d'exercices avec contre-indications
-- Programmes modèles par contrainte
+- Catalogue d'exercices avec contre-indications — **API livrée au lot 5**
+- Programmes modèles par contrainte — **API et référentiel livrés au jalon des programmes** : 9 modèles, 36 séances, 157 poses, plus la copie vers un programme personnel (D72 à D75). **Reste dû : la relecture par un kinésithérapeute**
 - **Écran de séance**, selon la structure imposée de `02-design.md`
-- Suggestion de progression, détection de plateau
-- Ressenti par exercice
-- Volume hebdomadaire, ratio tirage/poussée
+- Suggestion de progression, détection de plateau — **API livrée au lot 5**
+- Ressenti par exercice — **API livrée au lot 5** ; les seuils du § 5 restent à écrire, avec l'écran qui les montre
+- Volume hebdomadaire — **API livrée au lot 5**. **Le ratio tirage/poussée est REPORTÉ** : `exercises` ne porte aucune colonne disant si un mouvement tire ou pousse, et le déduire des muscles serait faux. La colonne se pose avec le catalogue, étape 1 bis — D62
 - Courbes
 - Onboarding six écrans, avec l'écran contraintes
 - Structures full body, upper/lower, PPL et split selon la fréquence
@@ -245,21 +245,42 @@ En dessous de la moitié, ne pas ouvrir le paiement — corriger d'abord.
 
 Les **étapes** sont des jalons produit, avec leurs critères de sortie. Les **lots** sont des unités d'exécution. **Elles divergent déjà** — l'étape 1 exigeait le harnais _et_ le socle, le lot 1 n'a livré que le harnais.
 
-| Étape      | Lot                                                            | Début      | Fin        | Durée constatée |
-| ---------- | -------------------------------------------------------------- | ---------- | ---------- | --------------- |
-| 1a         | **Lot 1 — harnais** (livré)                                    | 19/08/2026 | 20/08/2026 | 2 jours         |
-| 1b         | **Lot 2 — socle de données** + les 3 livrables D31             | 20/08/2026 | —          | —               |
-| 1b         | **Lot 3 — domaine** (livré)                                    | 21/08/2026 | 21/08/2026 | 1 jour          |
-| 1b         | **Lot 4 — authentification**                                   | —          | —          | —               |
-| 1b · 2 · 3 | **Lot 5 — API** (le reste du schéma y arrive, table par table) | —          | —          | —               |
-| 1b · 2     | **Lot 6 — socle d'écran complet et PWA**                       | —          | —          | —               |
-| 1b         | **Lot 7 — résilience front** (Dexie, file de retry)            | —          | —          | —               |
-| 6          | **Lot 8 — couche modèle**                                      | —          | —          | —               |
-| 7          | **Lot 9 — déploiement**                                        | —          | —          | —               |
+| Étape      | Lot                                                               | Début      | Fin        | Durée constatée |
+| ---------- | ----------------------------------------------------------------- | ---------- | ---------- | --------------- |
+| 1a         | **Lot 1 — harnais** (livré)                                       | 19/08/2026 | 20/08/2026 | 2 jours         |
+| 1b         | **Lot 2 — socle de données** + les 3 livrables D31 (livré)        | 20/08/2026 | 20/08/2026 | 1 jour          |
+| 1b         | **Lot 3 — domaine** (livré)                                       | 21/08/2026 | 21/08/2026 | 1 jour          |
+| 1b         | **Lot 4 — socle de session** (livré)                              | 21/08/2026 | 21/08/2026 | 1 jour          |
+| 1b         | **Lot 4b — fin du socle de session** (livré)                      | 23/08/2026 | 23/08/2026 | 1 nuit          |
+| 1b · 2 · 3 | **Lot 5 — API de l'entraînement** (livré, 2 tables sur 13)        | 23/08/2026 | 24/08/2026 | 1 nuit          |
+| 1 bis      | **Catalogue d'exercices** (livré) — 255 mouvements, 216 variantes | 24/08/2026 | 24/08/2026 | 1 jour          |
+| 1 bis · 2  | **Programmes** (livré) — 3 tables, 7 routes, 11 modèles           | 24/08/2026 | 24/08/2026 | 1 jour          |
+| 1 bis      | **Deux études en fan-out** (livré) — méthodes, et sexe            | 24/08/2026 | 24/08/2026 | 2 heures        |
+| 1b · 2     | **Lot 6 — socle d'écran complet et PWA**                          | —          | —          | —               |
+| 1b         | **Lot 7 — résilience front** (Dexie, file de retry)               | —          | —          | —               |
+| 6          | **Lot 8 — couche modèle**                                         | —          | —          | —               |
+| 7          | **Lot 9 — déploiement**                                           | —          | —          | —               |
 
 **À remplir à chaque fin de lot, depuis le rapport de lot.** Un tableau ne se remplit pas tout seul : c'est un instrument, pas un verrou. Sans lui, les conditions de réouverture de D9 et D17 n'ont rien qui puisse les déclencher.
 
-La seule ligne remplie l'est **par mesure et non par souvenir** : `git log` porte 22 commits datés du 19/08/2026 et 69 du 20/08/2026, et le lot 1 a été déclaré livré le 20/08/2026. Les lignes suivantes se remplissent de la même façon, et la colonne « durée constatée » ne reçoit jamais une estimation.
+Les lignes sont remplies **par mesure et non par souvenir**. `git log` compte, au 24/08/2026 :
+
+| Jour       | Commits | Ce qui y a été livré                              |
+| ---------- | ------: | ------------------------------------------------- |
+| 19/08/2026 |      22 | lot 1, première moitié                            |
+| 20/08/2026 |      99 | fin du lot 1, lot 2                               |
+| 21/08/2026 |      45 | lot 3, lot 4                                      |
+| 22/08/2026 |      21 | audit de sécurité, coffre des secrets (D59)       |
+| 23/08/2026 |      14 | lot 4b — Google, courriel, fusion, administration |
+| 24/08/2026 |      14 | lot 5, catalogue, programmes, deux études         |
+
+La colonne « durée constatée » ne reçoit jamais une estimation. **Le lot 4b porte « 1 nuit » et non « 1 jour »** : il a été exécuté en autonomie entre le 22/08 au soir et le 23/08 au matin, et arrondir à la journée effacerait précisément ce que ce tableau existe pour mesurer.
+
+**Ce que ce tableau ne dit pas, et qu'il faut lire à côté.** Au 24/08/2026, le
+backend porte 21 tables, 35 routes et 971 épreuves ; le front porte **759 lignes
+et un seul écran**, celui de l'état du socle. Le déséquilibre est voulu — le lot
+6 est précisément le socle d'écran — mais il doit se voir : l'API livrée n'a
+aujourd'hui aucun consommateur.
 
 **Deux écarts à la spec d'architecture § 14, à valider par le porteur du projet :**
 

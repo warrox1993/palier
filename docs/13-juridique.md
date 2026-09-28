@@ -101,12 +101,12 @@ Comptable dès la constitution. TVA trimestrielle, déclarations, cotisations so
 
 **Ce qui n'est plus délégué, et devient un traitement que vous opérez.** Deux lignes ont quitté le tableau ; les responsabilités qu'elles portaient, elles, n'ont pas disparu — elles ont changé de côté.
 
-| Ce qui était délégué                                              | À qui              | Qui en répond désormais                                                         |
-| ----------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------- |
-| Authentification, mots de passe, sessions, jetons                 | Supabase Auth      | Vous — D17                                                                      |
-| Système d'exploitation, correctifs, certificats TLS, durcissement | Plateforme managée | Vous — D15, le backend est conteneurisé sur un VPS ou une instance Public Cloud |
-| Supervision de l'infrastructure, sauvegardes, restauration        | Plateforme managée | Vous — D15                                                                      |
-| Diffusion du front                                                | Vercel             | Vous — D16, même domaine que l'API                                              |
+| Ce qui était délégué                                              | À qui              | Qui en répond désormais                                                          |
+| ----------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
+| Authentification, mots de passe, sessions, jetons                 | Supabase Auth      | Vous — D17. **État documenté** : `docs/aipd/2026-08-21-authentification-etat.md` |
+| Système d'exploitation, correctifs, certificats TLS, durcissement | Plateforme managée | Vous — D15, le backend est conteneurisé sur un VPS ou une instance Public Cloud  |
+| Supervision de l'infrastructure, sauvegardes, restauration        | Plateforme managée | Vous — D15                                                                       |
+| Diffusion du front                                                | Vercel             | Vous — D16, même domaine que l'API                                               |
 
 OVHcloud reste sous-traitant de l'infrastructure — matériel, centre de données, PostgreSQL managé. Il n'est sous-traitant d'aucun des quatre traitements ci-dessus.
 
@@ -117,6 +117,9 @@ Registre des traitements (RGPD art. 30) tenu à jour, listant finalité, base l�
 **Ce que le changement d'architecture ajoute à l'AIPD.** L'analyse ne décrit plus une application qui délègue sa sécurité, mais une application qui l'opère. Trois points en découlent, et aucun n'est cosmétique.
 
 1. **L'authentification devient une mesure technique de l'AIPD, et non plus une garantie de sous-traitant.** Les sept exigences de `09-comptes.md` § 1 — Google OAuth, vérification d'email obligatoire avant l'accès nutrition, contrôle du mot de passe contre HaveIBeenPwned, limitation des tentatives avec verrouillage progressif, 2FA TOTP, rotation des jetons de rafraîchissement, fusion des comptes email et Google — sont à décrire comme telles, avec leur état d'implémentation. D17 note qu'ASP.NET Identity en couvre une partie, pas tout : l'écart se documente, il ne se suppose pas comblé.
+
+   **Cet écart est désormais écrit**, au 21/08/2026 et à la fin du lot 4 : `docs/aipd/2026-08-21-authentification-etat.md`. Le compte y est donné sans l'édulcorer — **trois exigences livrées, deux partielles ou sous réserve, deux entièrement reportées** — avec les durées de conservation que ce lot crée, pour le registre de l'article 30. Deux conséquences y sont nommées et ne doivent pas se perdre : l'adresse et le mot de passe sont aujourd'hui le **seul** moyen de créer un compte, et **aucun compte ne peut atteindre la nutrition** tant que l'envoi de courriels n'existe pas — la règle est en place, le moyen de la satisfaire ne l'est pas.
+
 2. **L'exploitation du serveur devient une mesure de sécurité au sens de l'article 32.** Correctifs, certificats, durcissement, journalisation, sauvegardes et restauration éprouvée relèvent de vous. Un correctif non appliqué n'est plus l'oubli d'un fournisseur.
 3. **La détection d'un incident repose sur votre supervision.** Une plateforme managée signalait d'elle-même une anomalie de son socle ; sur un serveur administré, ce qui n'est pas supervisé n'est vu par personne. `14-contenu.md` § 6 en tire la liste.
 

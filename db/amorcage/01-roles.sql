@@ -62,9 +62,27 @@ create role palier_sauvegarde
   login password 'motdepasse_local_sauvegarde'
   nosuperuser bypassrls nocreatedb nocreaterole;
 
--- Les trois se connectent à la base du produit, et rien d'autre n'y a droit.
+-- `palier_auth` — LE SEUL CHEMIN vers les tables d'identité, que D38 avait
+-- fermées en refus par défaut : `enable` ET `force row level security` sans
+-- aucune politique. D38 posait la porte avec son écriteau et laissait le lot 4
+-- la concevoir ; c'est ce rôle.
+--
+-- Il suit la forme de `palier_app` et non celle de `palier_sauvegarde` : il ne
+-- possède aucun objet, et NOBYPASSRLS parce que ses politiques doivent mordre
+-- sur lui comme sur les autres. Les deux voies écartées sont dans la spec du
+-- lot 4 — fonctions SECURITY DEFINER (réécriture du magasin d'Identity, et
+-- CVE-2018-1058 sans SET search_path) et drapeau de contexte en session (la
+-- barrière dépendrait d'une variable que le code applicatif contrôle).
+--
+-- Ses privilèges sont accordés dans la MIGRATION qui crée les objets, comme
+-- pour `palier_app`, et il n'en reçoit AUCUN sur workouts, sets ni body_weight.
+create role palier_auth
+  login password 'motdepasse_local_authentification'
+  nosuperuser nobypassrls nocreatedb nocreaterole;
+
+-- Les quatre se connectent à la base du produit, et rien d'autre n'y a droit.
 revoke all on database palier from public;
-grant connect on database palier to palier_migrations, palier_app, palier_sauvegarde;
+grant connect on database palier to palier_migrations, palier_app, palier_sauvegarde, palier_auth;
 
 -- CREATE sur la BASE, et non sur un schéma : `create schema app` en a besoin.
 -- Mesuré le 20/08/2026 — sans cette ligne, la migration échoue sur
@@ -76,7 +94,7 @@ grant create on database palier to palier_migrations;
 -- est retiré à PUBLIC : sans cette ligne, la première migration échoue sur
 -- « permission denied for schema public ».
 grant create, usage on schema public to palier_migrations;
-grant usage on schema public to palier_app, palier_sauvegarde;
+grant usage on schema public to palier_app, palier_sauvegarde, palier_auth;
 
 -- Une transaction laissée ouverte est bornée, et la borne se pose MAINTENANT.
 -- Un cas d'usage qui appellerait un modèle laisserait la transaction ouverte

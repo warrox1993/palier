@@ -1,0 +1,56 @@
+# Les outils de CONFORT du développement — jamais la base, jamais la production.
+#
+# Ce fichier est séparé de `compose.yaml` pour une raison précise, et non par
+# goût du rangement : `tests-harness/db.test.mjs` exige que `db/compose.yaml` ne
+# déclare qu'un SEUL service — D33, dont le motif est que le backend reste sur
+# l'hôte, avec `dotnet run`, le débogueur et `dotnet ef` natifs.
+#
+# Un attrape-courriel n'est pas le backend, donc l'esprit de D33 l'autorise.
+# Mais la lettre est éprouvée, et un garde-fou éprouvé ne se contourne pas : on
+# met l'outil ailleurs plutôt que d'élargir la règle pour une commodité.
+#
+# `npm run outils:up` le lève, `npm run outils:down` l'arrête. Il n'est PAS
+# nécessaire aux épreuves : celles qui jugent un envoi remplacent le transport,
+# et le harnais pose un puits par défaut. Il sert à VOIR les courriels quand on
+# développe à la main.
+services:
+  palier-courrier:
+    # Mailpit remplace MailHog, qui n'est plus maintenu. MIT, et c'est la
+    # référence actuelle de l'attrape-courriel de développement.
+    #
+    # Le tag n'est PAS la dernière version : `v1.31.0` est sortie le 22/08/2026,
+    # soit la veille du jour où cette ligne a été écrite. La doctrine des
+    # dépendances de `CLAUDE.md` § 4 impose un délai avant adoption — « un
+    # paquet compromis est généralement retiré en quelques heures » — et une
+    # image publiée hier n'a eu le temps d'être regardée par personne.
+    # `v1.30.7` date du 08/08/2026 : deux semaines, et la même série mineure.
+    #
+    # Ce tag n'entre pas en conflit avec D34, qui ne parle que du tag
+    # PostgreSQL, et l'épreuve du harnais compte les occurrences de
+    # « postgres: » — pas celles de n'importe quelle image.
+    image: axllent/mailpit:v1.30.7
+    restart: unless-stopped
+    environment:
+      # Aucune authentification, aucun chiffrement : ce service n'écoute que
+      # sur la boucle locale et ne relaie RIEN vers l'extérieur. C'est un
+      # cul-de-sac, et c'est exactement ce qu'on veut d'un attrape-courriel —
+      # un courriel envoyé par erreur à une vraie adresse n'en sortira pas.
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      # Les messages vivent en mémoire et meurent avec le conteneur. Aucun
+      # volume : `docs/13-juridique.md` traite l'adresse comme une donnée
+      # personnelle, et un volume la ferait survivre sur le disque du poste
+      # sans que personne l'ait décidé.
+      MP_MAX_MESSAGES: 500
+    ports:
+      # L'écoute est explicitement bornée à 127.0.0.1, et non au `0.0.0.0` que
+      # Docker prend par défaut. Sans cela, l'attrape-courriel serait joignable
+      # depuis le réseau local — un poste voisin lirait les liens de
+      # vérification de tous les comptes créés en développement.
+      - '127.0.0.1:1025:1025' # SMTP  — ce que l'API vise
+      - '127.0.0.1:8025:8025' # Web   — http://localhost:8025
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 10

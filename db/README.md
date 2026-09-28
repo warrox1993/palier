@@ -324,3 +324,44 @@ signale**.
 SQL natif.** La cohérence de style du SQL repose sur le bloc `[*.sql]` de
 `.editorconfig` et sur la relecture — c'est écrit ici plutôt que laissé croire
 à une couverture qui n'existe pas.
+
+---
+
+## L'attrape-courriel du développement
+
+`db/compose.outils.yaml` lève **Mailpit**, qui reçoit tout ce que l'API envoie
+et ne relaie **rien** vers l'extérieur. Un courriel adressé par erreur à une
+vraie personne n'en sortira pas.
+
+```bash
+npm run outils:up      # le lève
+npm run outils:down    # l'arrête
+```
+
+Les messages se lisent sur **http://localhost:8025**. Ils vivent en mémoire et
+meurent avec le conteneur — aucun volume, parce qu'une adresse est une donnée
+personnelle et n'a pas à survivre sur le disque du poste sans que personne l'ait
+décidé.
+
+**Pourquoi un second fichier et non un service de plus dans `compose.yaml` :**
+`tests-harness/db.test.mjs` exige que `db/compose.yaml` ne déclare qu'un seul
+service — D33. Un attrape-courriel n'est pas le backend, donc l'esprit de la
+décision l'autorise ; mais la lettre est éprouvée, et un garde-fou éprouvé ne se
+contourne pas pour une commodité.
+
+**Sans lui, l'API refuse de démarrer** : `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`
+et `APP_URL` sont exigés au démarrage (D60). Les valeurs de développement sont
+dans `back/.env`, et visent `localhost:1025`.
+
+### Le parcours complet, à la main
+
+```bash
+npm run db:up && npm run outils:up
+dotnet run --project back/Palier.Api
+
+curl -X POST http://localhost:5025/api/v1/auth/inscription   -H 'Content-Type: application/json'   -d '{"email":"essai@exemple.test","motDePasse":"brouette-hivernale-38-oscille"}'
+```
+
+Ouvrir http://localhost:8025, suivre le lien du courriel : l'adresse est
+vérifiée, et la porte de la nutrition s'ouvre. **Mesuré le 23/08/2026** —
+inscription 202, courriel reçu, vérification 204.

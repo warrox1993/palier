@@ -870,3 +870,599 @@ Ce dernier point valide la promesse du produit : la règle de progression de `05
 **Ce que le domaine en fait.** Trois paliers de fiabilité — bonne jusqu'à 8 répétitions effectives, moyenne jusqu'à 12, faible jusqu'à 15 — et **rien du tout au-delà**. `ForceEstimee.Epley` rend `null` plutôt qu'une charge : un nombre rendu quand même serait indiscernable d'une estimation valide.
 
 **Ce qui la rouvrirait :** rien de connu.
+
+---
+
+## D54 — Un quatrième rôle PostgreSQL porte le chemin d'authentification
+
+**Tranché le :** 21/08/2026, au démarrage du lot 4. **Choisi par le porteur du projet parmi trois options.**
+
+D38 avait fermé les six tables `AspNet*` en refus par défaut — `enable` + `force row level security`, aucune politique — en laissant à concevoir le chemin qui les atteindrait. Le lot 4 a buté sur ce mur : l'authentification lit `AspNetUsers` **avant** qu'une identité existe, or `ExecuteurDeCasDUsage` refuse sans identité, `ArchitectureTests` interdit tout autre accès au contexte, et D38 a fermé les tables.
+
+**Le rôle `palier_auth`** est le seul chemin. Il ne possède rien, ne contourne pas RLS, et n'a **aucun privilège** sur `workouts`, `sets` ni `body_weight` — trois épreuves de `RolesTests` l'exigent en code 42501. Le contexte `PalierAuthDbContext` ne déclare que les tables d'identité et les sessions : ce qui n'est pas déclaré n'est pas atteignable, et la barrière du moteur n'est plus la seule.
+
+**Les deux voies écartées, et pourquoi.**
+
+- **Fonctions `SECURITY DEFINER`** — elles auraient obligé à réécrire cinq interfaces du magasin Identity, et chacune aurait dû porter `SET search_path` sous peine de rouvrir CVE-2018-1058. Beaucoup de surface pour une barrière que le rôle donne gratuitement.
+- **Un drapeau de contexte applicatif** — la barrière aurait dépendu d'une variable posée par l'application. Une barrière qu'un défaut applicatif peut lever n'est pas une barrière.
+
+**Ce qui la rouvrirait :** un magasin Identity qui n'irait plus en base — improbable — ou un besoin de lire les tables d'identité depuis le chemin des cas d'usage, qui serait d'abord un défaut de conception à corriger.
+
+---
+
+## D55 — Le hachage passe à 210 000 itérations, et la mesure est écrite
+
+**Tranché le :** 21/08/2026, pendant le lot 4. `docs/09-comptes.md` § 1 laissait l'arbitrage ouvert : « conserver le défaut ou relever le nombre d'itérations reste à arbitrer, et l'arbitrage **se mesure**, il ne se devine pas ».
+
+**L'algorithme réel, vérifié en décodant le format du haché octet par octet :** PBKDF2 **HMAC-SHA512**, sel de 128 bits, sous-clé de 256 bits, **100 000 itérations** par défaut. La documentation Microsoft annonce tantôt SHA-256, tantôt 10 000 — aucune des deux n'est ce que le code fait.
+
+**La mesure**, le 21/08/2026 sur seize cœurs : **56,7 ms** à 100 000 itérations contre **111,2 ms** à 210 000. Soit **54 ms de plus par connexion**. Sur un vCPU mutualisé, compter le double.
+
+**210 000** est ce qu'OWASP recommande pour PBKDF2-HMAC-SHA512 — la fonction que cette version emploie réellement, pas celle que la documentation annonce.
+
+**Ce que la mesure a changé dans le code :** l'ordre des contrôles. La limitation par adresse vient **avant** le hachage, sans quoi 111 ms deviennent un levier d'épuisement de ressources.
+
+**Ce qui la rouvrirait :** une recommandation OWASP révisée, ou une mesure sur l'instance OVHcloud réelle qui montrerait un coût par connexion incompatible avec la charge attendue. Le marqueur de version en tête du haché rend le changement sûr dans les deux sens.
+
+---
+
+## D56 — La fenêtre de grâce de rotation vaut trente secondes
+
+**Tranché le :** 21/08/2026, pendant le lot 4.
+
+RFC 9700 (janvier 2025) impose de révoquer la famille entière au réemploi d'un jeton de rafraîchissement : deux porteurs détiennent la même chaîne, lequel est le voleur est indécidable. Appliquée sans nuance, la règle **déconnecte les utilisateurs légitimes** — deux onglets qui se rafraîchissent à la même seconde présentent aussi la même chaîne.
+
+**Trente secondes**, le défaut d'Okta, réglable de 0 à 60 chez lui. Assez court pour qu'un jeton volé ne serve pas : un attaquant qui rejoue à la seconde près est dans la course, pas dans une exploitation. Assez long pour couvrir un aller-retour réseau dégradé, un second onglet, une reprise de connexion.
+
+**Ce que le rejeu dans la grâce fait exactement :** il rend un jeton **neuf de la même famille**, et ne consomme rien de plus. Le successeur porte son empreinte et non son jeton — il ne peut pas être reconstruit.
+
+**Ce qui la rouvrirait :** une mesure de déconnexions intempestives en exploitation, qui la ferait monter ; ou un incident de vol de jeton exploité dans la fenêtre, qui la ferait descendre. Aucune des deux ne se devine : `ParametresDeSession.FenetreDeGrace` est à un seul endroit, et `DecisionDeRotation` est couverte à 100 %.
+
+---
+
+## D57 — Les seuils de couverture des adaptateurs sont posés au niveau atteint
+
+**Tranché le :** 21/08/2026, fin du lot 4.
+
+| Projet                                 | Seuil                                               | Ce qu'il détecte                                                         |
+| -------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------ |
+| `Palier.Domain`                        | **100 %** ligne, branche, méthode                   | le code mort **public** — un membre que rien n'appelle n'est pas couvert |
+| `Palier.Application`                   | **100 %** ligne, branche, méthode                   | idem                                                                     |
+| `Palier.Infrastructure` + `Palier.Api` | **96 / 79 / 71 %** (mesuré : 96,63 / 79,60 / 71,55) | un **cliquet**, pas un détecteur                                         |
+
+**Un seuil sous la couverture réelle laisse celle-ci redescendre sans rien dire** — c'est un contrôle qui approuve. Les valeurs sont donc les entiers immédiatement inférieurs aux mesures, et rien de plus bas.
+
+**Ce que le seuil des adaptateurs ne fait PAS, et qu'il faut savoir :** à 71 % de méthodes, la détection de code mort public **n'existe pas** sur ces deux projets. Un membre public inutilisé y passe. Roslyn ne peut pas le signaler — par construction, il pourrait être appelé depuis l'extérieur de l'assemblage — et seule la couverture le ferait.
+
+Le chiffre des méthodes est plombé par le code **généré** : migrations EF, `Designer.cs`, `ModelSnapshot`. Les exclure demanderait une décision datée avec son échéance (`CLAUDE.md` § 4) ; elle n'a **pas** été prise, et le seuil vit donc avec eux.
+
+**Ce qui la rouvrirait :** chaque montée réelle de la couverture doit relever le seuil dans le même geste — sans quoi le cliquet ne cliquette pas. Et une décision d'exclure le code généré, si le chiffre des méthodes devient un obstacle plutôt qu'une mesure.
+
+---
+
+## D58 — Les six défauts de l'audit de sécurité sont corrigés, et trois d'entre eux ont révélé pire qu'eux-mêmes
+
+**Tranché le :** 22/08/2026, après l'audit multi-agents de la branche `feat/lot-4-socle-session`.
+
+Un scan de sécurité a rendu 14 pistes vérifiées sur `back` et `db` — 82 candidats, 31 après déduplication, 93 votes d'un panel à trois voix. Les 14 pistes sont **six défauts** : plusieurs chercheurs avaient trouvé le même problème par des chemins différents.
+
+**Ce qui est corrigé, et ce que la correction a coûté d'apprendre :**
+
+| Défaut                                                   | Correction                                                                   | Ce que la relecture adversariale a trouvé EN PLUS                                                                                                 |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/2fa/preparer` réenrôlait le second facteur sans preuve | Code d'authentificateur **ou de récupération** exigé quand la 2FA est active | Un paramètre de corps non nullable cassait le **premier enrôlement** ; une garde limitée à l'authentificateur enfermait qui a perdu son téléphone |
+| Codes de récupération en clair en base                   | Hachés par PBKDF2 à 210 000 itérations                                       | Le premier jet **laissait la ligne en clair** à côté, indéfiniment, et invalidait silencieusement les codes existants                             |
+| Compteur d'échecs non atomique                           | `select … for update` dans une transaction, pour les deux écritures          | Passer à `ExecuteUpdateAsync` **retirait le jeton de concurrence** : une route 2FA sans mot de passe effaçait alors un verrouillage               |
+| La grâce fourchait la famille de jetons                  | Successeur scellé sous une clé dérivée du jeton présenté                     | Le sceau vivait **quatorze jours** pour un usage de trente secondes, et les sceaux s'enchaînaient jusqu'au jeton vivant                           |
+| `/api/v1/sante` anonyme                                  | `RequireAuthorization()` — D41 l'exigeait depuis le lot 4                    | Le rôle d'administration que D41 demande aussi n'existe pas encore dans le produit                                                                |
+| Le temps des refus trahissait l'existence d'un compte    | Budget constant de 400 ms sur toutes les branches de refus                   | L'épreuve dérivait sa tolérance du budget qu'elle éprouvait, et l'écart naturel (5 ms) était déjà sous toute tolérance stable                     |
+
+**La leçon qui vaut au-delà de ces six.** Dans trois cas sur six, **la correction introduisait un défaut plus grave que celui qu'elle fermait**, et aucun n'aurait été vu par relecture : il a fallu une sonde qui mesure. Un correctif de sécurité n'est pas terminé quand il ferme la faille nommée — il l'est quand on a demandé ce qu'il **arrête** de faire, et pas seulement ce qu'il commence.
+
+**Ce qui reste ouvert, et qui appartient au porteur du projet :**
+
+- **Le secret TOTP reste en clair.** Il est relu à chaque vérification, donc il se chiffre — il ne se hache pas — et cela demande une décision de gestion de clé : où elle vit, comment elle tourne, ce qui se passe au redéploiement. Aucun trousseau n'a été fabriqué pour faire semblant.
+- **Le rôle d'administration de D41.** `PolitiquesDAutorisation` ne porte que deux politiques, qui sont des **domaines**, pas des rôles.
+- **Le budget de 400 ms** est calé sur une machine de développement. À revoir sur l'instance OVHcloud, où le PBKDF2 sera plus lent.
+
+**Ce qui la rouvrirait :** un audit ultérieur, que ces corrections n'exemptent de rien — un scan est non déterministe, et le relancer construit la couverture dans le temps.
+
+---
+
+## D59 — Le coffre des secrets est OVHcloud KMS, et non Azure Key Vault
+
+**Tranché le :** 22/08/2026. **Choisi par le porteur du projet**, qui avait d'abord nommé Azure Key Vault et a retenu OVHcloud après que la contradiction lui eut été signalée.
+
+D58 laissait ouverte la seule chose qui manquait au chiffrement du secret TOTP : où vit la clé. La demande initiale était Azure Key Vault. **Elle contredisait D15**, et pas à la marge : D15 pose OVHcloud parce qu'un fournisseur européen est hors portée du CLOUD Act, ce qui compte pour des données de santé relevant de l'article 9. Confier à Microsoft la clé qui ouvre ces données aurait laissé la donnée en Europe et fait basculer la clé sous une autre juridiction — un déplacement qui vide D15 de son sens sans jamais déplacer un octet.
+
+**Ce qui a été mesuré, et non supposé.** Une sonde jetable exécutée le 22/08 contre le domaine réel a établi que l'URL du jeton OAuth2 est `https://www.ovh.com/auth/oauth2/token` — aucune des trois adresses en `ovhcloud.com` ne répond autre chose qu'une page marketing en `404` —, que `datakey` rend une clé de 32 octets et une enveloppe au format JWE compact portant `x-key-ver`, et que `datakey/decrypt` coûte **30 ms de médiane** (27 min, 33 max). Le coffre injoignable échoue en 91 ms.
+
+**Ce que `x-key-ver` a changé au design.** OVH versionne la clé maîtresse et fait voyager le numéro _dans_ l'enveloppe. La rotation de la clé maîtresse ne demande donc aucun code : le format la porte. Seule la rotation de la clé de données restait à concevoir, et elle l'est.
+
+**Ce que la politique IAM accorde :** sept actions sur cinquante-neuf, une ressource, une identité. Aucune suppression, aucune modification, aucune signature — un compte de service volé permet de lire et d'écrire, jamais de rendre les données illisibles.
+
+**Les voies écartées.**
+
+- **Azure Key Vault, AWS KMS, Google Cloud KMS** — trois fournisseurs sous CLOUD Act. Écartés par D15, pas par leurs mérites techniques.
+- **Un secret simple pour la clé du TOTP, sans enveloppe** — plus simple, et strictement plus faible : une seule compromission suffirait. L'enveloppe stockée en base exige **deux compromissions indépendantes**, le serveur _et_ la base.
+- **Déchiffrer au coffre à chaque vérification TOTP** — 30 ms le permettraient. C'est la disponibilité qui l'interdit : chaque connexion à deux facteurs dépendrait alors de la joignabilité d'un service tiers.
+
+**Ce qui la rouvrirait :** un modèle de menace où le vidage mémoire du processus devient crédible — l'alternative serait alors l'appel par vérification, dont le coût est mesuré. Ou une rupture de service OKMS répétée, qui remettrait en cause le refus de démarrer.
+
+**Conception détaillée :** `docs/superpowers/specs/2026-08-22-coffre-des-secrets-design.md`.
+
+---
+
+## D60 — MailKit porte l'envoi d'emails, et le fournisseur reste interchangeable
+
+**Tranché le :** 23/08/2026, au lot 4b. **Le porteur du projet a choisi le SMTP générique** parmi trois options, puis a précisé que le fournisseur serait OVHcloud.
+
+L'exigence 2 de `docs/09-comptes.md` § 1 — « pas de nutrition sans email vérifié » — était livrée à moitié depuis le lot 4 : la règle existait, l'**envoi** non. `IEmailSender<TUser>` n'avait que son défaut, `NoOpEmailSender`, qui « ne fait rien » et existe pour qu'on remarque qu'on ne l'a pas remplacé.
+
+**Pourquoi SMTP plutôt qu'une API de fournisseur.** Brevo et Postmark exposent des API HTTP, ce qui aurait évité toute dépendance nouvelle — le produit sait déjà parler HTTP, le coffre en est la preuve. Mais le code aurait alors **connu son fournisseur** : en changer aurait demandé de réécrire l'adaptateur. En SMTP, l'hôte, le port, les identifiants et l'expéditeur sont de la configuration ; passer d'OVHcloud à un autre ne touche pas une ligne.
+
+**Pourquoi MailKit et non `System.Net.Mail`.** `SmtpClient` est explicitement déconseillé par Microsoft pour du code neuf — sa propre documentation renvoie à MailKit. Ce n'est pas une préférence de style : `SmtpClient` ne gère correctement ni STARTTLS moderne, ni l'authentification OAuth2, ni les jeux de caractères des en-têtes.
+
+**Ce qui a été vérifié à la source le 23/08/2026**, et non supposé : version **4.17.0**, publiée le **26/05/2026**, licence **MIT**. L'âge de la version satisfait le délai d'adoption de la doctrine des dépendances — un paquet compromis est généralement retiré en quelques heures, et trois mois valent mieux que trente jours.
+
+**Un piège rencontré en la vérifiant, qui vaut d'être écrit.** `dotnet package search MailKit --exact-match` a rendu **`1.10.0`** — une version qui n'a rien à voir avec la réalité. C'est l'index NuGet interrogé directement qui a donné la bonne. Une version lue dans la sortie de `dotnet package search` ne prouve rien.
+
+**Les voies écartées.**
+
+- **Une API de fournisseur (Brevo, Postmark)** — aucune dépendance nouvelle, mais le code connaît son fournisseur. Écartée pour cette raison seule.
+- **`System.Net.Mail.SmtpClient`** — aucune dépendance non plus, et déconseillée par son propre éditeur.
+- **Aucun envoi, et une vérification d'adresse par un autre canal** — il n'y en a pas d'autre.
+
+**Ce qui la rouvrirait :** un besoin de suivi de délivrabilité — ouvertures, rebonds, plaintes — que SMTP ne rapporte pas et qu'une API de fournisseur expose. Ce jour-là, l'adaptateur change et le reste du produit ne bouge pas : c'est précisément ce que le port `IEmailSender<Utilisateur>` garantit.
+
+---
+
+## D61 — La détection de perte rapide lit des MOYENNES hebdomadaires, pas des pesées
+
+**Tranché le :** 24/08/2026, au lot 5. **Pris en autonomie**, le porteur du projet ayant demandé que ce lot soit exécuté pendant son sommeil. **À relire** : la décision touche un garde-fou de santé.
+
+`PerteDePoidsRapide.EstDetectee` existait depuis le lot 3, éprouvée et couverte à 100 %. En la branchant sur l'API, une chose est apparue qu'aucune de ses épreuves ne pouvait montrer : **elle suppose que ses entrées sont hebdomadaires**. Elle compare des valeurs consécutives et lit chaque écart comme « une semaine ». Lui passer la série brute de `body_weight`, où l'utilisateur pèse quand il veut — donc souvent tous les jours — lui aurait fait mesurer des JOURS en croyant mesurer des semaines.
+
+**L'effet n'est pas un faux positif, c'est un SILENCE.** La variation d'un jour à l'autre reste sous le seuil de 1 %, donc la boucle sort à la première comparaison et rend `false`. La détection serait restée muette exactement chez les utilisateurs les plus assidus — ceux qui pèsent tous les jours parce qu'ils surveillent leur poids de près, c'est-à-dire la population que `docs/01-conformite.md` § 5 nomme comme celle qu'il faut protéger. Aucune épreuve n'aurait rougi : le domaine faisait correctement ce qu'on lui demandait, sur des entrées qui ne voulaient pas dire ce qu'il croyait.
+
+**Ce qui a été retenu : la MOYENNE de la semaine, et non sa dernière pesée.** Le poids corporel varie de 1 à 2 % d'un jour à l'autre — eau, glycogène, contenu digestif — soit **plus que le seuil lui-même**. Un échantillon hebdomadaire unique ferait donc du seuil un générateur de faux positifs : quatre creux successifs suffiraient à déclencher l'alerte chez quelqu'un dont le poids ne bouge pas. Une épreuve construit exactement ce cas et vérifie que le constat ne tombe pas.
+
+Et un garde-fou qui crie sans motif est un garde-fou qu'on finit par ignorer, puis par désactiver. Sur ce sujet-là, le coût d'une alerte de trop n'est pas nul : il use la seule alerte qui compte.
+
+**La semaine est la semaine ISO**, par `System.Globalization.ISOWeek`. Elle ne dépend ni de la culture du serveur ni du fuseau de l'utilisateur, contrairement au premier jour de semaine du calendrier, qui change de pays en pays. Une épreuve garde le passage du 31 décembre au 1er janvier, où un regroupement par année civile aurait scindé une même semaine en deux et inventé une comparaison hebdomadaire d'un jour.
+
+**Une semaine incomplète compte quand même** — la moyenne d'une pesée vaut cette pesée. Refuser les semaines partielles retarderait la détection de sept jours au pire moment : celui où quelqu'un vient de commencer à perdre vite.
+
+**Où vit le calcul.** Dans `Palier.Domain`, avec le seuil et la fenêtre qu'il sert. Le mettre dans le gestionnaire aurait placé une règle de sécurité hors du seul projet tenu à 100 % de couverture, et hors de portée des épreuves qui la gardent.
+
+**Les voies écartées.**
+
+- **Passer la série brute au domaine** — c'est l'état par défaut, celui qu'on obtient en ne se posant pas la question. Silencieux chez les utilisateurs assidus.
+- **La dernière pesée de chaque semaine** — plus simple à écrire et à expliquer, mais elle échantillonne un signal plus bruyant que le seuil qu'on lui applique.
+- **La moyenne mobile sur sept jours** — techniquement supérieure au découpage par semaines calendaires, qui traite mal une série commençant un jeudi. Écartée pour aujourd'hui : `01-conformite.md` § 5 parle de semaines, et une moyenne mobile changerait le sens de la règle en même temps que son calcul. C'est un raffinement, pas une correction.
+- **Exiger une pesée hebdomadaire du produit** — une contrainte d'interface pour éviter un calcul de dix lignes, et qui rendrait la détection dépendante d'un comportement qu'on ne contrôle pas.
+
+**Ce qui la rouvrirait :** un avis clinique — le kinésithérapeute que `docs/14-contenu.md` prévoit — sur la bonne façon de lire une série de poids. C'est le genre de question où une source médicale prime sur un raisonnement de conception, et cette décision est prise faute de l'avoir demandée.
+
+---
+
+## D62 — Les quatre arbitrages du lot 5
+
+**Tranchés le :** 24/08/2026. **Pris en autonomie**, le porteur du projet ayant demandé que le lot 5 soit exécuté pendant son sommeil. Chacun porte ce qui le défait ; deux d'entre eux ne sont pas des choix.
+
+> **Amendé le 24/08/2026**, sur demande du porteur : « tu dois aller [chercher] la meilleure solution ; si tu n'arrives pas à trancher, tu dois en faire une option et l'utilisateur ira cocher l'option dans ses paramètres. » Le dernier point de cette décision — le filtrage du catalogue, laissé ouvert — est donc **fermé par D63**, et il l'est par la conformité, pas par arbitrage. D39 est fermée ci-dessous.
+
+### La pagination va au CURSEUR, et le curseur est un couple
+
+`GET /api/v1/seances?avant={instant}&avantId={guid}&limite={n}`.
+
+**Le décalage aurait été faux.** Une liste triée par date décroissante reçoit ses insertions **en tête** : entre le moment où le client lit la page 1 et celui où il demande la page 2, une séance ouverte décale tout d'un rang, et un `OFFSET 20` saute la vingtième — définitivement, sans erreur et sans trou visible dans la réponse.
+
+**Le couple, parce que l'instant seul ne suffit pas.** Deux séances peuvent porter le même `started_at` — un import, deux entraînements notés à la minute près — et un `<` strict en aurait sauté une pour toujours. `(started_at, id)` est un ordre total.
+
+`EF.Functions.LessThan` sur un tuple traduit en comparaison de **row values** PostgreSQL, `(started_at, id) < (@a, @b)`, qui se sert de l'index `workouts (owner_id, started_at desc)` posé par D39 — là où un `OR` force souvent un parcours. Trouvé par Context7, pas de mémoire.
+
+**Ce qui la défait :** un besoin de sauter à la page N, qu'aucun écran ne demande.
+
+### Les deux listes sont FERMÉES, et le document les donne
+
+`docs/05-entrainement.md` nomme les quatre contraintes au § 4 — cervicale, lombaire, épaule, genou — et les trois états de ressenti au § 5 — `good`, `meh`, `pain`. **Il n'y avait rien à trancher** : la liste est fermée par le document métier.
+
+**Le texte libre aurait été un piège.** Il ne se traduit pas, il ne se compare pas — « épaule », « epaule », « Épaule droite » sont trois valeurs pour une machine — et il finirait dans un prompt de modèle, ce que `docs/01-conformite.md` encadre strictement.
+
+La forme stockée est en **minuscules sans accent**, des deux côtés : `user_constraints.region` et `exercises.contraindicated_for` se comparent, et une collation qui traiterait « e » et « é » différemment selon l'environnement rendrait le filtrage dépendant de la configuration du serveur. Le libellé accentué vit dans i18next.
+
+**Ce qui la défait :** une cinquième région réclamée par un utilisateur. Elle s'ajoute alors à l'énumération, à la contrainte `CHECK` et aux libellés — pas par le corps d'une requête.
+
+### Le ratio tirage/poussée est REPORTÉ
+
+`docs/05-entrainement.md` § 4 le définit, `VolumeParGroupe.SurSeptJours` sait le calculer depuis le lot 3, et `SerieEffectuee` attend un `RoleMouvement`.
+
+**Ce rôle n'existe nulle part en base.** `exercises` porte `primary_muscles` et `secondary_muscles` ; aucune colonne ne dit si un mouvement tire ou pousse. Le déduire des muscles serait faux — un pull-over travaille les pectoraux **et** le grand dorsal, un rowing inversé et un développé partagent le deltoïde — et **un ratio faux vaut moins que pas de ratio** : il ferait modifier un programme sur une mesure inventée.
+
+La colonne se pose au lot qui **remplit** le catalogue — étape 1 bis, 250 à 400 exercices — où le rôle se renseigne exercice par exercice, avec le reste. L'ajouter maintenant créerait une colonne vide sur un catalogue vide : le « garde-fou sans cible » que D39 refuse.
+
+**Ce qui la défait :** rien, jusqu'au catalogue. Le volume par muscle, lui, est livré.
+
+### Le filtrage du catalogue par les contraintes N'EST PAS TRANCHÉ
+
+C'est le seul point que ce lot laisse **délibérément ouvert**, et il appartient au porteur.
+
+Le § 4 décrit un filtrage automatique par intersection. Il laisse ouvert ce qu'on fait d'un exercice contre-indiqué : **l'exclure** du catalogue, ou **l'afficher marqué**. Les deux se défendent — exclure protège, marquer informe — et le choix se voit par l'utilisateur, donc `CLAUDE.md` § 6 s'applique.
+
+**Le lot 5 stocke et expose.** L'épreuve `Declarer_une_contrainte_ne_FILTRE_PAS_encore_le_catalogue` rougira le jour où le filtrage arrivera, avec un message qui explique pourquoi. Sans elle, le filtrage se serait installé au détour d'une implémentation, dans la forme que quelqu'un aurait trouvée évidente, et **personne n'aurait jamais posé la question**.
+
+### Et D39, considérée comme prise
+
+Elle portait « arbitrage à confirmer par le porteur du projet ». Trois lots s'appuient dessus, et la défaire coûterait treize tables et treize épreuves RLS que rien n'exercerait. Le lot 5 l'a appliquée à la lettre : **deux** tables nouvelles, chacune avec sa politique, ses trois rôles et son épreuve d'isolation.
+
+**FERMÉE le 24/08/2026.** Ce n'était pas un arbitrage de goût, et le relire l'a montré : poser les treize tables d'un coup produirait treize politiques RLS qu'aucun cas d'usage n'exerce. `CLAUDE.md` § 4 refuse cela en toutes lettres — « un garde-fou non éprouvé ment », « une branche jamais franchie est une branche qui ment ». La question se tranchait donc par une règle déjà écrite, pas par une préférence.
+
+**Ce qui la rouvrirait :** un besoin de voir le schéma complet d'un coup — pour une AIPD, un audit, une migration de masse. Ce besoin se sert d'un document, pas de treize tables vides.
+
+---
+
+## D63 — L'adaptation par contrainte MARQUE le catalogue, elle ne le filtre jamais
+
+**Tranché le :** 24/08/2026, sur demande du porteur d'aller chercher la meilleure solution plutôt que de lui laisser la question. **Ce n'est pas un arbitrage de goût : trois documents le tranchent, et ils disent la même chose.**
+
+D62 laissait ouvert ce qu'on fait d'un exercice contre-indiqué — l'exclure du catalogue, ou l'afficher marqué. La relecture des documents a montré que la question était déjà répondue ailleurs.
+
+**Ce que disent les documents.**
+
+`docs/05-entrainement.md` § 4 emploie le mot « filtrent », qui est ambigu — trier ou retirer. Mais `docs/00-produit.md` tranche ce qu'il peut vouloir dire : « "Voici ta valeur, voici la référence, voici l'écart" est une information. Même écran, même donnée, **régime juridique opposé**. » Et `docs/01-conformite.md` § 2 pose la formule canonique : « un chiffre, une référence, un écart. **Jamais une action.** »
+
+**Retirer un exercice du catalogue EST une action.** Elle ment sur le contenu du catalogue ; elle n'apprend rien ; et elle prend une décision médicale en silence pour quelqu'un qui a peut-être un avis contraire de son kinésithérapeute — précisément la population que `00-produit.md` décrit en ouverture, « sortie de kinésithérapie, retour après grossesse, prothèse ».
+
+**Ce qui est livré.** Le catalogue sort **entier**, et chaque exercice porte le recoupement entre ses contre-indications et les contraintes que l'appelant a déclarées : `MarquageDeContrainte(Region, Severite)`. L'API ne retire jamais une ligne. La présentation — replier, signaler, laisser passer — se déduit de la sévérité et appartient à l'écran, donc au lot 6.
+
+**Le réglage de l'utilisateur est la SÉVÉRITÉ, et il est par contrainte.**
+
+`docs/03-donnees.md` la prévoyait depuis toujours — `severity text check (severity in ('leger','modere','strict'))` — et le lot 5 l'avait **omise**, faute d'avoir relu ce document. C'est elle, le réglage que le porteur demandait : l'utilisateur coche la gravité de chaque contrainte, à la déclaration.
+
+**Par contrainte, et non global**, parce qu'une épaule strictement contre-indiquée et un genou légèrement sensible n'appellent pas le même traitement. Un réglage global aurait forcé un seul comportement pour les deux, et l'utilisateur aurait choisi le pire des deux compromis. Un second réglage d'affichage aurait créé des combinaisons contradictoires — `strict` + « tout afficher » — pour zéro information nouvelle : KISS gagne.
+
+**Le défaut est `modere`.** Pas `leger` : le défaut d'un produit dont la promesse est d'éviter les blessures ne peut pas être le moins protecteur des trois, et quelqu'un qui prend la peine de déclarer une contrainte signale déjà qu'elle compte. Pas `strict` non plus, qui replierait des exercices pour une gêne passagère.
+
+**Les voies écartées.**
+
+- **Exclure du catalogue** — la plus « protectrice » en apparence. Elle place l'éditeur en conseiller, ce qui est réglementé, et se fait contourner dès que l'utilisateur remarque qu'un exercice a disparu.
+- **Marquer sans sévérité** — l'écran n'aurait alors qu'un booléen, donc un seul comportement possible, et le § 4 serait lettre morte.
+- **Un réglage d'affichage global** — redondant avec la sévérité, et générateur de combinaisons contradictoires.
+
+**Ce qui la rouvrirait :** un avis du kinésithérapeute que `docs/14-contenu.md` prévoit, disant qu'une contre-indication stricte doit être rendue inaccessible et non repliée. Ce serait alors une décision de santé documentée, pas un défaut d'interface.
+
+---
+
+## D64 — La perte de poids se lit en fenêtres GLISSANTES, non en semaines calendaires
+
+**Tranché le :** 24/08/2026. **Corrige D61**, prise la nuit précédente.
+
+D61 avait identifié le bon problème — `PerteDePoidsRapide` suppose des entrées hebdomadaires, la série réelle est quotidienne — et posé une réduction par **semaines ISO**. En la relisant, cette réduction porte un défaut mesurable.
+
+**Le défaut.** Quelqu'un qui commence à peser un jeudi a une première « semaine » de quatre jours. L'écart entre sa moyenne et celle de la semaine suivante porte alors sur environ cinq jours, pas sept — et le seuil de 1 % appliqué à cinq jours est **plus strict qu'il ne devrait**. C'est un faux positif, sur une alerte dont `docs/01-conformite.md` § 5 dit qu'elle oriente vers un professionnel.
+
+**Ce qui est livré.** Une moyenne mobile sur sept jours glissants, ancrée sur le dernier jour observé, comparée à J−7, J−14 et J−21. Chaque comparaison porte sur exactement sept jours, quel que soit le jour où l'utilisateur a commencé. C'est aussi plus fidèle au texte, où « par semaine » désigne un intervalle et non une case du calendrier.
+
+**Une fenêtre vide interrompt la série**, elle ne s'interpole pas : inventer une valeur pour une semaine sans pesée reviendrait à conclure sur une mesure qui n'existe pas.
+
+**Une seule pesée par fenêtre suffit**, et c'est un changement par rapport à ce que D61 envisageait. Exiger deux pesées aurait retardé la détection chez qui pèse une fois par semaine — la plupart des gens — et la règle des **trois baisses consécutives** fait déjà le travail anti-bruit : il faut que chaque comparaison dépasse le seuil, ce qu'un bruit aléatoire produit rarement trois fois de suite.
+
+**Ce qui reste vrai de D61 :** la moyenne plutôt que la dernière pesée. Le poids varie de 1 à 2 % d'un jour à l'autre, soit plus que le seuil lui-même.
+
+**Ce qui la rouvrirait :** un avis clinique sur la bonne façon de lire une série de poids. Le kinésithérapeute de `docs/14-contenu.md` reste la source à interroger — mais la question porte désormais sur le SEUIL, qui vient de `01-conformite.md`, et non sur la méthode de mesure, qui est un fait de statistique.
+
+---
+
+## D65 — Le schéma livré au lot 5 s'aligne sur `03-donnees.md`
+
+**Tranché le :** 24/08/2026. **Correction**, découverte en relisant le document de référence pour répondre à D63.
+
+`CLAUDE.md` § 5 pose que le document spécialisé fait autorité — `03-donnees.md` sur le schéma. Le lot 5 s'en est écarté sur trois points, tous par inattention à ce document plutôt que par décision.
+
+| Écart                                   | Ce qui était livré | Ce que le document dit |
+| --------------------------------------- | ------------------ | ---------------------- |
+| `exercise_feedback` — nom de la colonne | `feeling`          | `rating`               |
+| `user_constraints` — gravité déclarée   | absente            | `severity` (3 valeurs) |
+| `user_constraints` — aide-mémoire       | absente            | `note`                 |
+
+**Et un quatrième point, qui est un défaut et non un écart de nommage.** `exercise_feedback` portait une colonne `noted_at` que le document n'a pas, et **l'historique était trié dessus**. Or le § 5 raisonne sur des séances CONSÉCUTIVES : trier sur la date de saisie fait passer en tête le ressenti d'une séance ancienne noté après coup, et « deux `pain` consécutifs » désigne alors deux séances qui ne se suivent pas — une orientation vers un professionnel sur une suite inventée. La colonne est retirée ; l'ordre vient de `workouts.started_at`.
+
+**Corrigé par une migration nouvelle**, non en réécrivant les deux migrations du lot 5. Elles sont poussées sur le dépôt distant, quelqu'un a pu les appliquer, et D14 pose des migrations versionnées — les réécrire après publication casse ce contrat. Le journal git raconte alors ce qui s'est passé : livré, relu, corrigé.
+
+**Ce qui la rouvrirait :** rien. C'est un alignement sur un document qui fait autorité.
+
+---
+
+## D66 à D71 — le catalogue d'exercices
+
+**Tranchées le :** 24/08/2026. **Prises en autonomie**, sur demande du porteur d'aller chercher la meilleure solution plutôt que de lui laisser la question.
+
+**Conception :** `docs/superpowers/specs/2026-08-24-catalogue-exercices-design.md`.
+
+### Ce que l'étude a renversé
+
+J'avais signalé deux questions comme appartenant au porteur — les champs manquants au schéma, et **d'où vient le contenu**. La relecture des documents a montré que la seconde n'en était pas une : `docs/16-projet.md` § 4 nomme déjà le fichier, son dossier et sa source.
+
+| Fichier            | Contenu                                  | Source                   |
+| ------------------ | ---------------------------------------- | ------------------------ |
+| `02-exercises.sql` | 60 exercices prioritaires puis extension | Rédigé, relu par le kiné |
+
+« Rédigé » — pas importé. Et le reste de la chaîne existait déjà, posé au lot 2 sans avoir jamais servi : le dossier, `db/SOURCES.md` avec son tableau vide, la règle `source-non-attribuee`, et la politique `migrations_referentiel` sur `exercises`. **Ce lot est le premier client de ce dispositif.**
+
+### D66 — le catalogue est RÉDIGÉ, jamais importé
+
+Confirmée par le document, et pour trois raisons qui tiennent seules.
+
+**Les bases libres sont anglophones**, et le produit exige les deux langues dès la V1 : traduire 400 entrées, c'est les rédiger.
+
+**Leurs licences contaminent.** `17-donnees-sources.md` pose la règle qui tranche : « ne jamais fusionner les sources dans une table unifiée enrichie, c'est exactement ce qui créerait une base dérivée au sens de l'ODbL ». Or un catalogue enrichi de contre-indications, de consignes et d'un rôle de mouvement EST une table unifiée enrichie.
+
+**Et leurs contre-indications ne sont pas les nôtres.** `05-entrainement.md` § 4 donne quatre régions précises ; une base externe porte d'autres catégories et d'autres silences.
+
+**Ce qui la rouvrirait :** une base sous licence permissive, en français, dont les contre-indications suivent le § 4. Elle n'existe pas.
+
+### D67 — bilingue par COLONNES suffixées
+
+`name_fr`, `name_en`, `instructions_fr`, `instructions_en`, `common_errors_fr`, `common_errors_en`.
+
+Deux langues figées par `11-qualite.md` — « français et anglais dès la V1 ». Et surtout : **une contrainte rend l'oubli impossible**. Une table `exercise_translations` aurait permis un exercice sans sa ligne anglaise, silencieusement, et l'écran aurait affiché un trou. Sur une table de référence remplie à la main, cette différence est celle qui compte.
+
+**Ce qui la défait :** une troisième langue. Ce jour-là, la table de traductions vaudra sa migration.
+
+### D68 — un SLUG comme clé naturelle
+
+`slug`, unique **là où `is_custom = false`**. Il résout l'**idempotence** du référentiel — rejouable après un `db:reset` ou une correction, sans figer d'UUID dans le fichier — et les **variantes**, qui se déclarent par slug plutôt que par un identifiant qu'aucun humain ne peut vérifier.
+
+### D69 — le rôle du mouvement, qui ferme le report de D62
+
+D62 reportait `movement_role` avec un motif précis : « la colonne se pose au lot qui **remplit** le catalogue ». C'est ce lot. Liste fermée — `tirage`, `poussee`, `aucun` — et le ratio tirage/poussée du § 4 devient calculable. Le deltoïde latéral vaut `aucun`, comme le document l'exige.
+
+### D70 — les champs du catalogue sont exigés du CATALOGUE
+
+Un utilisateur qui crée son exercice donne un nom, pas une traduction ni des consignes. Les colonnes sont donc nullables, et `ck_exercises_catalogue_complet` les exige quand `is_custom = false`.
+
+**Sans cette contrainte, une entrée incomplète entrerait au catalogue public** — visible de tous, affichée sans consigne, sur un produit dont la promesse est d'éviter les blessures.
+
+### D71 — les variantes par TABLE DE LIENS
+
+`exercise_variants`, deux clés étrangères. Un `uuid[]` aurait coûté une colonne au lieu d'une table, mais PostgreSQL ne contraint pas les références dans un tableau : une variante pointant sur un exercice supprimé y resterait, et le produit proposerait un remplacement qui n'existe plus.
+
+### Et le mécanisme d'application
+
+`npm run db:referentiel` — un script, **pas une migration**. Le référentiel n'est pas du schéma : corriger une faute dans une consigne ne doit pas produire une migration versionnée que tout déploiement rejouera pour l'éternité. `16-projet.md` sépare d'ailleurs les deux physiquement ; le mécanisme suit cette séparation.
+
+Il passe par `palier_migrations` et la politique `migrations_referentiel`, jamais par `BYPASSRLS` ni par un `NO FORCE` temporaire — les deux façons d'éteindre RLS sans que rien ne le signale.
+
+### CE QUI RESTE DÛ, et qui doit se voir
+
+**Le catalogue n'est PAS relu par un professionnel de santé.** `14-contenu.md` § 2 l'exige, et cette relecture n'a pas eu lieu. Les contre-indications livrées sont **dérivées mécaniquement** du tableau de `05-entrainement.md` § 4 : une application du document, pas un avis médical.
+
+La mention figure en tête du fichier de référentiel, dans la colonne Source de `db/SOURCES.md`, et ici. C'est la seule façon honnête de livrer un contenu de santé qui attend encore sa validation.
+
+---
+
+## D72 à D75 — le système de programmes
+
+_24/08/2026. `03-donnees.md` fixait déjà les trois tables ; aucune n'existait en base. Ce lot les pose, livre les neuf programmes modèles de `14-contenu.md` § 2, et ouvre la construction d'un programme personnel._
+
+### D72 — les modèles vivent dans la MÊME table que les programmes personnels
+
+`16-projet.md` § 4 signalait le point comme non tranché, et interdisait au lot 2 de le trancher seul : « `04-programs.sql` livre **9 programmes modèles**, mais `programs.owner_id` est `not null references auth.users` ». **Le porteur du projet a tranché le 24/08/2026.**
+
+`owner_id` devient NULLABLE, et `is_template` sépare les deux populations. C'est la forme « catalogue mixte » déjà en vigueur sur `exercises` — deux politiques permissives **séparées**, jamais un `OR` dans une seule, pour la raison que la migration du socle explique déjà : aucun ordre d'évaluation n'est garanti entre les branches d'un `OR`.
+
+**Ce que les deux autres formes coûtaient.** Une table `program_templates` distincte dupliquait l'arbre entier — jours et exercices compris, six tables au lieu de trois — et toute évolution se serait faite deux fois, avec la certitude qu'un jour l'une des deux serait oubliée. Un utilisateur système propriétaire des neuf modèles gardait le schéma intact, mais faisait entrer une identité qui n'est celle de personne dans `AspNetUsers` — que D38 tient délibérément hors des politiques RLS.
+
+**Ce que la forme retenue donne en plus, et qui a emporté la décision :** copier un modèle vers un programme personnel ne traduit rien. C'est la même forme, avec un propriétaire au lieu de nul.
+
+### D73 — la recherche par nom NORMALISE les accents, sans extension
+
+Le catalogue compte 255 mouvements. Les lister tous pour que le navigateur filtre était tenable à soixante ; ça ne l'est plus, et surtout ça ne répond pas à la demande — construire un programme en **tapant des noms d'exercices**.
+
+`GET /api/v1/exercices?recherche=` cherche donc au serveur, dans les deux langues. Le problème réel est français : qui tape `developpe couche` sans accent ne doit pas rester bredouille devant `Développé couché`.
+
+**Une colonne générée `search_key`, et aucune extension.** `unaccent` aurait demandé un `create extension` sur chaque environnement — un privilège de plus à négocier là où D37 pose « aucun superutilisateur ».
+
+Une collation ICU non déterministe était le candidat sérieux : elle ignore accents ET casse d'un seul geste, sans colonne supplémentaire. **Mesuré sur le cluster du projet — PostgreSQL 18.6 — `LIKE` fonctionne dessus**, la restriction des versions antérieures ayant été levée. Elle est écartée pour deux autres raisons :
+
+- Elle changerait le sens de `=` sur `name_fr` **partout**, pas seulement dans la recherche. Une collation s'applique à la colonne, pas à un usage : les comparaisons, les jointures et les contraintes d'unicité en hériteraient toutes, pour un besoin qui ne concerne qu'un écran.
+- Elle repose sur un comportement de PostgreSQL 18. Le moteur est hébergé chez un fournisseur dont ce dépôt ne fige pas la version, et `CLAUDE.md` § 3 exige qu'un changement d'hébergeur reste possible en une journée.
+
+Reste `translate()` sur la colonne minuscule, stockée en colonne générée : du SQL portable, aucune dépendance, aucun effet hors de la recherche.
+
+**Aucun index sur cette colonne, et c'est délibéré.** Un `LIKE '%terme%'` n'est ancré à gauche ni à droite : mesuré, un btree ne produit qu'un `Filter` sur un parcours complet, jamais un `Index Cond`. Poser un index aurait donné l'apparence d'une optimisation sans en être une. À 255 lignes le parcours est immédiat ; si le catalogue atteint un jour la taille où cela pèse, c'est un index trigramme qu'il faudra — et une décision datée pour l'extension qu'il demande.
+
+### D74 — un modèle se COPIE, il ne se référence pas
+
+`POST /api/v1/programmes/{id}/copie` duplique le modèle en programme personnel. L'alternative — un programme personnel qui pointe vers son modèle et n'enregistre que ses écarts — économisait des lignes et coûtait la seule chose qui compte : **l'utilisateur ne pourrait plus rien changer sans que le sens de son programme dépende d'une ligne qu'il ne possède pas.** Corriger un modèle aurait modifié, sans prévenir, le programme de tous ceux qui en étaient partis.
+
+Une copie est figée le jour où elle est prise. C'est ce qu'on attend d'un programme d'entraînement, et c'est aussi ce que le RGPD attend d'une donnée dont l'utilisateur est responsable.
+
+### D75 — un exercice contre-indiqué est MARQUÉ à la construction, jamais refusé
+
+D63 posait la règle pour le catalogue : « le catalogue se marque, ne se filtre jamais ». Elle vaut identiquement quand on bâtit un programme. Ajouter à son programme un mouvement contre-indiqué pour une contrainte qu'on a déclarée est **permis**, et signalé.
+
+Refuser serait plus simple à écrire, et ce serait une faute : `01-conformite.md` sépare informer de prescrire, et un logiciel qui interdit un mouvement à quelqu'un dont il ignore le dossier prescrit. L'utilisateur, lui, sait ce que son kinésithérapeute lui a dit.
+
+### CE QUI RESTE DÛ, et qui doit se voir
+
+**Les neuf programmes ne sont PAS relus par un kinésithérapeute.** `14-contenu.md` § 2 l'exige explicitement — « relus par un kinésithérapeute pour la partie contraintes […] tout aussi nécessaire » que la relecture du diététicien pour la nutrition.
+
+La réserve pèse plus lourd sur cinq d'entre eux : **Reprise cervicale, Reprise lombaire, Épaule ménagée, Genou ménagé, Reprise**. Ce sont ceux qu'on propose à quelqu'un qui revient de blessure, c'est-à-dire exactement la population que `00-produit.md` place au cœur de la cible.
+
+Comme pour le catalogue, la mention figure en tête du fichier de référentiel, dans `db/SOURCES.md`, et ici.
+
+---
+
+## D76 — le Split couvre SIX À SEPT séances, et la septième priorise
+
+_24/08/2026. Contradiction détectée entre deux documents, signalée puis tranchée par la hiérarchie de `CLAUDE.md` § 5._
+
+| Document                 | Ce qu'il disait                                   |
+| ------------------------ | ------------------------------------------------- |
+| `05-entrainement.md` § 1 | « **6-7** — Split spécialisé, avec priorisation » |
+| `14-contenu.md` § 2      | « Split — **6** »                                 |
+| `09-comptes.md` écran 6  | « Fréquence réaliste (**3 à 7**) »                |
+
+Le document spécialisé fait autorité sur son domaine : c'est `05-entrainement.md` pour l'entraînement. **Le Split va donc de six à sept**, et `14-contenu.md` était en retard.
+
+**Ce que la contradiction coûtait, mesuré.** Avant correction, la requête « quel programme pour sept séances » rendait `AUCUN`. Un utilisateur qui déclarait la fréquence haute que l'onboarding lui propose lui-même ne recevait aucune proposition — un cul-de-sac dans le parcours d'entrée du produit.
+
+**Pourquoi l'épreuve ne l'a pas vu.** `Les_STRUCTURES_du_document_sont_toutes_representees` bouclait sur `{ 3, 4, 5, 6 }`. Un seuil qui s'arrête avant la promesse ne garde rien : il vérifiait exactement ce que le contenu offrait, et n'aurait jamais pu signaler le manque. La boucle va désormais jusqu'à sept.
+
+**La septième séance REPREND un groupe, elle n'en ajoute pas.** Le split en compte six ; le septième jour repasse sur celui qui est en retard — c'est ce que « avec priorisation » veut dire. Inventer un septième groupe reviendrait à découper ce qui l'est déjà, et la note du programme le dit à l'utilisateur.
+
+---
+
+## D77 — le produit accueille UNE et DEUX séances par semaine
+
+_24/08/2026. Demandé par le porteur : « et aussi les gens pour 1 et 2 séances ». La décision a été prise APRÈS vérification de la littérature, parce qu'elle touche du contenu de santé._
+
+### Ce que les documents disaient, et pourquoi ça ne tenait pas
+
+`09-comptes.md` écran 6 proposait « fréquence réaliste (**3 à 7**) », et le tableau des structures de `05-entrainement.md` § 1 commence à trois. Quelqu'un qui ne peut tenir qu'une ou deux séances était donc **renvoyé dehors dès l'onboarding**.
+
+C'est contraire à la promesse même du produit. `00-produit.md` place au cœur de la cible la reprise, le retour après blessure, le temps compté — exactement les gens dont la fréquence est basse.
+
+### Ce que la littérature établit, et qui a permis de trancher
+
+Trois points, vérifiés avant d'écrire une ligne de contenu :
+
+1. **À volume égalisé, une et deux séances hebdomadaires produisent des gains comparables** chez le non-entraîné. Le volume porte le résultat ; la fréquence répartit le travail.
+
+   **Corrigé le 24/08/2026 par l'étude des méthodes.** Deux réserves que cette décision ne portait pas :
+
+   - **La dose minimale ne vaut PAS à tout âge.** C'est « la généralisation la plus dangereuse » du dossier : les doses de maintien réussissent chez les 20-35 ans et **échouent** chez les 60-75 ans. La note du programme le dit désormais à l'utilisateur.
+   - **Le « Weekend Warrior » ne dit pas ce qu'on lui fait dire.** Le protocole d'O'Donovan 2017 est de 150 min modérées ou 75 min vigoureuses concentrées en une ou deux séances — pas une séance courte. Une personne qui fait une séance brève n'est couverte par aucun de ses résultats.
+
+2. Une méta-analyse dose-réponse de 2025 — 67 études, 2 058 participants — trouve un effet de la **fréquence** compatible avec un effet **négligeable** une fois le volume tenu constant, là où l'effet du **volume** est établi avec une probabilité de 100 %.
+3. Cette même analyse compte les séries comme `05-entrainement.md` le fait déjà : **1 pour le muscle direct, 0,5 pour l'indirect**. Le document du projet était donc aligné sans le savoir.
+
+**Conséquence de conception, et non simple ajout :** la séance unique **concentre** le volume au lieu de le réduire. Quatre séries sur les mouvements principaux, aucune isolation, rien qui ne gagne sa place. Réduire le volume ET la fréquence aurait donné un programme qui ne fait rien.
+
+### La tension avec « chaque muscle 2 fois par semaine minimum »
+
+`05-entrainement.md` § 1 pose ce minimum. Le programme à deux séances le respecte ; celui à une séance, non.
+
+**Il n'est pas contourné, il est dit.** Le même document impose la manière : « le produit le signale — **comme une information chiffrée, jamais comme un reproche** ». La note du programme porte donc, mot pour mot, ce que la fréquence coûte et ce que passer à deux séances rapporterait — sans jugement, et sans laisser croire qu'une séance ne sert à rien.
+
+### Sources
+
+- [Dose-réponse volume et fréquence, méta-régressions (Sports Medicine, 2025)](https://link.springer.com/10.1007/s40279-025-02344-w)
+- [Dose-réponse volume hebdomadaire et masse musculaire (Schoenfeld et coll.)](https://pubmed.ncbi.nlm.nih.gov/27433992/)
+- [Entraînement minimaliste : dose et intensité réduites (Sports Medicine, 2023)](https://link.springer.com/article/10.1007/s40279-023-01949-3)
+- [Doses minimales pour la force en population générale](https://pmc.ncbi.nlm.nih.gov/articles/PMC11127831/)
+
+**Aucun texte n'en est repris.** Ce sont des faits et des ordres de grandeur, pas des formulations : la même ligne que pour le catalogue d'exercices.
+
+---
+
+## D78 — le sexe ne décide RIEN de l'entraînement, et une épreuve le garde
+
+_24/08/2026. Deux études en fan-out — 64 agents, 7,6 millions de jetons, chaque conclusion contestée par un agent sceptique remontant aux sources primaires._
+
+### La conclusion, sans nuance
+
+**Aucune différence liée au sexe ne justifie deux programmes.** Ni le choix des exercices, ni la charge relative, ni la plage de répétitions, ni le nombre de séries, ni la fréquence, ni la progression, ni les temps de repos, ni l'apport protéique, ni l'ampleur attendue des gains.
+
+À la question « qu'est-ce qui diffère vraiment et change quelque chose à un programme », le dossier répond en un mot : **rien**.
+
+### Ce qui rend cette absence solide
+
+Les résultats nuls reposent sur des effectifs très supérieurs à ceux des différences alléguées :
+
+| Question                      | Preuve                                                                |
+| ----------------------------- | --------------------------------------------------------------------- |
+| Hypertrophie relative         | ES 0,07 · p = 0,31 · **I² = 0**                                       |
+| Confirmation bayésienne       | +0,69 % (HDI −1,50 à +2,88) · 1 278 hommes, 1 537 femmes              |
+| Relation charge ↔ répétitions | **7 289 personnes**, 269 études                                       |
+| Cycle menstruel               | ES −0,06 · **78 études** · écart maximal jugé trivial par ses auteurs |
+| Besoins protéiques            | Plateau à 1,62 g/kg — modéré par l'âge, jamais par le sexe            |
+
+Contre `n = 42` pour l'écart de plus grande ampleur du dossier, qui porte sur **un seul exercice** et dont les auteurs qualifient eux-mêmes leurs mécanismes de « tentative and speculative ».
+
+### Pourquoi une ÉPREUVE et non un commentaire
+
+Brancher le sexe sur une décision d'entraînement ne casserait rien, ne lèverait rien, et passerait toutes les autres épreuves. **Le défaut serait invisible au compilateur et visible seulement à l'écran** — sous la forme d'un stéréotype que le produit aurait fabriqué lui-même.
+
+`ArchitectureTests.AUCUN_type_d_entrainement_ne_prend_le_SEXE_en_dependance` parcourt constructeurs, propriétés, champs et méthodes de tout type dont l'espace de noms contient `Entrainement`. Éprouvé par provocation le 24/08/2026 : une sonde posée dans `Palier.Application.Entrainement` a été refusée, nommément, sur ses deux voies.
+
+Une seconde épreuve garde le garde-fou : elle vérifie qu'il inspecte réellement des types, et que le type `Sexe` est toujours reconnu. Sans elle, un renommage aurait suffi à le transformer en décor.
+
+### Ce que l'épreuve N'INTERDIT PAS
+
+**Le sexe reste légitime côté nutrition.** Mifflin-St Jeor porte un terme de 166 kcal/jour, et `Palier.Domain.Depense` comme `Palier.Domain.Objectifs` le lisent à bon droit. La frontière est l'entraînement, pas le produit.
+
+### Les deux conséquences réelles — et aucune ne passe par le champ sexe
+
+1. **La progression s'affiche en pourcentage du point de départ.** Les gains absolus sont supérieurs chez l'homme, les relatifs sont équivalents : un affichage en kilos montre des chiffres plus petits à une femme pour un travail identique. La correction vaut **pour tout le monde** — « un affichage conditionné au sexe encoderait dans l'interface l'idée qu'une femme a besoin d'être protégée de ses valeurs absolues ».
+2. **Tout garde-fou de surcharge se calibre sur la personne par rapport à elle-même.** L'argument n'est pas le sexe : la variabilité entre deux personnes du même sexe dépasse l'écart moyen entre sexes.
+
+### Ce que le champ `sex` doit rester
+
+Binaire nullable, et **rien de plus**. Son terme vaut 166 kcal/jour quand l'erreur individuelle de l'équation est de ±150 à 300 kcal : le paramètre discuté est plus petit que le bruit de l'instrument.
+
+Pour une personne trans sous hormonothérapie, la masse maigre se déplace réellement — +4,12 kg sous testostérone, −2,4 kg sous œstrogènes — mais cela représente 50 à 90 kcal/jour, soit **la moitié** du saut que produirait un basculement du champ. Deux erreurs symétriques et aussi peu défendables : basculer le champ d'un coup, ou le figer à vie.
+
+### Ce qui reste dû
+
+Le dossier complet vit dans `.superpowers/sdd/2026-08-24-etude-sexe/`. Il porte des sections que ce journal ne résume pas — étapes de vie, plancher pelvien, signaux d'orientation vers un professionnel — et **elles attendent la même relecture que le catalogue**.
+
+---
+
+## D79 — la nutrition corrigée à la source, et un défaut qui plantait déjà
+
+_25/08/2026. Audit de `04-nutrition.md` par trente agents — 230 constats — puis neuf agents supplémentaires pour trancher les trois points que le porteur a contestés._
+
+### Ce qui était cassé DANS LE CODE, pas seulement dans le document
+
+`Palier.Domain/Objectifs/CibleMacronutriments.cs` levait un `ArgumentOutOfRangeException` quand l'énergie ne couvrait pas les protéines et les lipides demandés. **Provoqué le 25/08/2026 sur un profil ordinaire** — femme de 100 kg, 155 cm, 55 ans, sédentaire, déficit de 20 %, aux seules valeurs par défaut du document.
+
+Et le cas juste au-dessus du seuil était pire : le calcul rendait **12,6 g de glucides pour la journée**, soit 3 % de l'énergie, **sans rien signaler**. Une exception se voit ; une cible absurde s'affiche.
+
+**Aucun poste n'est plus le reste.** La méthode par soustraction n'est pas seulement fautive, elle est **supersédée** : l'ANSES décrit ainsi ses propres références antérieures — « la contribution des glucides à l'AET a été définie pour compléter les apports énergétiques au-delà des apports en lipides et protéines » — et les a remplacées en 2016. L'EFSA écrit que les valeurs glucidiques « cannot be made without considering other energy delivering macronutrients ».
+
+`Repartir` rend désormais une issue : **honorée**, **demande réduite** — les lipides cèdent d'abord, les protéines ensuite, pour protéger la masse maigre — ou **impossible**, un état nommé qui renvoie vers l'énergie et n'émet aucun nombre. La non-négativité est un **théorème**, pas une garde : jamais de `Math.Max(0, reste)`, qui masquerait la brèche en livrant un plan dont les macros ne somment plus aux calories.
+
+### Le magnésium — le porteur avait raison sur le nombre, l'audit sur la grandeur
+
+**« La limite est aux alentours de 400 mg » : le nombre est réel, la grandeur est fausse.** 400 mg/j est la **RDA** du FNB/IOM (1997), homme de 19 à 30 ans, apport **total** — une quantité à atteindre, l'inverse d'un plafond.
+
+**250 mg est vrai aussi, et ne le contredit pas.** C'est l'UL du SCF (2001), et son texte est sans ambiguïté :
+
+> « the UL for Mg **cannot be derived for the intake from all sources** […] **This UL does not include Mg normally present in foods and beverages.** »
+
+Un homme peut manger 420 mg de magnésium alimentaire tout en étant à **0 mg** sur le compteur de la limite haute. **Un plafond inférieur à un apport recommandé n'est une absurdité que si l'on croit qu'ils portent sur la même chose.**
+
+Le défaut du document n'était donc ni la valeur ni le principe : c'était **un seul compteur pour deux questions**. Sans correction, un homme mangeant exactement les 380 mg que l'ANSES lui recommande aurait été signalé à **152 % d'une « limite haute de sécurité »** — une alerte qui pousse au déficit, sur une application qui promet d'éviter les excès.
+
+### L'hydratation — la cible dépassait d'un tiers ce que l'EFSA pose
+
+`35 ml × poids` se réclamait des apports adéquats de l'EFSA. Le raisonnement était faux à sa racine : **ces valeurs portent sur l'eau TOTALE**, boissons et aliments confondus, alors que le produit ne compte que les boissons.
+
+La seule table qui publie ce coefficient est la table D-A-CH, dont l'intitulé de colonne dit mot pour mot « Wasserzufuhr durch Getränke **und feste Nahrung** » — et qui le dérive de la **dépense énergétique**, pas de la masse corporelle.
+
+Pour 73 kg, l'ancien calcul demandait 2 555 ml de boissons quand l'apport adéquat masculin est de 2 500 ml **tout compris**.
+
+**Et une cible gonflée n'est pas une prudence du côté de la sécurité.** Le consensus international sur l'hyponatrémie d'effort nomme les « inappropriate hydration recommendations » parmi les causes de l'apport excessif, et désigne comme les plus exposés le sportif **récréatif** et la **femme** — exactement le public de cette application.
+
+La cible passe donc aux boissons — 1,4 à 1,6 L pour la femme, 1,75 à 2,0 L pour l'homme — et **la limite haute devient un débit**, 0,7 L/h, parce qu'il n'existe aucune limite journalière : « No maximum daily amount of water that can be tolerated by a population group can be defined » (EFSA).
+
+### Les deux niveaux de source, et c'est le porteur qui les a posés
+
+> « Cite ANSES 2016 pour poser le socle réglementaire européen, puis Morton 2018 et l'ISSN pour l'apport spécifique à l'entraînement. Les deux niveaux ne se contredisent pas, ils répondent à des questions différentes, et le dire explicitement est ce qui rend l'argumentaire propre. »
+
+C'est la même distinction de grandeur que celle qui résout le magnésium, appliquée un cran plus haut. Le **socle** gouverne la contrainte — `PartGlucidiqueMinimale` vient de l'ANSES. La **littérature** gouverne la demande — les fourchettes protéiques viennent de Morton. La contrainte peut réduire la demande, jamais l'inverse.
+
+**La position de l'ISSN n'a PAS été vérifiée à la source** : le budget de recherche de la session était épuisé. Elle est nommée comme source à ajouter, et **aucune valeur ne lui est attribuée** tant qu'elle n'a pas été lue. C'est écrit dans le document lui-même.
+
+### Ce qui N'A PAS été tranché, et pourquoi
+
+Le § 7 du document porte **quatorze points** qui demandent un diététicien ou une décision du porteur. Les trois plus structurants :
+
+- **Le référentiel qui gouverne.** EFSA et ANSES divergent frontalement — lipides 20-35 % contre 35-40 %, qui ne se recoupent qu'au point unique de 35. Le choix est consigné, jamais moyenné.
+- **Les lipides à 0,8-1,2 g/kg n'ont aucune source.** Et la forme par kilogramme fait dériver silencieusement la part d'énergie : 1,0 g/kg vaut 33,7 % à 1 949 kcal et 24 % à 3 000 kcal **pour la même personne**.
+- **`nutrient_refs` manque trois colonnes** — `perimetre`, `forme_chimique` et surtout `statut`. Sans ce dernier, toute ligne dont `ul` est non nul devient une limite haute établie, et les niveaux sûrs du fer et du manganèse produiraient un vocabulaire de dépassement que l'EFSA interdit.
+
+**Aucune valeur de micronutriment n'a été corrigée en base** : l'audit en signale quatre périmées — B6, sélénium, fer, niacine — et chacune demande sa propre passe de vérification avant d'entrer.

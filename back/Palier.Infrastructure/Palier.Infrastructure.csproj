@@ -6,6 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="MailKit" Version="4.17.0" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -19,5 +20,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+
+  <!-- La liste de l'étage local du validateur. Embarquée dans l'assemblage
+       plutôt que rangée en base : aucune requête, aucun contexte, donc aucune
+       exemption d'architecture supplémentaire — une porte de moins. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Identite\Ressources\mots-de-passe-frequents.txt" />
+  </ItemGroup>
 
 </Project>

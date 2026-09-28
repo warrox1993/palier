@@ -74,7 +74,7 @@ Six écrans, aucun sautable sauf mention contraire. Objectif : que le premier é
 | 3   | Activité    | Temps de marche quotidien, métier assis ou debout. Pas de catégories floues       |
 | 4   | Contraintes | « Une blessure, une douleur ou une limitation ? » Régions, sévérité. **Sautable** |
 | 5   | Objectif    | Prise de masse, maintien, perte. Avec la marge d'erreur du calcul affichée        |
-| 6   | Programme   | Fréquence réaliste (3 à 7), puis proposition de structure                         |
+| 6   | Programme   | Fréquence réaliste (**1 à 7**), puis proposition de structure                     |
 
 **Écran 4 est le plus important du produit.** C'est lui qui active le différenciateur. Le formuler comme une aide, jamais comme un questionnaire médical : « pour qu'on évite de te proposer des exercices qui te font mal ».
 

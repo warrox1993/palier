@@ -37,6 +37,8 @@ Commencer par les 60 mouvements couvrant 90 % des programmes. Le reste s'ajoute 
 
 | Programme         | Fréquence | Contrainte visée           |
 | ----------------- | --------- | -------------------------- |
+| Une séance        | 1         | Aucune, temps très limité  |
+| Deux séances      | 2         | Aucune, temps limité       |
 | Reprise           | 3         | Aucune, retour après arrêt |
 | Reprise cervicale | 3         | Cervicale                  |
 | Reprise lombaire  | 3         | Lombaire                   |
@@ -45,7 +47,7 @@ Commencer par les 60 mouvements couvrant 90 % des programmes. Le reste s'ajoute 
 | Full body         | 3         | Aucune                     |
 | Upper / Lower     | 4         | Aucune                     |
 | PPL               | 5-6       | Aucune                     |
-| Split             | 6         | Aucune                     |
+| Split             | 6-7       | Aucune                     |
 
 Chaque programme porte une note expliquant ses choix. Un utilisateur qui comprend pourquoi un exercice est absent l'accepte ; sinon il le rajoute et se blesse.
 

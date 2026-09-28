@@ -22,6 +22,10 @@
     "erreur": {
       "titre": "Le socle de données ne répond pas",
       "aide": "La base est arrêtée ou injoignable. En développement, la relancer avec la commande db:up, puis actualiser."
+    },
+    "authentification": {
+      "titre": "Cet état demande une session",
+      "aide": "La route qui le publie est réservée aux comptes authentifiés. La base, elle, répond normalement : rien à relancer."
     }
   }
 }

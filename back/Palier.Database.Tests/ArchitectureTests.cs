@@ -1,6 +1,8 @@
+using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 using Palier.Application.Pipeline;
 using Palier.Infrastructure;
+using Palier.Infrastructure.Identite;
 
 namespace Palier.Database.Tests;
 
@@ -49,7 +51,44 @@ public sealed class ArchitectureTests
     /// accepte une requête, et la route répond sans authentification jusqu'au
     /// lot 4 (D41).
     /// </summary>
-    private static readonly string[] _exemptionsNommees = ["Palier.Api.Socle.LecteurDeSocle"];
+    /// <c>Palier.Infrastructure.Identite.MagasinDeSessions</c> — le SEUL type
+    /// autorisé à prendre <c>PalierAuthDbContext</c>. Motif, vérifiable ligne à
+    /// ligne : il porte le chemin que D38 laissait à concevoir, celui qui lit
+    /// `AspNetUsers` par email AVANT qu'aucune identité n'existe, et il n'atteint
+    /// aucune table de donnée de santé — `palier_auth` n'y a aucun privilège, ce
+    /// que trois épreuves de `RolesTests` exigent en code 42501.
+    /// <c>Palier.Infrastructure.Coffre.AmorcageDuTrousseau</c> — D59. Il lit
+    /// <c>cles_de_donnees</c> AVANT que le serveur accepte une requête, donc
+    /// sans identité à poser, exactement comme <c>LecteurDeSocle</c>. Motif
+    /// vérifiable ligne à ligne : il ne touche que cette table, qui ne porte
+    /// AUCUNE donnée personnelle — des enveloppes chiffrées, illisibles sans le
+    /// coffre. Il LIT et n'écrit jamais : `palier_app` n'a que <c>select</c> sur
+    /// cette table, aucune politique d'écriture n'existe, et deux épreuves de
+    /// <see cref="CleDeDonneesTests" /> l'exigent en code 42501.
+    private static readonly string[] _exemptionsNommees =
+    [
+        "Palier.Api.Socle.LecteurDeSocle",
+        "Palier.Infrastructure.Identite.MagasinDeSessions",
+        "Palier.Infrastructure.Coffre.AmorcageDuTrousseau",
+    ];
+
+    [Fact]
+    public void Une_FABRIQUE_de_contexte_est_une_voie_vers_le_contexte()
+    {
+        // La quatrième question du franchissement, appliquée à la branche que
+        // D59 a ajoutée. Sans elle, un type prenant
+        // `IDbContextFactory<PalierDbContext>` atteindrait les mêmes tables
+        // sans identité et passerait le contrôle sans être vu — mesuré : c'est
+        // exactement ce qui se produisait avant qu'on la ferme.
+        //
+        // Cette épreuve rougit le jour où la branche disparaît, et c'est sa
+        // seule raison d'être : une exemption qui ne protège plus rien est pire
+        // qu'une absence d'exemption, parce qu'elle rassure.
+        var voies = Voies(typeof(Palier.Infrastructure.Coffre.AmorcageDuTrousseau)).ToArray();
+
+        Assert.NotEmpty(voies);
+        Assert.Contains(voies, v => v.Contains("fabrique", StringComparison.Ordinal));
+    }
 
     [Fact]
     public void Les_trois_assemblages_du_produit_sont_bien_charges()
@@ -144,6 +183,164 @@ public sealed class ArchitectureTests
     /// C'est la forme la plus naturelle d'un contournement — on ne l'injecte
     /// pas, on se le fait passer.
     /// </summary>
+    [Fact]
+    public void AUCUN_type_d_entrainement_ne_prend_le_SEXE_en_dependance()
+    {
+        // LE GARDE-FOU LE PLUS CONTRE-INTUITIF DU DEPOT : il protege une
+        // ABSENCE.
+        //
+        // L'etude du 24/08/2026 — quatorze axes, trente-deux agents, chaque axe
+        // conteste par un sceptique — conclut sans nuance : aucune difference
+        // liee au sexe ne justifie deux programmes. Ni le choix des exercices,
+        // ni la charge relative, ni la plage de repetitions, ni le nombre de
+        // series, ni la frequence, ni la progression, ni les temps de repos.
+        //
+        // Les nuls reposent sur des effectifs tres superieurs a ceux des
+        // differences alleguees : 7 289 personnes pour la relation
+        // charge-repetitions, 78 etudes pour le cycle menstruel, contre n = 42
+        // pour l'ecart de plus grande ampleur du dossier.
+        //
+        // POURQUOI UNE EPREUVE PLUTOT QU'UN COMMENTAIRE. Brancher le sexe sur
+        // une decision d'entrainement ne casserait rien, ne leverait rien, et
+        // passerait toutes les autres epreuves. Le defaut serait invisible au
+        // compilateur et visible seulement a l'ecran, sous la forme d'un
+        // stereotype que le produit aurait fabrique lui-meme.
+        //
+        // Ce que l'epreuve N'INTERDIT PAS : le sexe reste legitime cote
+        // NUTRITION — Mifflin-St Jeor porte un terme de sexe de 166 kcal, et
+        // `Palier.Domain.Depense` comme `Palier.Domain.Objectifs` le lisent a
+        // bon droit. La frontiere est l'entrainement.
+        var fautifs = new List<string>();
+
+        foreach (var assemblage in _assemblages)
+        {
+            foreach (var type in assemblage.GetTypes())
+            {
+                if (
+                    type.Namespace is null
+                    || !type.Namespace.Contains("Entrainement", StringComparison.Ordinal)
+                )
+                {
+                    continue;
+                }
+
+                foreach (var voie in VoiesVersLeSexe(type))
+                {
+                    fautifs.Add($"{type.FullName} ({voie})");
+                }
+            }
+        }
+
+        Assert.True(
+            fautifs.Count == 0,
+            "Ces types d'entraînement prennent le SEXE en dépendance :\n  "
+                + string.Join("\n  ", fautifs)
+                + "\n\nAucune différence liée au sexe ne justifie d'adapter un programme — "
+                + "c'est la conclusion de l'étude du 24/08/2026, et elle est mieux étayée "
+                + "que n'importe quelle différence alléguée.\n"
+                + "Faire dépendre une décision d'entraînement du sexe FABRIQUERAIT une "
+                + "différence que la littérature ne soutient pas.\n"
+                + "Le sexe reste légitime côté NUTRITION : Mifflin-St Jeor en dépend."
+        );
+    }
+
+    [Fact]
+    public void Le_garde_fou_du_sexe_REGARDE_bien_quelque_chose()
+    {
+        // Quatrieme question du franchissement — ruling P12. Sans cette
+        // assertion, l'epreuve ci-dessus passerait au vert le jour ou le filtre
+        // sur « Entrainement » cesserait de trouver le moindre type : elle
+        // n'inspecterait plus rien, et le dirait en silence.
+        var inspectes = _assemblages
+            .SelectMany(a => a.GetTypes())
+            .Count(t =>
+                t.Namespace is not null
+                && t.Namespace.Contains("Entrainement", StringComparison.Ordinal)
+            );
+
+        Assert.True(
+            inspectes > 10,
+            $"Le garde-fou du sexe n'a inspecté que {inspectes} type(s) d'entraînement."
+        );
+
+        // Et la CIBLE doit exister. Si `Sexe` etait renomme ou deplace,
+        // `EstLeSexe` ne reconnaitrait plus rien et l'epreuve deviendrait un
+        // decor — le piege que ce depot ferme partout ailleurs.
+        Assert.True(
+            EstLeSexe(typeof(Palier.Domain.Grandeurs.Sexe)),
+            "`EstLeSexe` ne reconnaît plus le type `Sexe` : le garde-fou ne garde plus rien."
+        );
+    }
+
+    /// <summary>Le type que l'entraînement ne doit jamais atteindre.</summary>
+    private static bool EstLeSexe(Type type)
+    {
+        var nu = Nullable.GetUnderlyingType(type) ?? type;
+        return nu == typeof(Palier.Domain.Grandeurs.Sexe);
+    }
+
+    /// <summary>
+    /// Les voies par lesquelles un type atteint le sexe.
+    /// </summary>
+    /// <remarks>
+    /// Même parcours que <see cref="Voies"/> — constructeurs, propriétés,
+    /// champs, méthodes — parce qu'une dépendance se prend par n'importe
+    /// laquelle, et qu'en oublier une suffit à rendre le contrôle décoratif.
+    /// </remarks>
+    private static IEnumerable<string> VoiesVersLeSexe(Type type)
+    {
+        const BindingFlags tous =
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+
+        foreach (var constructeur in type.GetConstructors(tous))
+        {
+            foreach (var parametre in constructeur.GetParameters())
+            {
+                if (EstLeSexe(parametre.ParameterType))
+                {
+                    yield return $"constructeur, paramètre « {parametre.Name} »";
+                }
+            }
+        }
+
+        foreach (var propriete in type.GetProperties(tous))
+        {
+            if (EstLeSexe(propriete.PropertyType))
+            {
+                yield return $"propriété « {propriete.Name} »";
+            }
+        }
+
+        foreach (var champ in type.GetFields(tous))
+        {
+            if (EstLeSexe(champ.FieldType) && !champ.Name.Contains('<', StringComparison.Ordinal))
+            {
+                yield return $"champ « {champ.Name} »";
+            }
+        }
+
+        foreach (var methode in type.GetMethods(tous))
+        {
+            if (methode.IsSpecialName || methode.DeclaringType != type)
+            {
+                continue;
+            }
+
+            if (EstLeSexe(methode.ReturnType))
+            {
+                yield return $"méthode « {methode.Name} », type de retour";
+            }
+
+            foreach (var parametre in methode.GetParameters())
+            {
+                if (EstLeSexe(parametre.ParameterType))
+                {
+                    yield return $"méthode « {methode.Name} », paramètre « {parametre.Name} »";
+                }
+            }
+        }
+    }
+
     private static IEnumerable<string> Voies(Type type)
     {
         const BindingFlags tous =
@@ -203,5 +400,23 @@ public sealed class ArchitectureTests
     /// `IsAssignableFrom` et non l'égalité : un type dérivé de
     /// <c>PalierDbContext</c> donnerait exactement les mêmes pouvoirs.
     /// </summary>
-    private static bool EstLeContexte(Type type) => typeof(PalierDbContext).IsAssignableFrom(type);
+    private static bool EstLeContexte(Type type) =>
+        typeof(PalierDbContext).IsAssignableFrom(type)
+        // Lot 4 : `PalierAuthDbContext` n'hérite PAS de `PalierDbContext` — il
+        // n'expose délibérément aucune table de donnée de santé. Sans cette
+        // seconde branche, un contexte neuf échapperait au contrôle par
+        // construction : on aurait ouvert une seconde porte en croyant n'en
+        // surveiller qu'une.
+        || typeof(PalierAuthDbContext).IsAssignableFrom(type)
+        // D59 : une FABRIQUE de contexte est une voie vers le contexte, et
+        // c'était un trou. Un type qui prend `IDbContextFactory<PalierDbContext>`
+        // atteint exactement les mêmes tables, sans identité, et passait ce
+        // contrôle sans être vu. Le trou n'était pas théorique : le chargement
+        // du trousseau en a besoin, et une fabrique est justement ce qu'un
+        // service singleton emploie pour tenir un contexte à durée de requête.
+        || (
+            type.IsGenericType
+            && type.GetGenericTypeDefinition() == typeof(IDbContextFactory<>)
+            && EstLeContexte(type.GetGenericArguments()[0])
+        );
 }

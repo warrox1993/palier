@@ -152,4 +152,296 @@ public sealed class DetectionsDeSecuriteTests
         Assert.Equal(0.8m, RestrictionSevere.FractionDuMetabolismeDeBase);
         Assert.Equal(5, RestrictionSevere.JoursConsecutifs);
     }
+
+    // ================================================================
+    // La réduction en fenêtres glissantes — D64
+    // ================================================================
+
+    private static readonly DateOnly _fin = new(2026, 8, 30);
+
+    [Fact]
+    public void Sept_pesees_dans_une_fenetre_donnent_UNE_valeur()
+    {
+        // Sans cette réduction, `EstDetectee` mesurerait des JOURS en croyant
+        // mesurer des semaines, et conclurait sur trois semaines qui n'ont pas
+        // eu lieu.
+        var semaine = Enumerable
+            .Range(0, 7)
+            .Select(j => new Pesee(_fin.AddDays(-j), Masse.DepuisKilogrammes(80m)))
+            .ToArray();
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(semaine, _fin);
+
+        Assert.Single(reduites);
+        Assert.Equal(80m, reduites[0].Poids.Kilogrammes);
+        Assert.Equal(_fin, reduites[0].Jour);
+    }
+
+    [Fact]
+    public void La_valeur_est_la_MOYENNE_et_non_la_derniere_pesee()
+    {
+        // LE POINT QUI COMPTE. Le poids varie de 1 à 2 % d'un jour à l'autre —
+        // plus que le seuil de 1 % lui-même. Retenir la dernière pesée ferait
+        // du seuil un générateur de faux positifs.
+        var fenetre = new[]
+        {
+            new Pesee(_fin.AddDays(-6), Masse.DepuisKilogrammes(80m)),
+            new Pesee(_fin.AddDays(-3), Masse.DepuisKilogrammes(82m)),
+            new Pesee(_fin, Masse.DepuisKilogrammes(78m)),
+        };
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(fenetre, _fin);
+
+        Assert.Single(reduites);
+        Assert.Equal(80m, reduites[0].Poids.Kilogrammes);
+    }
+
+    [Fact]
+    public void Les_fenetres_sortent_de_la_PLUS_ANCIENNE_a_la_plus_recente()
+    {
+        // `EstDetectee` compare des valeurs consécutives dans cet ordre : la
+        // rendre à l'envers inverserait le sens de chaque variation, et une
+        // prise de poids passerait pour une perte.
+        var pesees = new[]
+        {
+            new Pesee(_fin, Masse.DepuisKilogrammes(78m)),
+            new Pesee(_fin.AddDays(-7), Masse.DepuisKilogrammes(80m)),
+        };
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(pesees, _fin);
+
+        Assert.Equal(2, reduites.Count);
+        Assert.Equal(80m, reduites[0].Poids.Kilogrammes);
+        Assert.Equal(78m, reduites[1].Poids.Kilogrammes);
+    }
+
+    [Fact]
+    public void UNE_SEULE_pesee_dans_une_fenetre_suffit()
+    {
+        // Exiger deux pesées par fenêtre retarderait la détection chez qui pèse
+        // une fois par semaine — la plupart des gens. La règle des trois
+        // baisses consécutives fait déjà le travail anti-bruit.
+        var une = new[] { new Pesee(_fin.AddDays(-2), Masse.DepuisKilogrammes(75m)) };
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(une, _fin);
+
+        Assert.Single(reduites);
+        Assert.Equal(75m, reduites[0].Poids.Kilogrammes);
+    }
+
+    [Fact]
+    public void Une_fenetre_VIDE_interrompt_la_serie()
+    {
+        // Elle ne s'interpole PAS : inventer une valeur pour une semaine sans
+        // pesée reviendrait à conclure sur une mesure qui n'existe pas. Ici,
+        // trois semaines de données puis un trou puis une semaine : seule la
+        // dernière survit.
+        var pesees = new[]
+        {
+            new Pesee(_fin.AddDays(-21), Masse.DepuisKilogrammes(85m)),
+            new Pesee(_fin.AddDays(-14), Masse.DepuisKilogrammes(83m)),
+            // rien entre -13 et -7 : la fenêtre -7 est vide
+            new Pesee(_fin, Masse.DepuisKilogrammes(80m)),
+        };
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(pesees, _fin);
+
+        Assert.Single(reduites);
+        Assert.Equal(80m, reduites[0].Poids.Kilogrammes);
+    }
+
+    [Fact]
+    public void Une_serie_VIDE_donne_une_serie_vide() =>
+        Assert.Empty(PerteDePoidsRapide.MoyennesHebdomadaires([], _fin));
+
+    [Fact]
+    public void Une_serie_commencee_un_JEUDI_n_invente_aucune_semaine_courte()
+    {
+        // LE DÉFAUT QUE D64 CORRIGE. Avec un découpage par semaine calendaire,
+        // quelqu'un qui commence à peser un jeudi a une première « semaine » de
+        // quatre jours, et l'écart avec la suivante porte sur environ cinq
+        // jours — le seuil de 1 % y devient plus strict qu'il ne devrait, donc
+        // un faux positif.
+        //
+        // Ici, un poids PARFAITEMENT STABLE, pesé chaque jour à partir d'un
+        // jeudi : aucune fenêtre ne doit montrer de variation.
+        var jeudi = new DateOnly(2026, 8, 6);
+        var pesees = Enumerable
+            .Range(0, 25)
+            .Select(j => new Pesee(jeudi.AddDays(j), Masse.DepuisKilogrammes(80m)))
+            .ToArray();
+
+        var fin = jeudi.AddDays(24);
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(pesees, fin);
+
+        Assert.Equal(4, reduites.Count);
+        Assert.All(reduites, p => Assert.Equal(80m, p.Poids.Kilogrammes));
+        Assert.False(PerteDePoidsRapide.EstDetectee(reduites));
+    }
+
+    [Fact]
+    public void La_reduction_rend_la_detection_JUSTE_sur_des_pesees_quotidiennes()
+    {
+        // Le bout à bout : quatre semaines à −1,5 % par semaine, pesées tous
+        // les jours. Sans réduction, `EstDetectee` verrait quatre jours
+        // consécutifs à variation quasi nulle et conclurait « non ».
+        var pesees = new List<Pesee>();
+        var poids = 80m;
+        var debut = new DateOnly(2026, 8, 3);
+
+        for (var semaine = 0; semaine < 4; semaine++)
+        {
+            for (var jour = 0; jour < 7; jour++)
+            {
+                pesees.Add(
+                    new Pesee(debut.AddDays((semaine * 7) + jour), Masse.DepuisKilogrammes(poids))
+                );
+            }
+
+            poids *= 0.985m;
+        }
+
+        var fin = debut.AddDays(27);
+
+        Assert.False(PerteDePoidsRapide.EstDetectee(pesees));
+        Assert.True(
+            PerteDePoidsRapide.EstDetectee(
+                PerteDePoidsRapide.MoyennesHebdomadaires(pesees, fin)
+            )
+        );
+    }
+
+    [Fact]
+    public void Le_domaine_DIT_de_combien_de_jours_il_a_besoin()
+    {
+        // `JoursNecessaires` existe pour que l'appelant ne puisse pas
+        // raccourcir l'analyse sans le savoir. La valeur SUIT
+        // `SemainesConsecutives` : si le seuil passe un jour à quatre semaines,
+        // la fenêtre de lecture suit toute seule.
+        Assert.Equal(
+            (PerteDePoidsRapide.SemainesConsecutives + 1) * 7,
+            PerteDePoidsRapide.JoursNecessaires
+        );
+
+        // Et il vaut au moins ce que `EstDetectee` exige : quatre valeurs
+        // hebdomadaires, donc vingt-huit jours.
+        Assert.True(PerteDePoidsRapide.JoursNecessaires >= 28);
+    }
+
+    [Fact]
+    public void Une_serie_TRONQUEE_sous_le_seuil_ne_peut_RIEN_detecter()
+    {
+        // LA PREUVE DU SILENCE, faite au domaine. Une perte de 2 %/semaine
+        // depuis un mois, mais dont on ne garde que les sept derniers jours :
+        // deux fenêtres survivent, `EstDetectee` en exige quatre, et le retour
+        // est `false` — indiscernable de « rien à signaler ».
+        //
+        // C'est cette épreuve qui justifie que la fenêtre d'analyse ne se
+        // négocie pas avec l'appelant.
+        var fin = new DateOnly(2026, 8, 30);
+        var toutes = new List<Pesee>();
+        var poids = 80m;
+
+        for (var jour = 27; jour >= 0; jour--)
+        {
+            toutes.Add(new Pesee(fin.AddDays(-jour), Masse.DepuisKilogrammes(poids)));
+            poids *= 0.997m;
+        }
+
+        // La série COMPLÈTE détecte.
+        Assert.True(
+            PerteDePoidsRapide.EstDetectee(
+                PerteDePoidsRapide.MoyennesHebdomadaires(toutes, fin)
+            )
+        );
+
+        // La série TRONQUÉE à sept jours ne détecte plus rien.
+        var tronquee = toutes.Where(p => p.Jour >= fin.AddDays(-7)).ToArray();
+        Assert.False(
+            PerteDePoidsRapide.EstDetectee(
+                PerteDePoidsRapide.MoyennesHebdomadaires(tronquee, fin)
+            )
+        );
+    }
+
+    [Fact]
+    public void Des_pesees_MENSUELLES_ne_declenchent_PAS_le_constat()
+    {
+        // LE FAUX POSITIF SYMÉTRIQUE, et la preuve qu'il est fermé.
+        //
+        // Une revue l'a signalé sur la version à semaines ISO : quatre pesées
+        // mensuelles — 80, 78, 76, 74 kg — donnaient quatre valeurs
+        // consécutives dans la série réduite, et `EstDetectee` les comparait
+        // comme si une semaine les séparait. Chaque écart de 2 kg dépassait le
+        // seuil de 1 %, et le constat tombait sur une perte RÉELLE de
+        // 0,59 %/semaine — bien SOUS le seuil.
+        //
+        // Les fenêtres glissantes ferment ce cas sans règle nouvelle : une
+        // fenêtre sans pesée interrompt la série, et une cadence mensuelle en
+        // laisse trois vides sur quatre. Cette épreuve garde le comportement,
+        // parce que la prochaine réécriture de la réduction pourrait le
+        // rouvrir sans que rien d'autre ne le montre.
+        var fin = new DateOnly(2026, 4, 5);
+        var mensuelles = new[]
+        {
+            new Pesee(new DateOnly(2026, 1, 5), Masse.DepuisKilogrammes(80m)),
+            new Pesee(new DateOnly(2026, 2, 4), Masse.DepuisKilogrammes(78m)),
+            new Pesee(new DateOnly(2026, 3, 6), Masse.DepuisKilogrammes(76m)),
+            new Pesee(fin, Masse.DepuisKilogrammes(74m)),
+        };
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(mensuelles, fin);
+
+        // Une seule fenêtre survit : les trois autres sont vides.
+        Assert.Single(reduites);
+        Assert.False(PerteDePoidsRapide.EstDetectee(reduites));
+    }
+
+    [Fact]
+    public void Une_cadence_HEBDOMADAIRE_reste_detectee()
+    {
+        // L'autre bord du même sujet : le `Clear()` sur fenêtre vide ne doit
+        // pas casser le cas que la détection existe pour servir. Une pesée par
+        // semaine, à −2 % chacune, doit parler.
+        var fin = new DateOnly(2026, 8, 30);
+        var poids = 80m;
+        var hebdomadaires = new List<Pesee>();
+
+        for (var rang = 3; rang >= 0; rang--)
+        {
+            hebdomadaires.Add(new Pesee(fin.AddDays(-7 * rang), Masse.DepuisKilogrammes(poids)));
+            poids *= 0.98m;
+        }
+
+        var reduites = PerteDePoidsRapide.MoyennesHebdomadaires(hebdomadaires, fin);
+
+        Assert.Equal(4, reduites.Count);
+        Assert.True(PerteDePoidsRapide.EstDetectee(reduites));
+    }
+
+    // ================================================================
+    // Masse : demander sans lever
+    // ================================================================
+
+    [Theory]
+    [InlineData(0.1)]
+    [InlineData(80)]
+    [InlineData(500)]
+    public void Masse_valide_ce_que_la_fabrique_accepte(decimal kilogrammes)
+    {
+        Assert.True(Masse.EstValide(kilogrammes));
+        Assert.Equal(kilogrammes, Masse.DepuisKilogrammes(kilogrammes).Kilogrammes);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(500.1)]
+    public void Masse_refuse_ce_que_la_fabrique_refuse(decimal kilogrammes)
+    {
+        // Zéro est refusé, contrairement à `Charge` : un corps qui ne pèse rien
+        // n'existe pas, alors qu'une traction se note à 0 kg ajouté.
+        Assert.False(Masse.EstValide(kilogrammes));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Masse.DepuisKilogrammes(kilogrammes));
+    }
 }

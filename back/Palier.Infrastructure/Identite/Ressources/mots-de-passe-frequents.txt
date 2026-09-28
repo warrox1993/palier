@@ -1,0 +1,91 @@
+# Mots de passe fréquents — étage local du validateur, lot 4.
+#
+# CE QUE CETTE LISTE EST. Les mots de passe que les attaques par devinette et
+# par bourrage d'identifiants essaient en premier. Le bourrage représente 22 %
+# des fuites en 2024-2025, premier vecteur devant l'hameçonnage, et il s'appuie
+# sur les mots de passe FRÉQUENTS — c'est exactement ce que couvre cet étage.
+#
+# CE QU'ELLE N'EST PAS. Un substitut à l'API k-anonymat de HIBP, qui connaît
+# des centaines de millions de valeurs. Elle est le socle qui ne peut pas
+# tomber en panne ; l'API ajoute le reste quand elle répond.
+#
+# CE QUI RESTE À FAIRE, et qui est écrit dans la spec du lot 4 § 9 : l'enrichir
+# au sommet du classement HIBP par nombre d'occurrences, avec l'attribution
+# CC BY 4.0 que ces données imposent, et la porter à docs/17-donnees-sources.md.
+#
+# La comparaison est insensible à la casse et ignore les lignes vides et les
+# commentaires. Les valeurs de moins de dix caractères y figurent quand même :
+# la longueur minimale les refuse déjà, mais une liste qui dépend d'un autre
+# contrôle pour être correcte est une liste fragile.
+123456
+123456789
+12345678
+password
+qwerty
+abc123
+111111
+123123
+1234567890
+azerty
+motdepasse
+azertyuiop
+soleil
+loulou
+doudou
+chouchou
+bonjour
+password1
+password123
+motdepasse1
+qwerty123
+1q2w3e4r
+admin
+administrateur
+welcome
+welcome1
+iloveyou
+princess
+sunshine
+football
+baseball
+dragon
+monkey
+letmein
+trustno1
+000000
+1234
+12345
+654321
+superman
+batman
+azerty123
+marseille
+liverpool
+chelsea
+juventus
+nicolas
+sebastien
+alexandre
+christophe
+jonathan
+caroline
+charlotte
+stephanie
+veronique
+elisabeth
+changeme
+changeme1
+secret
+secret123
+qwertyuiop
+asdfghjkl
+zxcvbnm
+1qaz2wsx
+qazwsx
+passw0rd
+p@ssw0rd
+p@ssword
+azerty1234
+motdepasse123
+bonjour123
+soleil123

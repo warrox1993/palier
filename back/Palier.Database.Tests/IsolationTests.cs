@@ -586,8 +586,16 @@ public sealed class IsolationTests(BaseFixture baseDeDonnees)
         await using var connexion = await Ouvrir(Migrations);
         await using var commande = new NpgsqlCommand(
             """
-            insert into public.exercises (name, primary_muscles, is_custom, owner_id)
-            values ($1, array['pectoraux'], $2, $3) returning id
+            insert into public.exercises (slug, name_fr, name_en, instructions_fr, instructions_en, common_errors_fr, common_errors_en, movement_role, primary_muscles, is_custom, owner_id)
+            values (case when $2 then null else $1 end,
+                    $1,
+                    case when $2 then null else $1 end,
+                    case when $2 then null else 'Consignes.' end,
+                    case when $2 then null else 'Cues.' end,
+                    case when $2 then null else 'Erreurs.' end,
+                    case when $2 then null else 'Errors.' end,
+                    'poussee', array['pectoraux'], $2, $3)
+            returning id
             """,
             connexion
         );
@@ -614,5 +622,206 @@ public sealed class IsolationTests(BaseFixture baseDeDonnees)
         commande.Parameters.AddWithValue(seance);
         commande.Parameters.AddWithValue(exercice);
         return (Guid)(await commande.ExecuteScalarAsync())!;
+    }
+
+    // ================================================================
+    // Épreuve 9 — `sessions_refresh` : palier_auth seul, et la cascade
+    // ================================================================
+
+    [Fact]
+    public async Task Sur_sessions_refresh_palier_app_n_a_aucun_privilege()
+    {
+        // Une session porte l'empreinte d'un jeton et l'appareil de son porteur.
+        // Elle n'a rien à faire sur le chemin des données de santé, et le rôle
+        // qui les sert n'a rien à y faire non plus.
+        var refus = await Assert.ThrowsAsync<PostgresException>(async () =>
+        {
+            await using var connexion = await Ouvrir(baseDeDonnees.ChaineApp);
+            await using var commande = new NpgsqlCommand(
+                "select count(*) from public.sessions_refresh",
+                connexion
+            );
+            await commande.ExecuteScalarAsync();
+        });
+
+        Assert.True(
+            refus.SqlState == "42501",
+            $"palier_app lit `sessions_refresh` : attendu 42501, reçu {refus.SqlState}"
+        );
+    }
+
+    [Fact]
+    public async Task Sur_sessions_refresh_palier_auth_lit_et_ecrit()
+    {
+        var utilisateur = await Utilisateur();
+
+        await using var connexion = await Ouvrir(baseDeDonnees.ChaineAuth);
+        await using var insertion = new NpgsqlCommand(
+            """
+            insert into public.sessions_refresh
+              (id, owner_id, token_hash, family_id, created_at, expires_at, last_seen_at)
+            values (gen_random_uuid(), $1, $2, gen_random_uuid(), now(),
+                    now() + interval '14 days', now())
+            """,
+            connexion
+        );
+        insertion.Parameters.AddWithValue(utilisateur);
+        insertion.Parameters.AddWithValue(new byte[32]);
+
+        Assert.True(
+            await insertion.ExecuteNonQueryAsync() == 1,
+            "palier_auth n'écrit pas dans `sessions_refresh` : le magasin de sessions "
+                + "n'aurait aucun chemin."
+        );
+    }
+
+    [Fact]
+    public async Task Sur_AspNetUsers_palier_auth_lit_desormais()
+    {
+        await Utilisateur();
+
+        // D38 fermait ces tables à TOUT LE MONDE en attendant ce lot. Si cette
+        // épreuve rougit, le chemin de connexion n'existe pas.
+        var vues = await Compter(
+            """select count(*) from public."AspNetUsers" """,
+            baseDeDonnees.ChaineAuth
+        );
+
+        Assert.True(
+            vues > 0,
+            "palier_auth ne lit pas `AspNetUsers` : la connexion par email est impossible."
+        );
+    }
+
+    [Fact]
+    public async Task Sur_AspNetUsers_palier_app_reste_refuse()
+    {
+        // L'ouverture faite pour palier_auth ne doit RIEN ouvrir à palier_app.
+        // Une politique permissive ne s'applique qu'aux rôles qu'elle nomme, et
+        // cette épreuve garde la promesse.
+        var refus = await Assert.ThrowsAsync<PostgresException>(async () =>
+        {
+            await using var connexion = await Ouvrir(baseDeDonnees.ChaineApp);
+            await using var commande = new NpgsqlCommand(
+                """select count(*) from public."AspNetUsers" """,
+                connexion
+            );
+            await commande.ExecuteScalarAsync();
+        });
+
+        Assert.True(
+            refus.SqlState == "42501",
+            $"palier_app lit `AspNetUsers` après l'ouverture faite à palier_auth : "
+                + $"attendu 42501, reçu {refus.SqlState}"
+        );
+    }
+
+    [Fact]
+    public async Task La_suppression_d_un_utilisateur_emporte_ses_sessions()
+    {
+        // RGPD article 17. La cascade est portée par la contrainte ; cette
+        // épreuve vérifie qu'elle mord vraiment, sur une session RÉELLE.
+        var utilisateur = await Utilisateur();
+
+        await using (var connexion = await Ouvrir(baseDeDonnees.ChaineAuth))
+        {
+            await using var insertion = new NpgsqlCommand(
+                """
+                insert into public.sessions_refresh
+                  (id, owner_id, token_hash, family_id, created_at, expires_at, last_seen_at)
+                values (gen_random_uuid(), $1, $2, gen_random_uuid(), now(),
+                        now() + interval '14 days', now())
+                """,
+                connexion
+            );
+            insertion.Parameters.AddWithValue(utilisateur);
+            insertion.Parameters.AddWithValue(new byte[32]);
+            await insertion.ExecuteNonQueryAsync();
+        }
+
+        // Sans cette assertion, « zéro session après suppression » serait vrai
+        // sur une table vide et ne prouverait rien.
+        var avant = await CompterSessionsDe(utilisateur);
+        Assert.True(avant == 1, $"la session n'a pas été créée : {avant} trouvée(s)");
+
+        await using (var connexion = await Ouvrir(baseDeDonnees.ChaineAdministrateur))
+        {
+            await using var suppression = new NpgsqlCommand(
+                """delete from public."AspNetUsers" where "Id" = $1""",
+                connexion
+            );
+            suppression.Parameters.AddWithValue(utilisateur);
+            await suppression.ExecuteNonQueryAsync();
+        }
+
+        var apres = await CompterSessionsDe(utilisateur);
+        Assert.True(
+            apres == 0,
+            $"{apres} session(s) survivent à leur utilisateur supprimé — article 17."
+        );
+    }
+
+    [Fact]
+    public async Task La_cascade_NE_DEBORDE_PAS_sur_les_autres_comptes()
+    {
+        // L'autre moitié de la règle, et celle qu'on oublie. Une contrainte
+        // trop large — ou un `delete` sans clause — emporterait les sessions de
+        // tout le monde, et l'épreuve ci-dessus resterait parfaitement verte.
+        var vise = await Utilisateur();
+        var voisin = await Utilisateur();
+
+        await using (var connexion = await Ouvrir(baseDeDonnees.ChaineAuth))
+        {
+            foreach (var proprietaire in new[] { vise, voisin })
+            {
+                await using var insertion = new NpgsqlCommand(
+                    """
+                    insert into public.sessions_refresh
+                      (id, owner_id, token_hash, family_id, created_at, expires_at, last_seen_at)
+                    values (gen_random_uuid(), $1, $2, gen_random_uuid(), now(),
+                            now() + interval '14 days', now())
+                    """,
+                    connexion
+                );
+                insertion.Parameters.AddWithValue(proprietaire);
+                insertion.Parameters.AddWithValue(Guid.NewGuid().ToByteArray());
+                await insertion.ExecuteNonQueryAsync();
+            }
+        }
+
+        Assert.True(
+            await CompterSessionsDe(voisin) == 1,
+            "le harnais n'a pas créé la session du voisin : l'épreuve ne prouverait rien."
+        );
+
+        await using (var connexion = await Ouvrir(baseDeDonnees.ChaineAdministrateur))
+        {
+            await using var suppression = new NpgsqlCommand(
+                """delete from public."AspNetUsers" where "Id" = $1""",
+                connexion
+            );
+            suppression.Parameters.AddWithValue(vise);
+            await suppression.ExecuteNonQueryAsync();
+        }
+
+        Assert.True(
+            await CompterSessionsDe(vise) == 0,
+            "la cascade n'a pas emporté les sessions du compte supprimé."
+        );
+        Assert.True(
+            await CompterSessionsDe(voisin) == 1,
+            "la cascade a DÉBORDÉ : les sessions d'un autre compte ont disparu."
+        );
+    }
+
+    private async Task<long> CompterSessionsDe(Guid utilisateur)
+    {
+        await using var connexion = await Ouvrir(baseDeDonnees.ChaineAdministrateur);
+        await using var commande = new NpgsqlCommand(
+            "select count(*) from public.sessions_refresh where owner_id = $1",
+            connexion
+        );
+        commande.Parameters.AddWithValue(utilisateur);
+        return (long)(await commande.ExecuteScalarAsync())!;
     }
 }

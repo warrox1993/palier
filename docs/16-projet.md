@@ -163,13 +163,20 @@ VITE_STRIPE_PUBLISHABLE_KEY=
 `back/.env.example` — **rien de tout cela n'atteint le navigateur** :
 
 ```bash
-# Base de données PostgreSQL, hébergée chez OVHcloud (D15)
-ConnectionStrings__Palier=
+# Le coffre OVHcloud KMS (D59). CES CINQ VARIABLES SONT L'AMORÇAGE : elles ne
+# peuvent pas aller au coffre, ce sont elles qui l'ouvrent. Tout le reste des
+# SECRETS y a migré — les quatre chaînes de connexion, JWT_SIGNING_KEY et
+# GOOGLE_OAUTH_CLIENT_SECRET —, et ce qui n'est pas secret reste ici.
+OKMS_ENDPOINT=
+OKMS_ID=
+OKMS_KEY_ID=
+OKMS_CLIENT_ID=
+OKMS_CLIENT_SECRET=
 
-# Authentification (D17) — ASP.NET Identity
-JWT_SIGNING_KEY=
+# Ce qui n'est PAS secret et reste donc dans l'environnement : l'identifiant
+# client Google est public par construction — il apparaît dans l'URL de
+# redirection OAuth.
 GOOGLE_OAUTH_CLIENT_ID=
-GOOGLE_OAUTH_CLIENT_SECRET=
 
 # Modèles — serveur uniquement
 ANTHROPIC_API_KEY=
@@ -187,6 +194,18 @@ OPENFOODFACTS_USER_AGENT=
 # Observabilité
 SENTRY_DSN=
 ```
+
+**Poser la première clé de données** — une fois, avant le premier démarrage, et
+de nouveau à chaque rotation :
+
+```bash
+dotnet run --project back/Palier.Api -- poser-cle-de-donnees
+```
+
+L'API n'en crée jamais : une table `cles_de_donnees` vide **refuse le
+démarrage**. Une API qui fabriquerait sa clé quand elle n'en trouve pas en
+fabriquerait une chaque fois qu'elle démarre contre une base qu'elle ne lit pas,
+et rendrait illisibles, en silence, tous les secrets chiffrés par la précédente.
 
 **Aucune clé de modèle ni de service ne doit être accessible côté client.** Tout
 appel aux modèles passe par le backend, jamais par le navigateur. Ce n'est pas
@@ -215,21 +234,24 @@ chiffre pas et ne supervise pas.
 
 ### Le référentiel
 
-| Fichier                | Contenu                                      | Source                   |
-| ---------------------- | -------------------------------------------- | ------------------------ |
-| `01-nutrient-refs.sql` | Références et limites hautes, ~40 nutriments | EFSA DRV                 |
-| `02-exercises.sql`     | 60 exercices prioritaires puis extension     | Rédigé, relu par le kiné |
-| `03-foods.sql`         | 300 aliments courants                        | CIQUAL                   |
-| `04-programs.sql`      | 9 programmes modèles                         | Rédigés, relus           |
+| Fichier                | Contenu                                      | Source                 |
+| ---------------------- | -------------------------------------------- | ---------------------- |
+| `01-nutrient-refs.sql` | Références et limites hautes, ~40 nutriments | EFSA DRV               |
+| `02*-exercises*.sql`   | 255 exercices, en trois fichiers             | Rédigé, **NON relu**   |
+| `03-foods.sql`         | 300 aliments courants                        | CIQUAL                 |
+| `04-programs.sql`      | 9 programmes modèles, 36 séances, 157 poses  | Rédigés, **NON relus** |
 
-**Deux de ces quatre lignes ne sont PAS tranchées, et le lot 2 n'a pas le droit de les trancher
-seul** — signalées ici plutôt que devinées :
+**Une de ces quatre lignes n'est PAS tranchée, et aucun lot n'a le droit de la trancher
+seul** — signalée ici plutôt que devinée. La seconde l'a été le 24/08/2026 :
 
 - `03-foods.sql` est-il du **référentiel de production** ou un jeu de développement ? La réponse
   change le dossier qui le porte et le moment où il s'applique.
-- `04-programs.sql` livre **9 programmes modèles**, mais `programs.owner_id` est
+- ~~`04-programs.sql` livre **9 programmes modèles**, mais `programs.owner_id` est
   `not null references auth.users` : le schéma n'a **aucune place pour un programme sans
-  propriétaire**.
+  propriétaire**.~~ **TRANCHÉ le 24/08/2026 par le porteur du projet — D72.** `owner_id`
+  devient nullable et `is_template` sépare les deux populations : c'est la forme « catalogue
+  mixte » déjà en vigueur sur `exercises`, avec ses deux politiques RLS séparées. Une seule
+  ligne du tableau ci-dessus reste donc ouverte.
 
 ### La démonstration
 

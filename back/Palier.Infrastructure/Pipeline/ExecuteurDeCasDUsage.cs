@@ -104,18 +104,3 @@ public sealed class ExecuteurDeCasDUsage(PalierDbContext contexte, IIdentiteDema
             .ConfigureAwait(false);
     }
 }
-
-/// <summary>
-/// Le demandeur tant qu'aucune authentification n'existe : il ne rend JAMAIS
-/// d'identité.
-///
-/// Ce n'est pas un bouchon complaisant, c'est l'état réel du produit à ce lot —
-/// et il fait échouer tout cas d'usage, bruyamment, en nommant l'appel. Le lot 4
-/// le remplace par un demandeur qui lit la revendication du jeton. Aucune ligne
-/// de code d'authentification n'est écrite ici, et cette classe n'en est pas
-/// une : elle constate une absence.
-/// </summary>
-public sealed class DemandeurSansIdentite : IIdentiteDemandeur
-{
-    public Guid? Identifiant => null;
-}

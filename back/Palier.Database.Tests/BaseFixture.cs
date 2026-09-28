@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Palier.Infrastructure;
+using Palier.Infrastructure.Identite;
 using Testcontainers.PostgreSql;
 
 namespace Palier.Database.Tests;
@@ -118,9 +119,14 @@ public sealed class BaseFixture : IAsyncLifetime
     /// <summary>Le compte d'administration du conteneur, lu dans <c>db/compose.yaml</c>.</summary>
     public string Administrateur { get; }
 
-    /// <summary>Les trois rôles de D37, dans l'ordre où l'amorçage les crée.</summary>
+    /// <summary>
+    /// Les rôles de l'amorçage, dans l'ordre où il les crée. Les trois premiers
+    /// viennent de D37 ; <c>palier_auth</c> est le quatrième, ajouté au lot 4
+    /// pour porter le seul chemin vers les tables d'identité que D38 avait
+    /// fermées.
+    /// </summary>
     public static IReadOnlyList<string> Roles { get; } =
-        ["palier_migrations", "palier_app", "palier_sauvegarde"];
+        ["palier_migrations", "palier_app", "palier_sauvegarde", "palier_auth"];
 
     private Dictionary<string, string> MotDePasse { get; }
 
@@ -136,6 +142,13 @@ public sealed class BaseFixture : IAsyncLifetime
 
     /// <summary>La chaîne du rôle de sauvegarde. Consommée par la tâche 10.</summary>
     public string ChaineSauvegarde => Chaine("palier_sauvegarde");
+
+    /// <summary>
+    /// La chaîne du rôle d'authentification. C'est le SEUL chemin vers les
+    /// tables d'identité, et il n'a aucun privilège sur les données de santé —
+    /// éprouvé par <c>RolesTests</c>.
+    /// </summary>
+    public string ChaineAuth => Chaine("palier_auth");
 
     /// <summary>La chaîne du compte d'administration du conteneur, pour les épreuves qui doivent le comparer.</summary>
     public string ChaineAdministrateur => _conteneur.GetConnectionString();
@@ -224,6 +237,18 @@ public sealed class BaseFixture : IAsyncLifetime
             .UseNpgsql(chaine, npgsql ?? (_ => { }))
             .Options;
         return new PalierDbContext(options);
+    }
+
+    /// <summary>
+    /// Le contexte du rôle d'authentification — lot 4. Il ne voit que les tables
+    /// d'identité et les sessions ; le moteur refuse le reste par un 42501.
+    /// </summary>
+    public static PalierAuthDbContext ContexteAuth(string chaine)
+    {
+        var options = new DbContextOptionsBuilder<PalierAuthDbContext>()
+            .UseNpgsql(chaine)
+            .Options;
+        return new PalierAuthDbContext(options);
     }
 
     private static string TrouverRacine()

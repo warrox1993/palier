@@ -108,6 +108,43 @@ internal sealed class AssertionDIsolation(LecteurDeSocle lecteur)
             );
         }
 
+        // (4) et (5) — LE QUATRIÈME RÔLE, lot 4.
+        //
+        // D37 ne contrôlait que le rôle de la connexion. `palier_auth` détient
+        // désormais le seul chemin vers les empreintes de mots de passe, les
+        // secrets TOTP et les sessions : ouvrir cet accès sans étendre le
+        // contrôle qui le surveille reviendrait à poser une porte sans serrure.
+        if (diagnostic.AuthIsSuperutilisateur || diagnostic.AuthIsContournementRls)
+        {
+            var attributsAuth = string.Join(
+                " et ",
+                new[]
+                {
+                    diagnostic.AuthIsSuperutilisateur ? "SUPERUSER" : null,
+                    diagnostic.AuthIsContournementRls ? "BYPASSRLS" : null,
+                }.Where(a => a is not null)
+            );
+            throw new IsolationNonGarantieException(
+                $"Le rôle « palier_auth » porte {attributsAuth}. C'est le seul chemin vers les "
+                    + "tables d'identité, que D38 avait fermées en refus par défaut : s'il "
+                    + "contourne RLS, cette fermeture devient décorative et les politiques "
+                    + "posées au lot 4 ne mordent plus. Vérifier `db/amorcage/01-roles.sql` — "
+                    + "le rôle y est déclaré NOBYPASSRLS."
+            );
+        }
+
+        if (diagnostic.AuthTablesPossedees.Count > 0)
+        {
+            throw new IsolationNonGarantieException(
+                "Le rôle « palier_auth » est PROPRIÉTAIRE de "
+                    + $"{diagnostic.AuthTablesPossedees.Count.ToString(CultureInfo.InvariantCulture)} "
+                    + $"table(s) de `public` : {string.Join(", ", diagnostic.AuthTablesPossedees)}. "
+                    + "« Table owners normally bypass row security as well » — un propriétaire "
+                    + "échappe à ses propres politiques. Les objets appartiennent à "
+                    + "`palier_migrations`, jamais au rôle qui les lit."
+            );
+        }
+
         return diagnostic;
     }
 }

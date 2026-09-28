@@ -152,6 +152,27 @@ namespace Palier.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Palier.Infrastructure.Coffre.CleDeDonnees", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreeeLe")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("creee_le");
+
+                    b.Property<string>("Enveloppe")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("enveloppe");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("cles_de_donnees", (string)null);
+                });
+
             modelBuilder.Entity("Palier.Infrastructure.Entites.BodyWeight", b =>
                 {
                     b.Property<Guid>("Id")
@@ -189,6 +210,14 @@ namespace Palier.Infrastructure.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<string>("CommonErrorsEn")
+                        .HasColumnType("text")
+                        .HasColumnName("common_errors_en");
+
+                    b.Property<string>("CommonErrorsFr")
+                        .HasColumnType("text")
+                        .HasColumnName("common_errors_fr");
+
                     b.PrimitiveCollection<string[]>("ContraindicatedFor")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -206,6 +235,14 @@ namespace Palier.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("equipment");
 
+                    b.Property<string>("InstructionsEn")
+                        .HasColumnType("text")
+                        .HasColumnName("instructions_en");
+
+                    b.Property<string>("InstructionsFr")
+                        .HasColumnType("text")
+                        .HasColumnName("instructions_fr");
+
                     b.Property<bool>("IsCustom")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -218,10 +255,21 @@ namespace Palier.Infrastructure.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_unilateral");
 
-                    b.Property<string>("Name")
+                    b.Property<string>("MovementRole")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("aucun")
+                        .HasColumnName("movement_role");
+
+                    b.Property<string>("NameEn")
+                        .HasColumnType("text")
+                        .HasColumnName("name_en");
+
+                    b.Property<string>("NameFr")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("name");
+                        .HasColumnName("name_fr");
 
                     b.Property<Guid?>("OwnerId")
                         .HasColumnType("uuid")
@@ -232,6 +280,12 @@ namespace Palier.Infrastructure.Migrations
                         .HasColumnType("text[]")
                         .HasColumnName("primary_muscles");
 
+                    b.Property<string>("SearchKey")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("text")
+                        .HasColumnName("search_key")
+                        .HasComputedColumnSql("translate(upper(coalesce(name_fr, '') || ' ' || coalesce(name_en, '')), 'ÁÀÂÄÃÅÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜŸÇÑ', 'AAAAAAEEEEIIIIOOOOOUUUUYCN')", true);
+
                     b.PrimitiveCollection<string[]>("SecondaryMuscles")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -239,11 +293,69 @@ namespace Palier.Infrastructure.Migrations
                         .HasColumnName("secondary_muscles")
                         .HasDefaultValueSql("'{}'");
 
+                    b.Property<string>("Slug")
+                        .HasColumnType("text")
+                        .HasColumnName("slug");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId");
 
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ux_exercises_slug")
+                        .HasFilter("is_custom = false");
+
                     b.ToTable("exercises", (string)null);
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.ExerciseFeedback", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("ExerciseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("exercise_id");
+
+                    b.Property<string>("Rating")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rating");
+
+                    b.Property<Guid>("WorkoutId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workout_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExerciseId");
+
+                    b.HasIndex("WorkoutId", "ExerciseId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_exercise_feedback_workout_exercise");
+
+                    b.ToTable("exercise_feedback", (string)null);
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.ExerciseVariant", b =>
+                {
+                    b.Property<Guid>("ExerciseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("exercise_id");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("ExerciseId", "VariantId");
+
+                    b.HasIndex("VariantId");
+
+                    b.ToTable("exercise_variants", (string)null);
                 });
 
             modelBuilder.Entity("Palier.Infrastructure.Entites.NutrientRef", b =>
@@ -299,6 +411,269 @@ namespace Palier.Infrastructure.Migrations
                     b.ToTable("nutrient_refs", (string)null);
                 });
 
+            modelBuilder.Entity("Palier.Infrastructure.Entites.ProgramDay", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("LabelEn")
+                        .HasColumnType("text")
+                        .HasColumnName("label_en");
+
+                    b.Property<string>("LabelFr")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("label_fr");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<Guid>("ProgramId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("program_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProgramId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("ux_program_days_program_id_position");
+
+                    b.ToTable("program_days", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_program_days_position", "position >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.ProgramExercise", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("ExerciseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("exercise_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<Guid>("ProgramDayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("program_day_id");
+
+                    b.Property<int>("RestSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("rest_seconds");
+
+                    b.Property<int?>("TargetRepsMax")
+                        .HasColumnType("integer")
+                        .HasColumnName("target_reps_max");
+
+                    b.Property<int>("TargetRepsMin")
+                        .HasColumnType("integer")
+                        .HasColumnName("target_reps_min");
+
+                    b.Property<int>("TargetRir")
+                        .HasColumnType("integer")
+                        .HasColumnName("target_rir");
+
+                    b.Property<int>("TargetSets")
+                        .HasColumnType("integer")
+                        .HasColumnName("target_sets");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExerciseId");
+
+                    b.HasIndex("ProgramDayId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("ux_program_exercises_day_id_position");
+
+                    b.ToTable("program_exercises", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_program_exercises_position", "position >= 1");
+
+                            t.HasCheckConstraint("ck_program_exercises_repetitions", "target_reps_min between 1 and 100 and (target_reps_max is null or target_reps_max between target_reps_min and 100)");
+
+                            t.HasCheckConstraint("ck_program_exercises_repos", "rest_seconds between 0 and 900");
+
+                            t.HasCheckConstraint("ck_program_exercises_rir", "target_rir between 0 and 10");
+
+                            t.HasCheckConstraint("ck_program_exercises_series", "target_sets between 1 and 20");
+                        });
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.TrainingProgram", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DescriptionEn")
+                        .HasColumnType("text")
+                        .HasColumnName("description_en");
+
+                    b.Property<string>("DescriptionFr")
+                        .HasColumnType("text")
+                        .HasColumnName("description_fr");
+
+                    b.Property<int?>("FrequencyMax")
+                        .HasColumnType("integer")
+                        .HasColumnName("frequency_max");
+
+                    b.Property<int?>("FrequencyMin")
+                        .HasColumnType("integer")
+                        .HasColumnName("frequency_min");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsTemplate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_template");
+
+                    b.Property<string>("NameEn")
+                        .HasColumnType("text")
+                        .HasColumnName("name_en");
+
+                    b.Property<string>("NameFr")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name_fr");
+
+                    b.Property<string>("NotesEn")
+                        .HasColumnType("text")
+                        .HasColumnName("notes_en");
+
+                    b.Property<string>("NotesFr")
+                        .HasColumnType("text")
+                        .HasColumnName("notes_fr");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<string>("Slug")
+                        .HasColumnType("text")
+                        .HasColumnName("slug");
+
+                    b.Property<string>("TargetsConstraint")
+                        .HasColumnType("text")
+                        .HasColumnName("targets_constraint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId")
+                        .HasDatabaseName("ix_programs_owner_id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ux_programs_slug")
+                        .HasFilter("is_template = true");
+
+                    b.ToTable("programs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_programs_frequence", "frequency_min is null or (frequency_min between 1 and 7 and frequency_max between frequency_min and 7)");
+
+                            t.HasCheckConstraint("ck_programs_modele_complet", "not is_template or (slug is not null and name_en is not null and description_fr is not null and description_en is not null and notes_fr is not null and notes_en is not null and frequency_min is not null and frequency_max is not null)");
+
+                            t.HasCheckConstraint("ck_programs_proprietaire", "(is_template and owner_id is null) or (not is_template and owner_id is not null)");
+
+                            t.HasCheckConstraint("ck_programs_targets_constraint", "targets_constraint is null or targets_constraint in ('cervicale', 'lombaire', 'epaule', 'genou', 'hanche', 'poignet', 'cheville')");
+                        });
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.UserConstraint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("DeclaredAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("declared_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("region");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("modere")
+                        .HasColumnName("severity");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId", "Region")
+                        .IsUnique()
+                        .HasDatabaseName("ux_user_constraints_owner_region");
+
+                    b.ToTable("user_constraints", (string)null);
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.WeeklyVolume", b =>
+                {
+                    b.Property<decimal>("HardSets")
+                        .HasColumnType("numeric")
+                        .HasColumnName("hard_sets");
+
+                    b.Property<string>("Muscle")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("muscle");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<DateTimeOffset>("Week")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("week");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("weekly_volume", (string)null);
+                });
+
             modelBuilder.Entity("Palier.Infrastructure.Entites.Workout", b =>
                 {
                     b.Property<Guid>("Id")
@@ -323,6 +698,10 @@ namespace Palier.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("owner_id");
 
+                    b.Property<Guid?>("ProgramDayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("program_day_id");
+
                     b.Property<decimal?>("SleepHours")
                         .HasColumnType("numeric")
                         .HasColumnName("sleep_hours");
@@ -334,6 +713,9 @@ namespace Palier.Infrastructure.Migrations
                         .HasDefaultValueSql("now()");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProgramDayId")
+                        .HasDatabaseName("ix_workouts_program_day_id");
 
                     b.HasIndex("OwnerId", "StartedAt")
                         .IsDescending(false, true)
@@ -399,6 +781,71 @@ namespace Palier.Infrastructure.Migrations
                     b.ToTable("sets", (string)null);
                 });
 
+            modelBuilder.Entity("Palier.Infrastructure.Identite.SessionRafraichissement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Device")
+                        .HasColumnType("text")
+                        .HasColumnName("device");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<Guid?>("ReplacedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("replaced_by_id");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<byte[]>("SuccessorSealed")
+                        .HasColumnType("bytea")
+                        .HasColumnName("successor_sealed");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FamilyId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("sessions_refresh", (string)null);
+                });
+
             modelBuilder.Entity("Palier.Infrastructure.Identite.Utilisateur", b =>
                 {
                     b.Property<Guid>("Id")
@@ -411,6 +858,14 @@ namespace Palier.Infrastructure.Migrations
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ConsentementSanteLe")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ConsentementSanteLe");
+
+                    b.Property<DateTimeOffset?>("DernierEchecLe")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DernierEchecLe");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -451,6 +906,12 @@ namespace Palier.Infrastructure.Migrations
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<int>("VerrouillagesSubis")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("VerrouillagesSubis");
 
                     b.HasKey("Id");
 
@@ -532,6 +993,77 @@ namespace Palier.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("Palier.Infrastructure.Entites.ExerciseFeedback", b =>
+                {
+                    b.HasOne("Palier.Infrastructure.Entites.Exercise", null)
+                        .WithMany()
+                        .HasForeignKey("ExerciseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Palier.Infrastructure.Entites.Workout", null)
+                        .WithMany()
+                        .HasForeignKey("WorkoutId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.ExerciseVariant", b =>
+                {
+                    b.HasOne("Palier.Infrastructure.Entites.Exercise", null)
+                        .WithMany()
+                        .HasForeignKey("ExerciseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Palier.Infrastructure.Entites.Exercise", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.ProgramDay", b =>
+                {
+                    b.HasOne("Palier.Infrastructure.Entites.TrainingProgram", null)
+                        .WithMany()
+                        .HasForeignKey("ProgramId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.ProgramExercise", b =>
+                {
+                    b.HasOne("Palier.Infrastructure.Entites.Exercise", null)
+                        .WithMany()
+                        .HasForeignKey("ExerciseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Palier.Infrastructure.Entites.ProgramDay", null)
+                        .WithMany()
+                        .HasForeignKey("ProgramDayId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.TrainingProgram", b =>
+                {
+                    b.HasOne("Palier.Infrastructure.Identite.Utilisateur", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Entites.UserConstraint", b =>
+                {
+                    b.HasOne("Palier.Infrastructure.Identite.Utilisateur", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Palier.Infrastructure.Entites.Workout", b =>
                 {
                     b.HasOne("Palier.Infrastructure.Identite.Utilisateur", null)
@@ -539,6 +1071,11 @@ namespace Palier.Infrastructure.Migrations
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Palier.Infrastructure.Entites.ProgramDay", null)
+                        .WithMany()
+                        .HasForeignKey("ProgramDayId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Palier.Infrastructure.Entites.WorkoutSet", b =>
@@ -552,6 +1089,15 @@ namespace Palier.Infrastructure.Migrations
                     b.HasOne("Palier.Infrastructure.Entites.Workout", null)
                         .WithMany()
                         .HasForeignKey("WorkoutId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Palier.Infrastructure.Identite.SessionRafraichissement", b =>
+                {
+                    b.HasOne("Palier.Infrastructure.Identite.Utilisateur", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

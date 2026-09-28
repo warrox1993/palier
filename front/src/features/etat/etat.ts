@@ -38,6 +38,23 @@ export class SocleInjoignableError extends Error {
 }
 
 /**
+ * La route a répondu, et elle a refusé l'appelant.
+ *
+ * Elle N'HÉRITE PAS de {@link SocleInjoignableError}, et c'est le point : un
+ * `instanceof` qui les confondrait ramènerait le défaut que cette classe
+ * corrige. D41 a fermé `GET /api/v1/sante` derrière l'authentification — elle
+ * publiait l'identifiant de la dernière migration appliquée. Sans distinction,
+ * l'écran annonce « la base est arrêtée » et envoie relancer un conteneur qui
+ * tourne déjà. Mesuré le 22/08/2026, message à l'appui.
+ */
+export class AuthentificationRequiseError extends Error {
+  constructor(cause: string) {
+    super(cause)
+    this.name = 'AuthentificationRequiseError'
+  }
+}
+
+/**
  * Lit l'état du socle. Lève {@link SocleInjoignableError} dès que la réponse
  * n'est pas exploitable — code non 200, corps qui n'est pas du JSON, champ
  * manquant. Le serveur de prévisualisation rend `index.html` sur une route
@@ -49,6 +66,12 @@ export async function lireEtatDuSocle(signal?: AbortSignal): Promise<EtatDuSocle
     headers: { Accept: 'application/json' },
     ...(signal === undefined ? {} : { signal }),
   })
+
+  // 403 autant que 401 : le droit manque, la base n'y est pour rien. Les
+  // distinguer à l'écran n'apporterait rien — la conduite à tenir est la même.
+  if (reponse.status === 401 || reponse.status === 403) {
+    throw new AuthentificationRequiseError(`code ${String(reponse.status)}`)
+  }
 
   if (!reponse.ok) {
     throw new SocleInjoignableError(`code ${String(reponse.status)}`)

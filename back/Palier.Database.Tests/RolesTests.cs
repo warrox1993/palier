@@ -202,4 +202,119 @@ public sealed class RolesTests(BaseFixture baseDeDonnees)
         Assert.True(await lecteur.ReadAsync(), $"pg_roles ne connaît aucun rôle « {role} »");
         return (lecteur.GetBoolean(0), lecteur.GetBoolean(1));
     }
+
+    // ================================================================
+    // Le quatrième rôle — lot 4, le chemin que D38 laissait à concevoir
+    // ================================================================
+
+    [Fact]
+    public async Task Le_role_d_authentification_n_est_ni_superutilisateur_ni_porteur_de_bypassrls()
+    {
+        await using var connexion = new NpgsqlDataSourceBuilder(baseDeDonnees.ChaineAuth)
+            .Build()
+            .CreateConnection();
+        await connexion.OpenAsync();
+
+        await using (var commande = new NpgsqlCommand("select current_user", connexion))
+        {
+            var role = (string)(await commande.ExecuteScalarAsync())!;
+            Assert.True(
+                role == "palier_auth",
+                $"La fixture parle au moteur sous « {role} », pas sous « palier_auth »."
+            );
+        }
+
+        await using var attributs = new NpgsqlCommand(
+            "select rolsuper, rolbypassrls from pg_roles where rolname = current_user",
+            connexion
+        );
+        await using var lecteur = await attributs.ExecuteReaderAsync();
+        Assert.True(await lecteur.ReadAsync(), "pg_roles ne connaît pas current_user");
+
+        Assert.True(
+            !lecteur.GetBoolean(0),
+            "palier_auth est SUPERUTILISATEUR : il contournerait toutes les politiques."
+        );
+        Assert.True(
+            !lecteur.GetBoolean(1),
+            "palier_auth porte BYPASSRLS : « roles with the BYPASSRLS attribute always "
+                + "bypass the row security system ». La barrière des tables d'identité "
+                + "deviendrait décorative."
+        );
+    }
+
+    [Fact]
+    public async Task Le_role_d_authentification_ne_possede_aucune_table()
+    {
+        await using var connexion = new NpgsqlDataSourceBuilder(baseDeDonnees.ChaineApp)
+            .Build()
+            .CreateConnection();
+        await connexion.OpenAsync();
+
+        await using var commande = new NpgsqlCommand(
+            """
+            select c.relname from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+              join pg_roles r on r.oid = c.relowner
+             where n.nspname = 'public' and c.relkind = 'r' and r.rolname = 'palier_auth'
+             order by c.relname
+            """,
+            connexion
+        );
+
+        var possedees = new List<string>();
+        await using var lecteur = await commande.ExecuteReaderAsync();
+        while (await lecteur.ReadAsync())
+        {
+            possedees.Add(lecteur.GetString(0));
+        }
+
+        Assert.True(
+            possedees.Count == 0,
+            $"palier_auth possède {possedees.Count} table(s) : {string.Join(", ", possedees)}. "
+                + "« Table owners normally bypass row security as well » — un propriétaire "
+                + "échappe à ses propres politiques."
+        );
+    }
+
+    [Fact]
+    public async Task Le_role_d_authentification_n_atteint_aucune_donnee_de_sante()
+    {
+        // Sa seule fonction est de reconnaître qui se présente. Un privilège sur
+        // workouts, sets ou body_weight ferait de lui un second chemin vers les
+        // données de l'article 9 — et un chemin qui, lui, n'a aucune identité à
+        // poser.
+        //
+        // Les trois requêtes sont écrites au site d'appel : un nom de table ne
+        // peut pas être un paramètre lié, et CA2100 refuse jusqu'à la variable
+        // issue d'un littéral. C'est la doctrine « aucune requête construite par
+        // concaténation », appliquée par le compilateur.
+        await RefuseAsync("workouts", c => new NpgsqlCommand("select count(*) from public.workouts", c));
+        await RefuseAsync("sets", c => new NpgsqlCommand("select count(*) from public.sets", c));
+        await RefuseAsync("body_weight", c => new NpgsqlCommand("select count(*) from public.body_weight", c));
+    }
+
+    /// <summary>
+    /// Ouvre une connexion sous <c>palier_auth</c>, exécute la commande, et exige
+    /// un refus de privilège. Le code 42501 est nommé : un code non nul ne prouve
+    /// pas que le moteur a refusé — une table absente en rendrait un aussi.
+    /// </summary>
+    private async Task RefuseAsync(string table, Func<NpgsqlConnection, NpgsqlCommand> fabrique)
+    {
+        var refus = await Assert.ThrowsAsync<PostgresException>(async () =>
+        {
+            await using var connexion = new NpgsqlDataSourceBuilder(baseDeDonnees.ChaineAuth)
+                .Build()
+                .CreateConnection();
+            await connexion.OpenAsync();
+            await using var commande = fabrique(connexion);
+            await commande.ExecuteScalarAsync();
+        });
+
+        Assert.True(
+            refus.SqlState == "42501",
+            $"palier_auth atteint `{table}` : attendu 42501 (privilège refusé), "
+                + $"reçu {refus.SqlState}."
+        );
+    }
 }
