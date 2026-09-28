@@ -41,26 +41,39 @@ internal static class PreparerLaBase
     internal const string CleDuReferentiel = "PALIER_REFERENTIEL";
 
     /// <summary>
-    /// Le chemin de la ligne de commande : il assemble ce que
-    /// <see cref="ExecuterAsync" /> reçoit déjà construit dans les épreuves.
+    /// Le chemin de la ligne de commande : il lit les deux réglages dans
+    /// l'environnement, puis délègue. Tout ce qui se juge vit dans
+    /// <see cref="DepuisLaConfigurationAsync" /> et <see cref="ExecuterAsync" />.
     /// </summary>
-    internal static async Task<int> DepuisLEnvironnementAsync()
+    internal static Task<int> DepuisLEnvironnementAsync() =>
+        DepuisLaConfigurationAsync(
+            new ConfigurationBuilder().AddEnvironmentVariables().Build(),
+            Console.Out,
+            CancellationToken.None
+        );
+
+    /// <summary>Lit les deux réglages, et refuse en nommant celui qui manque.</summary>
+    internal static async Task<int> DepuisLaConfigurationAsync(
+        IConfiguration configuration,
+        TextWriter sortie,
+        CancellationToken jeton
+    )
     {
-        var environnement = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+        ArgumentNullException.ThrowIfNull(configuration);
 
         return await ExecuterAsync(
-                environnement.GetConnectionString("PalierMigrations")
+                configuration.GetConnectionString("PalierMigrations")
                     ?? throw new InvalidOperationException(
                         "ConnectionStrings__PalierMigrations est absente : les migrations et le "
                             + "référentiel s'écrivent sous le rôle propriétaire."
                     ),
-                environnement[CleDuReferentiel]
+                configuration[CleDuReferentiel]
                     ?? throw new InvalidOperationException(
                         $"{CleDuReferentiel} est absente : elle nomme le dossier des fichiers "
                             + "`db/referentiel/*.sql`."
                     ),
-                Console.Out,
-                CancellationToken.None
+                sortie,
+                jeton
             )
             .ConfigureAwait(false);
     }

@@ -1504,6 +1504,8 @@ Les migrations et le référentiel s'écrivent sous `palier_migrations`, propri�
 
 Le document décrit chaque route et chaque politique : c'est une carte. Il n'est donc routé qu'en `Development`, et `DocumentationOpenApiTests` vérifie sur la table de routage réelle qu'en `Production`, ni `/openapi` ni `/scalar` n'existent. Le schéma `Bearer` n'est exigé que sur les routes protégées : l'inscription et la connexion n'affichent pas un cadenas qu'elles n'ont pas.
 
+**Une exclusion de couverture, et une seule.** Le générateur de `Microsoft.AspNetCore.OpenApi` émet dans `Palier.Api` un fichier de 3 264 lignes, `OpenApiXmlCommentSupport.generated.cs`, qui recopie les commentaires XML dans le document. Il n'existe dans aucun fichier du dépôt. La première CI de la branche a mesuré la couverture de `Palier.Api` à 39 % au lieu de 88 %, sans qu'aucune ligne écrite ici ait perdu son épreuve. Ce fichier, et lui seul, est exclu par son nom dans `Palier.Database.Tests.csproj` ; les migrations restent comptées, comme D57 l'a tranché. Ce qui fermerait l'exclusion : renoncer aux commentaires XML dans le document, ce qui retire le générateur.
+
 **Ce qui la rouvrirait :** une API publique destinée à des tiers, dont le contrat devrait alors être publié et versionné pour de bon.
 
 ### D83 — une image et un compose de DÉMONSTRATION

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 using Palier.Api.Outils;
 
@@ -120,6 +121,52 @@ public sealed class PreparerLaBaseTests(BaseFixture baseDeDonnees)
         {
             dossier.Delete(recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task Depuis_la_configuration_la_commande_lit_ses_deux_reglages()
+    {
+        // Le chemin de la ligne de commande, moins la lecture de
+        // l'environnement du processus : les mêmes clés, lues au même endroit.
+        await using var neuve = await BaseNeuve.CreerAsync(baseDeDonnees);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:PalierMigrations"] = neuve.ChaineMigrations,
+                    [PreparerLaBase.CleDuReferentiel] = Referentiel(),
+                }
+            )
+            .Build();
+
+        Assert.Equal(
+            0,
+            await PreparerLaBase.DepuisLaConfigurationAsync(configuration, TextWriter.Null, CancellationToken.None)
+        );
+        Assert.True(await neuve.CompterAsync("select count(*) from public.exercises") > 0);
+    }
+
+    [Theory]
+    [InlineData("ConnectionStrings:PalierMigrations", "ConnectionStrings__PalierMigrations")]
+    [InlineData(PreparerLaBase.CleDuReferentiel, PreparerLaBase.CleDuReferentiel)]
+    public async Task Un_reglage_ABSENT_est_refuse_en_le_nommant(string retire, string nomme)
+    {
+        var reglages = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:PalierMigrations"] = "Host=127.0.0.1",
+            [PreparerLaBase.CleDuReferentiel] = Referentiel(),
+        };
+        reglages.Remove(retire);
+
+        var refus = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => PreparerLaBase.DepuisLaConfigurationAsync(
+                new ConfigurationBuilder().AddInMemoryCollection(reglages).Build(),
+                TextWriter.Null,
+                CancellationToken.None
+            )
+        );
+
+        Assert.Contains(nomme, refus.Message, StringComparison.Ordinal);
     }
 
     /// <summary>Le dossier du dépôt, lu et jamais recopié.</summary>
