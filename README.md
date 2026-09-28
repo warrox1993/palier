@@ -82,13 +82,14 @@ docs/                     spécifications, décisions datées, conception de cha
 
 ## Tests
 
-| Projet                   | Tests | Ce qu'ils couvrent                                                                                     |
-| ------------------------ | ----- | ------------------------------------------------------------------------------------------------------ |
-| Palier.Domain.Tests      | 261   | règles pures, couverture exigée à 100 %                                                                |
-| Palier.Application.Tests | 252   | cas d'usage et décisions, couverture exigée à 100 %                                                    |
-| Palier.Database.Tests    | 525   | intégration sur un vrai PostgreSQL (Testcontainers) : RLS, rôles, Identity, routes, démarrage de l'API |
-| front                    | 119   | Vitest, dont les épreuves du harnais (lint, format, secrets, i18n)                                     |
-| front e2e                | 3     | Playwright et axe-core                                                                                 |
+| Projet                   | Tests         | Ce qu'ils couvrent                                                                                     |
+| ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------ |
+| Palier.Domain.Tests      | 261           | règles pures, couverture exigée à 100 %                                                                |
+| Palier.Application.Tests | 252           | cas d'usage et décisions, couverture exigée à 100 %                                                    |
+| Palier.Database.Tests    | 525           | intégration sur un vrai PostgreSQL (Testcontainers) : RLS, rôles, Identity, routes, démarrage de l'API |
+| front                    | 119           | Vitest : écran de diagnostic et épreuves du harnais (lint, format, secrets, i18n)                      |
+| front e2e                | 5 (+1 ignoré) | Playwright et axe-core, sous Chromium                                                                  |
+| harnais du dépôt         | 60            | épreuves qui provoquent chaque garde-fou : CI, compose, références, licences, rigueur des analyseurs   |
 
 Les tests d'intégration ne simulent pas la base : ils démarrent PostgreSQL dans un conteneur, appliquent les migrations sous le rôle propriétaire et se connectent sous les rôles réels, pour que RLS s'applique vraiment.
 
