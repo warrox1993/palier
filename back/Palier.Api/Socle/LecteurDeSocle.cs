@@ -194,6 +194,12 @@ internal sealed class LecteurDeSocle(PalierDbContext contexte)
             var authContournement = false;
             using (var commande = connexion.CreateCommand())
             {
+                // Même cas que `_requeteRole` plus haut : un `private const`
+                // littéral, sans entrée. La première exécution de semgrep sur
+                // cette branche l'a signalé le 28/09/2026, parce que l'exclusion
+                // n'avait été posée que sur la première des deux lectures du
+                // catalogue ; celle-ci est arrivée au lot 4 sans elle.
+                // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli
                 commande.CommandText = _requeteRoleAuth;
                 var lecteur = await commande.ExecuteReaderAsync(jeton).ConfigureAwait(false);
                 await using (lecteur.ConfigureAwait(false))
