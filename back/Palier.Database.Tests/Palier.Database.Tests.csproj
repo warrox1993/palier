@@ -27,14 +27,30 @@
        Le chiffre des méthodes est par ailleurs plombé par le code GÉNÉRÉ :
        migrations EF, `Designer.cs`, `ModelSnapshot`. Les exclure demanderait
        une décision datée (CLAUDE.md § 4, « aucune exception sans échéance ») ;
-       elle n'a pas été prise ici, et le seuil vit donc avec eux. -->
+       elle n'a pas été prise ici, et le seuil vit donc avec eux.
+
+       Relevé le 28/09/2026, au même principe du cliquet, après la vitrine
+       (D80 à D83) et l'exclusion du seul code généré par OpenAPI :
+         Palier.Api            93,84 % lignes · 78,28 % branches · 94,56 % méthodes
+         Palier.Infrastructure 99,54 % lignes · 89,80 % branches · 91,33 % méthodes
+         Total                 98,72 % lignes · 83,06 % branches · 92,58 % méthodes -->
   <PropertyGroup>
     <CollectCoverage>true</CollectCoverage>
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
     <Include>[Palier.Infrastructure]*,[Palier.Api]*</Include>
-    <Threshold>96,79,71</Threshold>
+    <Threshold>98,83,92</Threshold>
     <ThresholdType>line,branch,method</ThresholdType>
     <ThresholdStat>total</ThresholdStat>
+    <!-- D82 : le seul fichier exclu, et il n'est pas écrit ici. C'est le code
+         que le générateur de `Microsoft.AspNetCore.OpenApi` émet dans
+         `Palier.Api` pour recopier les commentaires XML dans le document :
+         3 264 lignes, marquées `GeneratedCode`, qui n'existent dans aucun
+         fichier du dépôt. Mesuré le 28/09/2026 : sans cette ligne, la
+         couverture de `Palier.Api` tombait de 88 % à 39 % sans qu'une seule
+         ligne écrite ici ait perdu son épreuve. L'exclusion vise ce fichier
+         par son NOM, pas tout le code généré : les migrations restent comptées,
+         comme D57 l'a tranché. -->
+    <ExcludeByFile>**/OpenApiXmlCommentSupport.generated.cs</ExcludeByFile>
   </PropertyGroup>
 
   <ItemGroup>

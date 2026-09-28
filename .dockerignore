@@ -1,0 +1,17 @@
+# Une liste BLANCHE : tout est exclu, puis on rouvre ce que l'image exige.
+# Une liste noire laisserait passer le prochain fichier qu'on n'a pas prévu —
+# un `.env`, un `secrets.json`, un dossier `bin/` d'un autre poste.
+*
+
+!global.json
+!Directory.Build.props
+!.editorconfig
+!back/Palier.Domain/
+!back/Palier.Application/
+!back/Palier.Infrastructure/
+!back/Palier.Api/
+!db/referentiel/
+
+# Rouverts ci-dessus, refermés ici : les sorties de compilation locales.
+back/**/bin/
+back/**/obj/

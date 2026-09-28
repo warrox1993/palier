@@ -18,7 +18,12 @@ public sealed record ReglagesDuCoffre(
     string ClientSecret
 )
 {
-    private static readonly string[] _requises =
+    /// <summary>
+    /// Les cinq noms, écrits ici et nulle part ailleurs. Le coffre local (D80)
+    /// les relit pour refuser un poste qui les porte : une seconde liste
+    /// divergerait de celle-ci le jour où une variable s'ajoute.
+    /// </summary>
+    public static IReadOnlyList<string> Variables { get; } =
     [
         "OKMS_ENDPOINT",
         "OKMS_ID",
@@ -46,7 +51,7 @@ public sealed record ReglagesDuCoffre(
         // chaîne vide est le cas le plus courant d'un fichier d'environnement
         // mal rempli, et le refus doit tomber ici plutôt que plus loin, ailleurs,
         // en disant autre chose.
-        var absentes = _requises.Where(c => string.IsNullOrWhiteSpace(source[c])).ToArray();
+        var absentes = Variables.Where(c => string.IsNullOrWhiteSpace(source[c])).ToArray();
         if (absentes.Length > 0)
         {
             throw new InvalidOperationException(

@@ -1466,3 +1466,62 @@ Le § 7 du document porte **quatorze points** qui demandent un diététicien ou 
 - **`nutrient_refs` manque trois colonnes** — `perimetre`, `forme_chimique` et surtout `statut`. Sans ce dernier, toute ligne dont `ul` est non nul devient une limite haute établie, et les niveaux sûrs du fer et du manganèse produiraient un vocabulaire de dépassement que l'EFSA interdit.
 
 **Aucune valeur de micronutriment n'a été corrigée en base** : l'audit en signale quatre périmées — B6, sélénium, fer, niacine — et chacune demande sa propre passe de vérification avant d'entrer.
+
+---
+
+## D80 à D84 — la vitrine démontrable
+
+_28/09/2026. Choisi par le porteur du projet : terminer Palier comme **vitrine d'API backend .NET**, démontrable par n'importe qui en une commande, puis rendre le dépôt public. Aucune fonction produit nouvelle ; le périmètre est ce qui manquait pour qu'un tiers puisse lancer et essayer l'API._
+
+### D80 — un coffre LOCAL, refusé hors de Development
+
+**Le constat.** Depuis D59, l'API ne démarrait nulle part sans un vrai OVHcloud KMS, développement compris : `Program.cs` ajoutait le coffre comme source de configuration sans condition, et la clé de données venait d'une enveloppe que seul OKMS déballe. Personne d'autre que le porteur ne pouvait lancer le produit.
+
+**Tranché.** `PALIER_COFFRE=local` demande un coffre local : la configuration vient du poste (variables d'environnement, `dotnet user-secrets`), et la clé de données de `PALIER_CLE_LOCALE`, 32 octets en Base64. Le format chiffré ne change pas : `TrousseauDeChiffrement` reste le seul à chiffrer, avec la même liaison au propriétaire. L'identifiant de la clé locale est dérivé par HMAC, pour qu'un secret TOTP reste lisible après un redémarrage.
+
+**Les trois refus, tous au démarrage et avant l'ouverture du port** (`CoffreLocal.Choisir`) :
+
+1. le mode se DEMANDE : sans `PALIER_COFFRE`, le chemin d'OKMS est celui d'avant, refus compris. Un coffre injoignable ne fait jamais basculer en local ;
+2. l'environnement doit être `Development`, écrit exactement. `Production`, `Staging`, `development` en minuscules refusent ;
+3. aucune des cinq variables `OKMS_*` ne doit être posée : le mélange avec les identifiants du vrai coffre se refuse.
+
+**Ce qui le prouve.** `CoffreLocalTests` éprouve la décision et le chemin de démarrage (`SourceDesSecrets`) ; `DemarrageDeLApiTests` lance le **binaire réel** en `Production` avec une configuration locale complète et constate le refus, code de sortie non nul et aucun port ouvert, puis le même lancement en `Development`, qui démarre. Sans ce témoin positif, le refus pourrait venir d'une variable oubliée.
+
+**Aucune baisse en production** : le chemin d'OKMS n'a pas changé d'une ligne ; il a seulement été déplacé dans `SourceDesSecrets.Brancher`.
+
+**Ce qui la rouvrirait :** un besoin d'environnement de recette sans OKMS. Il demanderait son propre coffre, pas l'élargissement de celui-ci.
+
+### D81 — `preparer-la-base`, une commande d'exploitation
+
+Les migrations et le référentiel s'écrivent sous `palier_migrations`, propriétaire des tables. Les appliquer au démarrage de l'API obligerait le processus qui sert les requêtes à détenir la chaîne du propriétaire, ce que D37 sépare. La commande `dotnet Palier.Api.dll preparer-la-base` fait les deux, dans l'ordre de `scripts/referentiel.mjs`, sans `dotnet-ef` ni `psql`. Elle est rangée à côté de `poser-cle-de-donnees`, et la démonstration la lance dans un conteneur qui se termine avant l'API. Rejouable : `on conflict` sur le slug (D68). `PreparerLaBaseTests` l'éprouve sur une base neuve, rejouée, avec un dossier vide et avec un fichier refusé.
+
+### D82 — OpenAPI intégré et Scalar, en Development seulement
+
+**Deux dépendances directes**, vérifiées sur nuget.org le 28/09/2026 :
+
+- `Microsoft.AspNetCore.OpenApi` **10.0.11** (MIT), la génération de document intégrée à ASP.NET Core 10, alignée sur les autres paquets `10.0.11` du projet. Elle remplace Swashbuckle, que Microsoft ne livre plus dans les modèles depuis .NET 9.
+- `Scalar.AspNetCore` **2.17.6** (MIT), publiée le 19/09/2026 : l'interface qui lit ce document et permet d'essayer les routes. La 2.17.10 existait, publiée trois jours plus tôt ; la doctrine des dépendances impose un délai avant adoption.
+
+Le document décrit chaque route et chaque politique : c'est une carte. Il n'est donc routé qu'en `Development`, et `DocumentationOpenApiTests` vérifie sur la table de routage réelle qu'en `Production`, ni `/openapi` ni `/scalar` n'existent. Le schéma `Bearer` n'est exigé que sur les routes protégées : l'inscription et la connexion n'affichent pas un cadenas qu'elles n'ont pas.
+
+**Une exclusion de couverture, et une seule.** Le générateur de `Microsoft.AspNetCore.OpenApi` émet dans `Palier.Api` un fichier de 3 264 lignes, `OpenApiXmlCommentSupport.generated.cs`, qui recopie les commentaires XML dans le document. Il n'existe dans aucun fichier du dépôt. La première CI de la branche a mesuré la couverture de `Palier.Api` à 39 % au lieu de 88 %, sans qu'aucune ligne écrite ici ait perdu son épreuve. Ce fichier, et lui seul, est exclu par son nom dans `Palier.Database.Tests.csproj` ; les migrations restent comptées, comme D57 l'a tranché. Ce qui fermerait l'exclusion : renoncer aux commentaires XML dans le document, ce qui retire le générateur.
+
+**Ce qui la rouvrirait :** une API publique destinée à des tiers, dont le contrat devrait alors être publié et versionné pour de bon.
+
+### D83 — une image et un compose de DÉMONSTRATION
+
+D33 écartait un Dockerfile et un compose de production pour le **développement** : le backend y reste sur l'hôte, avec le débogueur. Cette décision ne la rouvre pas. `Dockerfile` et `compose.yaml` à la racine servent la **démonstration**, en `Development` et en coffre local ; le déploiement de production reste à concevoir au lot 9.
+
+- `Dockerfile` : deux étapes, SDK puis runtime ASP.NET, utilisateur non privilégié de l'image (`$APP_UID`), port 8080 ; `.dockerignore` en liste blanche.
+- `compose.yaml` : la base est **étendue** depuis `db/compose.yaml`, jamais redéclarée, pour que le tag PostgreSQL reste écrit à un seul endroit (D34) ; `preparation`, puis Mailpit, puis l'API. Tout écoute sur `127.0.0.1`.
+- `demarrer-demo.sh` engendre `.env` (exclu du dépôt), choisit Docker Compose, `podman compose` ou `podman-compose`, et attend que l'API réponde.
+
+**Un défaut trouvé en chemin.** `db/compose.yaml` publiait PostgreSQL sur `0.0.0.0:5432`, avec des mots de passe lisibles dans le dépôt : la base de développement était joignable depuis le réseau local. Le port est désormais borné à `127.0.0.1`, comme l'attrape-courriel l'était déjà, et déplaçable par `PALIER_PORT_BASE`.
+
+**`global.json` passe de `10.0.303` à `10.0.100`**, avec le même `rollForward: latestFeature`. `setup-dotnet` lit `latestFeature` comme « la dernière 10.0 » (10.0.401 mesuré en CI le 24/09) : la CI ne change pas. Mais un poste avec un SDK 10.0.1xx, celui des distributions Linux, ne pouvait plus compiler, et l'exigence ne reposait sur aucune fonction propre à la bande 3xx.
+
+### D84 — le dépôt devient public
+
+D29 écartait la publication parce que le projet était un service commercial propriétaire. Le porteur la décide le 28/09/2026, pour en faire une vitrine. Conditions posées avant de changer la visibilité : gitleaks sur tout l'historique, recherche de données personnelles dans l'historique, et vérification des licences des données embarquées (`db/SOURCES.md` : aucune donnée tierce). Le code reste sans licence d'utilisation (`UNLICENSED`) : il est lisible, pas réutilisable.
+
+**Conséquence sur D29 :** GitHub Free offre les règles de branche aux dépôts publics. Le gardien de `main` reste en place ; une protection de branche devient possible et reste à décider.

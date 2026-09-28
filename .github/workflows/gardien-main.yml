@@ -3,8 +3,12 @@
 # GitHub Free n'autorise les règles de dépôt (protection de branche classique
 # ET rulesets) que sur les dépôts PUBLICS. Vérifié le 20/08/2026 : les deux API
 # rendent « Upgrade to GitHub Pro or make this repository public », en HTTP 403,
-# avec des droits d'administration pleins. `palier` est privé et le restera —
-# c'est un service commercial propriétaire.
+# avec des droits d'administration pleins. `palier` était privé.
+#
+# Il est PUBLIC depuis le 28/09/2026 (D84) : les règles de branche deviennent
+# possibles, et restent à décider. Ce gardien reste en place d'ici là, et après :
+# une règle de branche empêche une fusion rouge, elle ne dit rien d'un `main`
+# cassé par un changement extérieur, une action ou une image qui bouge.
 #
 # Il n'existe donc AUCUNE barrière côté serveur : rien ne peut empêcher un push
 # sur `main`, ni refuser une fusion dont la CI est rouge. Ce fichier ne prétend

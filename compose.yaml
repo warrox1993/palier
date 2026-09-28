@@ -1,0 +1,105 @@
+# La démonstration de l'API, en une commande — D83.
+#
+#   ./demarrer-demo.sh           engendre `.env`, construit, lance, attend
+#   docker compose up --build    la même chose, une fois `.env` engendré
+#   podman compose up --build    idem sous Podman
+#
+# Quatre services, dans cet ordre :
+#
+#   base         PostgreSQL, ÉTENDU depuis `db/compose.yaml` au lieu d'être
+#                redéclaré : le tag de l'image n'est écrit qu'à un seul endroit
+#                du dépôt (D34), et `tests-harness/db.test.mjs` le vérifie.
+#   preparation  la commande `preparer-la-base` de l'API (D81) : migrations puis
+#                référentiel, sous le rôle propriétaire, et elle se termine.
+#   courrier     Mailpit, qui capte les courriels de vérification.
+#   api          l'API en Development, coffre local (D80), OpenAPI et Scalar
+#                (D82).
+#
+# AUCUN SECRET ICI. Les chaînes de connexion, la clé de signature des jetons et
+# la clé de données viennent de `.env`, que `demarrer-demo.sh` engendre au
+# premier lancement et que `.gitignore` exclut. Les mots de passe des rôles y
+# sont LUS dans `db/amorcage/01-roles.sql`, jamais recopiés : ce sont des
+# valeurs locales sans entropie, qui n'ouvrent qu'un conteneur sur le poste.
+#
+# Tout écoute sur 127.0.0.1 : rien de la démonstration n'est joignable depuis
+# le réseau local.
+name: palier-demo
+
+services:
+  base:
+    extends:
+      file: db/compose.yaml
+      service: palier-db
+    container_name: palier-demo-base
+    # Redéclarés par leur CIBLE, ce qui remplace ceux du service étendu au lieu
+    # de s'y ajouter. Nécessaire pour `podman-compose`, qui résout les chemins
+    # relatifs d'un service étendu depuis CE fichier et non depuis `db/` :
+    # mesuré le 28/09/2026 avec la 1.5.0, `amorcage/` n'était pas monté.
+    volumes:
+      - donnees:/var/lib/postgresql
+      - ./db/amorcage:/docker-entrypoint-initdb.d:ro
+
+  preparation:
+    build: .
+    image: localhost/palier-api:demo
+    command: ['preparer-la-base']
+    environment:
+      ConnectionStrings__PalierMigrations: ${PALIER_CHAINE_MIGRATIONS:?Lancer ./demarrer-demo.sh, qui engendre .env}
+    depends_on:
+      base:
+        condition: service_healthy
+
+  courrier:
+    # Même image que `db/compose.outils.yaml`, et pour les mêmes raisons : aucun
+    # relais vers l'extérieur, messages en mémoire seulement.
+    image: docker.io/axllent/mailpit:v1.30.7
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      MP_MAX_MESSAGES: 500
+    ports:
+      - '127.0.0.1:${PALIER_PORT_COURRIER:-8025}:8025'
+      # Le port de l'API est publié ICI : l'API partage l'espace réseau de ce
+      # conteneur (voir `api`, `network_mode`).
+      - '127.0.0.1:${PALIER_PORT_API:-5025}:8080'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    image: localhost/palier-api:demo
+    # L'API partage l'espace réseau de Mailpit, et joint donc le relais sur
+    # `localhost`. Ce n'est pas du confort : `ReglagesDuCourrier` exige STARTTLS
+    # vers tout relais qui n'est pas la boucle locale, et Mailpit n'offre pas de
+    # certificat que MailKit accepterait. Désigner le relais par son nom de
+    # service faisait échouer l'inscription en 500 (mesuré le 28/09/2026) ;
+    # affaiblir la règle pour la démonstration l'aurait affaiblie partout.
+    network_mode: service:courrier
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Le coffre local — D80. Refusé par l'API hors de Development.
+      PALIER_COFFRE: local
+      PALIER_CLE_LOCALE: ${PALIER_CLE_LOCALE:?Lancer ./demarrer-demo.sh, qui engendre .env}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?Lancer ./demarrer-demo.sh, qui engendre .env}
+      ConnectionStrings__Palier: ${PALIER_CHAINE_API:?Lancer ./demarrer-demo.sh, qui engendre .env}
+      ConnectionStrings__PalierAuth: ${PALIER_CHAINE_AUTH:?Lancer ./demarrer-demo.sh, qui engendre .env}
+      SMTP_HOST: localhost
+      SMTP_PORT: '1025'
+      SMTP_FROM: palier@demo.invalid
+      # La base des liens envoyés par courriel. Elle désigne le front, qui n'est
+      # pas construit : le compte et le code se lisent dans Mailpit et se
+      # soumettent à `POST /api/v1/auth/verifier-l-adresse`.
+      APP_URL: http://localhost:5173
+      # L'adresse qui ouvre `GET /api/v1/sante` une fois VÉRIFIÉE (D41).
+      ADMIN_EMAILS: ${PALIER_ADMIN:-admin@demo.palier.test}
+    depends_on:
+      preparation:
+        condition: service_completed_successfully
+      courrier:
+        condition: service_healthy
+
+volumes:
+  donnees:
