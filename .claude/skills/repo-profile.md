@@ -54,10 +54,10 @@
 - `.github/workflows/gardien-main.yml` ouvre une issue `main-rouge` quand la CI échoue sur `main`
 
 ## Integration style
-- **Merge mode:** merge — commit de fusion normal, choix de JB pour garder l'historique détaillé
-  (#21 et les PR Dependabot). Le kit fusionne en squash par défaut : passer
-  `guarded-pr-merge.sh <PR> -- --merge --delete-branch`. Squash reste autorisé, rebase désactivé
-  (`.github/repo-setup.yml`).
+- **Merge mode:** squash — décision de JB du 28/09/2026 : fusion squash seule, comme le kit
+  (commit de fusion et rebase désactivés dans `.github/repo-setup.yml`). Le titre de la PR devient
+  le sujet du commit sur la branche par défaut, suivi de `(#<PR>)` ; `merge-pr` et
+  `guarded-pr-merge.sh` fusionnent ainsi par défaut. Historique antérieur : commits de fusion.
 - **PR title convention:** pas de contrôle de titre en CI. Messages en français (`CLAUDE.md` § 4 :
   « à l'impératif » ; l'historique montre une minuscule initiale et un verbe conjugué : « rend
   l'API démontrable… », « reporte au README… »), sans préfixe Conventional Commits. Un titre de
