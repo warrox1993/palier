@@ -56,11 +56,11 @@ describe('garde-fou : intégration continue', () => {
     // SAUTER le job quand un amont échoue : il apparaît GRIS, pas rouge — et un
     // job gris se lit comme « pas concerné ».
     //
-    // C'est grave ici et nulle part ailleurs : D29 rappelle qu'AUCUNE barrière
-    // côté serveur n'existe — GitHub Free ne donne ni branches protégées ni
-    // rulesets sur un dépôt privé. `franchissement` est ce qui devrait dire
-    // « les garde-fous ont tourné ». Gris, une fusion passe sans qu'aucune
-    // épreuve de franchissement n'ait tourné.
+    // C'est grave ici et nulle part ailleurs : `franchissement` est l'un des six
+    // checks exigés par le ruleset de `main` (D29 révisée, 28/09/2026) et ce qui
+    // dit « les garde-fous ont tourné ». Un job SAUTÉ compte comme réussi pour
+    // un check requis : gris, une fusion passerait sans qu'aucune épreuve de
+    // franchissement n'ait tourné.
     const job = flux.jobs.franchissement
     expect(String(job.if ?? ''), 'le job saute au lieu d’échouer : `if: always()` manque').toMatch(
       /always\(\)/,
@@ -208,11 +208,10 @@ describe('garde-fou : intégration continue', () => {
   })
 
   it('le gardien de main existe et surveille la CI', () => {
-    // Il n'y a AUCUNE protection de branche sur ce dépôt : GitHub Free ne
-    // l'autorise que sur les dépôts publics, et `palier` est privé. Vérifié le
-    // 20/08/2026, les deux API rendent 403 avec des droits d'administration
-    // pleins. Ce gardien est ce qui remplace la barrière absente — il n'empêche
-    // rien, il rend l'échec impossible à ignorer. Décision D29.
+    // Le ruleset de `main` (D29 révisée, 28/09/2026) empêche une fusion rouge,
+    // pas une `main` qui devient rouge sans fusion (action, image ou service
+    // extérieur qui bouge). Ce gardien couvre ce cas : il n'empêche rien, il
+    // rend l'échec impossible à ignorer.
     //
     // Cette épreuve existe parce qu'un fichier de workflow se supprime sans que
     // rien ne bouge : il n'est appelé par aucun script, aucun test, aucune
