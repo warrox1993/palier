@@ -4,7 +4,7 @@ import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtempSync } from 'node:fs'
-import { lancerOutil } from './run-outil'
+import { echapperArgumentWindows, lancerOutil } from './run-outil'
 
 describe('lancerOutil', () => {
   it('retourne le code 0 et la sortie quand la commande réussit', () => {
@@ -79,5 +79,125 @@ describe('lancerOutil — les défaillances ne se déguisent pas en refus', () =
     } finally {
       rmSync(bac, { recursive: true, force: true })
     }
+  })
+})
+
+/**
+ * Découpage d'une ligne de commande par le runtime C de Microsoft, selon les
+ * règles documentées (« Parsing C command-line arguments ») : c'est ce que
+ * font Node, .NET et la plupart des outils sous Windows. Référence écrite ici
+ * pour que l'épreuve tourne aussi sous Linux, où la CI s'exécute.
+ */
+function decouperCommeLeRuntimeC(ligne: string): string[] {
+  const args: string[] = []
+  let courant = ''
+  let dansUnArgument = false
+  let entreGuillemets = false
+  let i = 0
+  while (i < ligne.length) {
+    const c = ligne.charAt(i)
+    if (c === '\\') {
+      let barres = 0
+      while (ligne.charAt(i) === '\\') {
+        barres++
+        i++
+      }
+      if (ligne.charAt(i) === '"') {
+        courant += '\\'.repeat(Math.floor(barres / 2))
+        if (barres % 2 === 1) {
+          courant += '"'
+          i++
+        }
+      } else {
+        courant += '\\'.repeat(barres)
+      }
+      dansUnArgument = true
+      continue
+    }
+    if (c === '"') {
+      if (entreGuillemets && ligne.charAt(i + 1) === '"') {
+        courant += '"'
+        i += 2
+      } else {
+        entreGuillemets = !entreGuillemets
+        i++
+      }
+      dansUnArgument = true
+      continue
+    }
+    if ((c === ' ' || c === '\t') && !entreGuillemets) {
+      if (dansUnArgument) args.push(courant)
+      courant = ''
+      dansUnArgument = false
+      i++
+      continue
+    }
+    courant += c
+    dansUnArgument = true
+    i++
+  }
+  if (dansUnArgument) args.push(courant)
+  return args
+}
+
+/**
+ * Ce que cmd.exe laisserait HORS guillemets : il ignore les barres inverses et
+ * bascule à chaque `"`. Un métacaractère hors guillemets serait interprété
+ * (séparateur de commandes, redirection…).
+ */
+function metacaracteresHorsGuillemetsPourCmd(ligne: string): string[] {
+  const exposes: string[] = []
+  let entreGuillemets = false
+  for (const c of ligne) {
+    if (c === '"') entreGuillemets = !entreGuillemets
+    else if (!entreGuillemets && '&|<>^()'.includes(c)) exposes.push(c)
+  }
+  return exposes
+}
+
+// CodeQL js/incomplete-sanitization (28/09/2026) : l'ancien échappement
+// remplaçait `"` par `\"` sans traiter les barres obliques inverses. Ces cas
+// sont précisément ceux qu'il cassait.
+describe('echapperArgumentWindows — relu à l’identique par le runtime C et par cmd.exe', () => {
+  const CAS = [
+    'simple',
+    'avec espace',
+    'a^b',
+    'a>b',
+    'C:\\dossier x\\',
+    'C:\\dossier x\\\\',
+    'C:\\a b\\c',
+    'a"b c',
+    'a\\"b c',
+    'a\\\\"b c',
+    '"',
+    '\\',
+    ' ',
+    'fin par barre \\',
+    'a"b & calc',
+    'x" & echo pwned & "',
+    '(groupe) | tube',
+    '\\\\serveur\\partage\\fichier avec espace',
+  ]
+
+  it.each(CAS)('%j ressort intact du découpage du runtime C', (arg) => {
+    const ligne = `outil ${echapperArgumentWindows(arg)} suivant`
+    expect(decouperCommeLeRuntimeC(ligne)).toEqual(['outil', arg, 'suivant'])
+  })
+
+  it.each(CAS)('%j ne laisse aucun métacaractère hors guillemets pour cmd.exe', (arg) => {
+    expect(metacaracteresHorsGuillemetsPourCmd(echapperArgumentWindows(arg))).toEqual([])
+  })
+
+  it('laisse tel quel un argument sans caractère spécial, et quote la chaîne vide', () => {
+    expect(echapperArgumentWindows('C:\\sans\\espace')).toBe('C:\\sans\\espace')
+    expect(echapperArgumentWindows('')).toBe('""')
+    expect(decouperCommeLeRuntimeC(`a ${echapperArgumentWindows('')} b`)).toEqual(['a', '', 'b'])
+  })
+
+  it('double les barres inverses devant un guillemet et en fin d’argument, pas ailleurs', () => {
+    expect(echapperArgumentWindows('C:\\dossier x\\')).toBe('"C:\\dossier x\\\\"')
+    expect(echapperArgumentWindows('a\\"b c')).toBe('"a\\\\""b c"')
+    expect(echapperArgumentWindows('C:\\a b\\c')).toBe('"C:\\a b\\c"')
   })
 })
