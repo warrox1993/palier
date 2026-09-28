@@ -86,7 +86,7 @@ docs/                     spécifications, décisions datées, conception de cha
 | ------------------------ | ------------- | ------------------------------------------------------------------------------------------------------ |
 | Palier.Domain.Tests      | 261           | règles pures, couverture exigée à 100 %                                                                |
 | Palier.Application.Tests | 252           | cas d'usage et décisions, couverture exigée à 100 %                                                    |
-| Palier.Database.Tests    | 525           | intégration sur un vrai PostgreSQL (Testcontainers) : RLS, rôles, Identity, routes, démarrage de l'API |
+| Palier.Database.Tests    | 523           | intégration sur un vrai PostgreSQL (Testcontainers) : RLS, rôles, Identity, routes, démarrage de l'API |
 | front                    | 119           | Vitest : écran de diagnostic et épreuves du harnais (lint, format, secrets, i18n)                      |
 | front e2e                | 5 (+1 ignoré) | Playwright et axe-core, sous Chromium                                                                  |
 | harnais du dépôt         | 60            | épreuves qui provoquent chaque garde-fou : CI, compose, références, licences, rigueur des analyseurs   |

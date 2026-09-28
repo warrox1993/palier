@@ -421,7 +421,7 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
 
         var inconnue = new List<double>();
         var mauvaise = new List<double>();
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 5; i++)
         {
             inconnue.Add(
                 await MesurerAsync(portee.ServiceProvider, EmailNeuf(), _motDePasseSolide)
@@ -431,7 +431,14 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
             );
         }
 
-        var ecart = Math.Abs(inconnue.Average() - mauvaise.Average());
+        // La MÉDIANE de cinq mesures, et non la moyenne de trois. Sur un
+        // exécuteur partagé, une seule mesure retardée par le disque ou le
+        // ramasse-miettes — 953 ms de moyenne relevés le 28/09/2026, pour un
+        // budget de 400 — faisait rougir l'épreuve sans rien dire du canal
+        // temporel. Celui qu'un attaquant exploite est une différence
+        // SYSTÉMATIQUE, que la médiane mesure aussi bien que la moyenne. La
+        // tolérance, elle, ne bouge pas.
+        var ecart = Math.Abs(Mediane(inconnue) - Mediane(mauvaise));
 
         // LE SEUIL EST LITTÉRAL, et l'assertion qui suit dit pourquoi.
         //
@@ -456,8 +463,8 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         // exploitable par qui sonde en masse.
         Assert.True(
             ecart < toleranceEnMs,
-            $"adresse inconnue {inconnue.Average():F0} ms contre mauvais mot de passe "
-                + $"{mauvaise.Average():F0} ms — écart de {ecart:F0} ms. Le temps de réponse "
+            $"adresse inconnue {Mediane(inconnue):F0} ms contre mauvais mot de passe "
+                + $"{Mediane(mauvaise):F0} ms — écart de {ecart:F0} ms. Le temps de réponse "
                 + "distingue une adresse qui a un compte d'une adresse qui n'en a pas."
         );
 
@@ -472,14 +479,18 @@ public sealed class PointsDEntreeTests(BaseFixture baseDeDonnees)
         foreach (var (nom, mesures) in new[] { ("inconnue", inconnue), ("mauvaise", mauvaise) })
         {
             Assert.True(
-                mesures.Average() >= PointsDEntree.BudgetDeRefus.TotalMilliseconds * 0.9,
-                $"la branche « {nom} » revient en {mesures.Average():F0} ms, sous le budget de "
+                Mediane(mesures) >= PointsDEntree.BudgetDeRefus.TotalMilliseconds * 0.9,
+                $"la branche « {nom} » revient en {Mediane(mesures):F0} ms, sous le budget de "
                     + $"{PointsDEntree.BudgetDeRefus.TotalMilliseconds:F0} ms : l'égalisation "
                     + "n'est pas appliquée, et chaque branche paie son coût propre — donc le "
                     + "temps la trahit."
             );
         }
     }
+
+    /// <summary>La valeur du milieu d'un nombre IMPAIR de mesures.</summary>
+    private static double Mediane(List<double> mesures) =>
+        mesures.Order().ElementAt(mesures.Count / 2);
 
     /// <summary>Le temps qu'une connexion refusée met à revenir, en millisecondes.</summary>
     private static async Task<double> MesurerAsync(
