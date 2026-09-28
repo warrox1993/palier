@@ -84,8 +84,9 @@ Le coût est négligeable : quelques appels de test valent des centimes. Fixe un
 mkdir mon-app && cd mon-app
 git init
 # décompresser le brief à la racine :
-# CLAUDE.md, README.md, DEMARRAGE.md et docs/ doivent être ici
-ls              # doit montrer CLAUDE.md, README.md, docs/
+# CLAUDE.md, DEMARRAGE.md et docs/ doivent être ici — le brief,
+# alors README.md, vit depuis le 28/09/2026 dans docs/brief-claude-code.md
+ls              # doit montrer CLAUDE.md, DEMARRAGE.md, docs/
 git add . && git commit -m "ajoute le dossier de spécification"
 ```
 

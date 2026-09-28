@@ -1,64 +1,127 @@
-# Brief — Application muscu & nutrition
+# Palier
 
-Dossier de spécification destiné à Claude Code.
+[![CI](https://github.com/warrox1993/palier/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/warrox1993/palier/actions/workflows/ci.yml)
 
-## Démarrage
+API backend en .NET 10 pour une application de suivi d'entraînement en musculation. Sa règle métier tient en une phrase : l'application informe, elle ne prescrit jamais. Elle rend des chiffres, des références et des écarts, jamais de consigne.
 
-**`DEMARRAGE.md`** — procédure exacte, étape par étape, avec les commandes et le premier prompt.
+Ce dépôt est une vitrine technique. Il montre une API ASP.NET Core complète, sécurisée et testée sur une vraie base PostgreSQL, que l'on peut lancer en une commande et essayer dans le navigateur.
 
-## Ordre de lecture
+![L'interface Scalar de l'API, sur une route d'entraînement](docs/images/scalar.png)
 
-1. **`CLAUDE.md`** — règles de travail. Superpowers obligatoire, aucun agent créé, agentique et non vibecoding
-2. `docs/00-produit.md` — cible, promesse, périmètre
-3. `docs/01-conformite.md` — cadre juridique, ligne informer/prescrire, garde-fous. **Prime sur tout le reste**
-4. `docs/02-design.md` — direction artistique, jetons, écran de séance
-5. `docs/03-donnees.md` — schéma PostgreSQL et RLS
-6. `docs/04-nutrition.md` — formules et références
-7. `docs/05-entrainement.md` — volume, progression, contraintes
-8. `docs/06-ia.md` — architecture LLM multi-fournisseur
-9. `docs/07-roadmap.md` — séquence
-10. `docs/08-workflow.md` — ingénierie agentique, harnais, définition de terminé
-11. `docs/09-comptes.md` — auth, onboarding, abonnement, notifications, support, admin
-12. `docs/10-progression.md` — radar, états, avatar
-13. `docs/11-qualite.md` — résilience, accessibilité, i18n, mesure
-14. `docs/12-confort.md` — duplication, import/export, performance, sécurité
-15. `docs/13-juridique.md` — mineurs, transferts de données, structure, assurance
-16. `docs/14-contenu.md` — catalogue d'exercices, programmes, exploitation
-17. `docs/15-marque.md` — nom et dépôt de marque
-18. `docs/16-projet.md` — arborescence, conventions, variables d'environnement, glossaire
-19. `docs/17-donnees-sources.md` — licences des bases alimentaires, attribution, share-alike
-20. **`docs/decisions.md`** — le journal des décisions, **à lire au démarrage de chaque session**. Il porte ce qui a déjà été tranché, avec le motif et ce qui rouvrirait chaque décision. Une décision qu'on ne relit pas au démarrage se reprend.
+## Ce qui est livré, et ce qui ne l'est pas
 
-> **`docs/decisions.md` prime sur les autres documents quand ils divergent** — c'est lui qui est daté. Son absence de cet index jusqu'au 20/08/2026 a laissé sept documents décrire une pile Supabase + Vercel abandonnée le 19/08.
+Livré et testé :
 
-## Premier prompt
+- l'authentification complète : inscription, vérification de l'adresse par courriel, connexion, rafraîchissement, déconnexion, réinitialisation du mot de passe, double authentification TOTP, suppression du compte, connexion Google (facultative) ;
+- l'API d'entraînement : séances, séries, poids corporel, force estimée, détection de plateau, volume hebdomadaire par groupe musculaire, ressenti par exercice, contraintes physiques du compte, programmes ;
+- un référentiel rédigé pour le projet : 255 exercices et 60 programmes modèles, chargés au démarrage de la démonstration ;
+- 42 routes documentées en OpenAPI, dont 33 protégées par jeton.
 
-> Lis `CLAUDE.md`, `docs/decisions.md`, puis l'ensemble de `docs/`. Vérifie que Superpowers
-> est installé et actif — les noms de commandes varient selon la version, utilise ceux que
-> `/help` affiche. Ne code rien pour l'instant. Lance la commande de clarification sur l'étape 1
-> de la roadmap et pose-moi les questions nécessaires avant de proposer un plan.
+Pas livré :
 
-## En cas de contradiction entre documents
+- le front. Le dossier `front/` contient l'outillage (React 19, Vite, Vitest, Playwright, axe-core) et un seul écran de diagnostic. Aucune interface utilisateur n'est construite ; l'API s'essaie avec Scalar.
+- la nutrition. Les calculs existent dans le domaine et sont testés, mais aucune route ne les expose encore, et le référentiel des nutriments n'est pas chargé.
+- le déploiement. La cible est OVHcloud ; l'image fournie ici sert la démonstration, pas la production.
 
-Ce dossier a été écrit par itérations successives. **Si tu détectes une contradiction : signale-la avec les références exactes, propose la résolution, attends validation.** Ne tranche jamais seul sur le contenu métier.
+## Lancer la démonstration
 
-Ordre de priorité : `01-conformite.md` > document spécialisé > `07-roadmap.md` > `CLAUDE.md`. Le détail est en section 5 de `CLAUDE.md`.
+Prérequis : Docker avec Compose, ou Podman (`podman compose` ou `podman-compose`). Rien d'autre, pas même le SDK .NET.
 
-### Corrections déjà appliquées
+```bash
+git clone https://github.com/warrox1993/palier.git
+cd palier
+./demarrer-demo.sh
+```
 
-| Contradiction | Résolution |
-|---|---|
-| `CLAUDE.md` annonçait « magic link », trois documents imposaient Google OAuth + mot de passe | **Google OAuth + email/mot de passe.** `CLAUDE.md` corrigé |
-| `CLAUDE.md` disait « dix points », `08-workflow.md` en comptait douze | **Douze.** `CLAUDE.md` corrigé |
-| Noms de commandes Superpowers obsolètes (`/superpowers:brainstorm`) | Les noms **varient selon la version** — vérifier via `/help`. Version courante : `brainstorming`, `writing-plans`, `executing-plans` |
-| Clés API interdites à l'étape 0, exigées à l'étape 1 | **Les créer à l'étape 0**, avec plafond de dépense. L'étape 1 livre un appel de test |
-| Ce même document écrivait « dix points » deux lignes plus bas | **Douze.** Corrigé le 20/08/2026 — la correction annoncée n'avait pas été appliquée à sa propre section |
-| Sept documents décrivaient Supabase, Vercel et ESLint | **Backend .NET, OVHcloud, Oxlint** — décisions D9, D10, D15, D17. Propagées le 20/08/2026 |
-| `docs/decisions.md` n'était indexé nulle part | Ajouté à l'ordre de lecture ci-dessus. C'était la cause mécanique de la dérive documentaire |
+Le script engendre un fichier `.env` local (clés tirées au hasard), construit l'image de l'API, lève PostgreSQL, applique les migrations et le référentiel, puis attend que l'API réponde. Il faut compter une trentaine de secondes une fois les images téléchargées.
 
-## Les quatre règles à ne jamais contourner
+| Adresse                               | Contenu                                           |
+| ------------------------------------- | ------------------------------------------------- |
+| http://localhost:5025/scalar          | l'interface pour essayer l'API                    |
+| http://localhost:5025/openapi/v1.json | le document OpenAPI                               |
+| http://localhost:8025                 | Mailpit, qui reçoit les courriels de vérification |
 
-1. **Informer, jamais prescrire.** Un chiffre, une référence, un écart. Aucune action recommandée
-2. **Le LLM ne calcule pas.** Il reçoit des valeurs déjà produites par du code testé
-3. **Brainstorm, plan validé, puis exécution.** Jamais de code avant accord sur un plan
-4. **Produit fini, jamais prototype.** Les **douze** points de la définition de terminé sont cochés avant de passer à la suite
+Pour obtenir un jeton dans Scalar :
+
+1. `POST /api/v1/auth/inscription` avec une adresse et un mot de passe d'au moins dix caractères ;
+2. ouvrir le courriel dans Mailpit, relever `compte` et `code` dans le lien, et les envoyer à `POST /api/v1/auth/verifier-l-adresse` ;
+3. `POST /api/v1/auth/connexion`, puis coller `jetonDAcces` dans l'authentification Bearer.
+
+L'adresse `admin@demo.palier.test`, une fois vérifiée, ouvre la route de santé réservée à l'administration. Les routes d'authentification sont limitées à cinq tentatives par quart d'heure et par adresse IP : c'est voulu.
+
+`./demarrer-demo.sh arreter` arrête les conteneurs, `./demarrer-demo.sh effacer` supprime aussi les données. Les ports se changent par `PALIER_PORT_API`, `PALIER_PORT_COURRIER` et `PALIER_PORT_BASE` au premier lancement.
+
+## Architecture
+
+```
+back/
+  Palier.Domain           règles pures : grandeurs, calculs, décisions. Aucune dépendance.
+  Palier.Application      cas d'usage et décisions de session, sans infrastructure.
+  Palier.Infrastructure   EF Core, Identity, PostgreSQL, courrier, coffre des secrets.
+  Palier.Api              minimal API : routes, authentification, composition.
+db/                       compose de développement, rôles, référentiel SQL.
+docs/                     spécifications, décisions datées, conception de chaque lot.
+```
+
+- Clean Architecture en quatre projets. `Palier.Domain` ne référence aucun autre projet ni aucun paquet d'accès aux données, et une épreuve le vérifie.
+- Minimal API d'ASP.NET Core, groupes de routes versionnés sous `/api/v1`, autorisation posée sur le groupe plutôt que route par route.
+- EF Core 10 et Npgsql sur PostgreSQL 18. Chaque cas d'usage passe par un exécuteur unique qui ouvre la transaction et y pose l'identité de l'appelant (`set_config`), lue dans le jeton vérifié et jamais dans la requête.
+- Row Level Security activée et forcée sur les 21 tables. L'API se connecte sous un rôle qui ne possède aucune table et ne contourne pas RLS ; les migrations passent par un autre rôle, propriétaire ; les tables d'identité par un troisième. Au démarrage, l'API interroge les catalogues de PostgreSQL et refuse de s'ouvrir si l'une de ces conditions n'est pas remplie.
+
+## Sécurité
+
+- ASP.NET Core Identity avec un magasin sur un rôle PostgreSQL dédié.
+- Jeton d'accès JWT de quinze minutes ; jeton de rafraîchissement de quatorze jours dans un cookie HttpOnly, renouvelé à chaque usage. Le rejeu d'un jeton déjà consommé révoque toute la famille de sessions, avec une fenêtre de grâce de trente secondes pour deux onglets concurrents.
+- Double authentification TOTP. Le secret est chiffré en AES-GCM et lié à son propriétaire ; les codes de récupération sont hachés.
+- Verrouillage progressif après échecs (cinq, quinze puis soixante minutes), et refus de connexion à durée égalisée, pour ne pas révéler l'existence d'un compte.
+- Mots de passe hachés en PBKDF2-HMAC-SHA512 à 210 000 itérations, longueur minimale de dix caractères sans règle de composition (NIST SP 800-63B), refus des mots de passe compromis par une liste embarquée et par Have I Been Pwned.
+- Limitation des tentatives par adresse IP réelle, avec une liste de proxys de confiance.
+- En production, la configuration et la clé de données viennent d'OVHcloud KMS : chiffrement par enveloppe, la base ne stocke que des clés chiffrées que seul le coffre sait déballer. Pour la démonstration, un coffre local lit la clé dans l'environnement ; l'API refuse ce mode hors de l'environnement Development, et un test lance le binaire réel en Production pour le prouver.
+- Le document OpenAPI et Scalar ne sont routés qu'en Development.
+- Aucune donnée de santé dans les journaux.
+
+## Tests
+
+| Projet                   | Tests | Ce qu'ils couvrent                                                                                     |
+| ------------------------ | ----- | ------------------------------------------------------------------------------------------------------ |
+| Palier.Domain.Tests      | 261   | règles pures, couverture exigée à 100 %                                                                |
+| Palier.Application.Tests | 252   | cas d'usage et décisions, couverture exigée à 100 %                                                    |
+| Palier.Database.Tests    | 521   | intégration sur un vrai PostgreSQL (Testcontainers) : RLS, rôles, Identity, routes, démarrage de l'API |
+| front                    | 119   | Vitest, dont les épreuves du harnais (lint, format, secrets, i18n)                                     |
+| front e2e                | 3     | Playwright et axe-core                                                                                 |
+
+Les tests d'intégration ne simulent pas la base : ils démarrent PostgreSQL dans un conteneur, appliquent les migrations sous le rôle propriétaire et se connectent sous les rôles réels, pour que RLS s'applique vraiment.
+
+```bash
+dotnet test back/Palier.sln
+```
+
+## Intégration continue
+
+GitHub Actions, sur chaque pull request et sur `main` :
+
+- backend : compilation avec les analyseurs .NET en erreur, tests, `dotnet format`, audit des paquets vulnérables ;
+- front : format, lint (Oxlint), types, tests, code mort (knip), build ;
+- sécurité : gitleaks sur tout l'historique, semgrep (OWASP Top 10), `npm audit`, licences des dépendances ;
+- e2e (Playwright) et performance (Lighthouse CI) ;
+- un job de franchissement qui échoue si l'un des précédents n'a pas réussi, et un gardien qui ouvre une issue quand `main` casse.
+
+Dependabot suit NuGet, npm, les actions et les images, avec un délai avant adoption.
+
+## Limites et suite prévue
+
+- La table des profils et le verrou d'âge (refus sous seize ans) ne sont pas posés : c'est le prochain lot, et la règle existe déjà dans le domaine.
+- Le lien du courriel de vérification vise une page `/verifier` du front, qui n'existe pas encore. Dans la démonstration, le compte et le code se soumettent à l'API directement.
+- Les réponses de l'API ne déclarent pas encore leurs types dans le document OpenAPI : les corps de requête sont décrits, les corps de réponse non.
+- Les exercices et les programmes n'ont pas été relus par un kinésithérapeute ; les valeurs nutritionnelles attendent un diététicien. C'est écrit en tête de chaque fichier concerné.
+- Suite prévue : nutrition, hydratation, puis le front et le déploiement.
+
+## Méthode
+
+Palier est développé en pilotant Claude Code, l'agent de programmation d'Anthropic. Le travail suit une boucle fixe : spécification de chaque lot, plan validé, développement piloté par les tests, revue, puis consignation. Chaque choix structurant est une décision datée dans [`docs/decisions.md`](docs/decisions.md) (84 à ce jour), avec son motif et ce qui la rouvrirait. Les spécifications et les plans sont dans [`docs/superpowers/`](docs/superpowers/), et le brief initial dans [`docs/brief-claude-code.md`](docs/brief-claude-code.md).
+
+Le code reste celui du porteur du projet, Jean-Baptiste Dhondt : l'agent écrit, le porteur décide, relit et tranche.
+
+## Licence
+
+Tous droits réservés. Le code est public pour être lu, pas réutilisé.
