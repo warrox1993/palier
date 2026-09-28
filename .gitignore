@@ -27,3 +27,4 @@ back/Palier.Domain.Tests/Energie/SondeSousDossierTests.cs
 
 # Worktrees git locaux : un dépôt imbriqué commité casse les clones
 .claude/worktrees/
+.worktrees/
