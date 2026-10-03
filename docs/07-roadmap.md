@@ -82,7 +82,7 @@ Le point 7 est structurant : il conditionne l'architecture de la couche IA et do
 
 - TypeScript strict, **Oxlint 1.79 et `oxlint-tsgolint`** — et non ESLint : `typescript-eslint` déclare une contrainte de pair `typescript <6.1.0`, le dépôt est sur TypeScript 7, la chaîne est mécaniquement inutilisable (D18)
 - Prettier, Vitest, Playwright, axe-core, hooks pre-commit et pre-push, CI GitHub Actions. Voir `08-workflow.md`
-- Ce que la ligne d'origine ne disait pas, et qui est en place : `scripts/regles-projet.mjs` (les règles qu'aucun linter ne connaît), le contrôle de licences sur npm et NuGet (D13), gitleaks installé hors npm (D23), semgrep, les actions GitHub épinglées par empreinte (D28), le gardien de `main` qui remplace la protection de branche absente (D29), et le **point d'entrée unique `npm run verify`** (D25)
+- Ce que la ligne d'origine ne disait pas, et qui est en place : `scripts/regles-projet.mjs` (les règles qu'aucun linter ne connaît), le contrôle de licences sur npm et NuGet (D13), gitleaks installé hors npm (D23), semgrep, les actions GitHub épinglées par empreinte (D28), le gardien de `main` qui complète le ruleset de `main` (D29, révisée le 28/09/2026), et le **point d'entrée unique `npm run verify`** (D25)
 
 **Ce que le lot 1 n'a pas livré, et qu'il a daté :** les états d'interface et le parcours au clavier ne sont pas gardables sans écran, et `i18next` n'est pas installé (D31). Les trois livrables arrivent avec le premier écran, au lot 2.
 

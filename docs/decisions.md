@@ -319,6 +319,19 @@ Ce n'est ni un problème de droits ni de syntaxe : la page de tarification confi
 
 **Ce qui la rouvrirait :** un passage à un plan qui offre les règles de dépôt sur le privé, ou le jour où une deuxième personne rejoint le projet. À une seule paire de mains, la discipline peut tenir lieu de verrou ; à deux, elle ne le peut plus.
 
+**Révisée le 28/09/2026 : la barrière côté serveur existe.** Le dépôt est public depuis D84, et GitHub Free offre alors les règles de dépôt. Le ruleset « Protection de la branche par défaut » (id 24111580, cible `~DEFAULT_BRANCH`, actif) :
+
+- interdit la suppression de `main` et le force-push ;
+- exige une pull request (0 approbation, conversations résolues), fusionnée en **squash** seulement, avec un historique linéaire ;
+- exige les six checks de la CI au vert : `front`, `backend`, `securite`, `e2e`, `performance`, `franchissement` ;
+- ne laisse contourner que l'administrateur, et seulement par une fusion de pull request explicitement forcée (`--admin`).
+
+S'y ajoute l'épinglage obligatoire des actions par empreinte SHA, réglé côté dépôt (`sha_pinning_required`), qui fait de D28 une règle du serveur et plus seulement une convention.
+
+Mesuré le même jour : un push direct sur `main` est refusé (`GH013: Repository rule violations`), une fusion demandée pendant que la CI tourne est refusée (`the base branch policy prohibits the merge`), puis acceptée une fois les checks verts.
+
+Ce qui ne change pas : le **gardien de `main`** reste en place. Le ruleset empêche une fusion rouge ; il ne voit pas une `main` qui devient rouge sans fusion (action, image, dépendance ou service extérieur qui bouge). La phrase « il n'existe aucune barrière côté serveur » ci-dessus décrit l'état du 20/08/2026 et n'est plus vraie.
+
 ## D30 — Les alertes Dependabot étaient éteintes côté GitHub, le fichier ne suffit pas
 
 **Tranché le :** 20/08/2026, après mesure d'un audit de complétude.
@@ -1524,4 +1537,4 @@ D33 écartait un Dockerfile et un compose de production pour le **développement
 
 D29 écartait la publication parce que le projet était un service commercial propriétaire. Le porteur la décide le 28/09/2026, pour en faire une vitrine. Conditions posées avant de changer la visibilité : gitleaks sur tout l'historique, recherche de données personnelles dans l'historique, et vérification des licences des données embarquées (`db/SOURCES.md` : aucune donnée tierce). Le code reste sans licence d'utilisation (`UNLICENSED`) : il est lisible, pas réutilisable.
 
-**Conséquence sur D29 :** GitHub Free offre les règles de branche aux dépôts publics. Le gardien de `main` reste en place ; une protection de branche devient possible et reste à décider.
+**Conséquence sur D29 :** GitHub Free offre les règles de branche aux dépôts publics. La protection a été posée le jour même (ruleset « Protection de la branche par défaut », voir la révision de D29) ; le gardien de `main` reste en place.

@@ -1,18 +1,23 @@
-# Gardien de `main` — l'alternative à la protection de branche.
+# Gardien de `main` — l'alarme qui complète la protection de branche.
 #
 # GitHub Free n'autorise les règles de dépôt (protection de branche classique
 # ET rulesets) que sur les dépôts PUBLICS. Vérifié le 20/08/2026 : les deux API
-# rendent « Upgrade to GitHub Pro or make this repository public », en HTTP 403,
-# avec des droits d'administration pleins. `palier` était privé.
+# rendaient « Upgrade to GitHub Pro or make this repository public », en HTTP
+# 403, avec des droits d'administration pleins. `palier` était privé (D29).
 #
-# Il est PUBLIC depuis le 28/09/2026 (D84) : les règles de branche deviennent
-# possibles, et restent à décider. Ce gardien reste en place d'ici là, et après :
-# une règle de branche empêche une fusion rouge, elle ne dit rien d'un `main`
-# cassé par un changement extérieur, une action ou une image qui bouge.
+# Il est PUBLIC depuis le 28/09/2026 (D84), et une barrière côté serveur existe
+# depuis le même jour : le ruleset « Protection de la branche par défaut »
+# (id 24111580) interdit le push direct et le force-push sur `main`, exige une
+# pull request fusionnée en squash, un historique linéaire, et les six checks
+# `front`, `backend`, `securite`, `e2e`, `performance`, `franchissement` au
+# vert. Vérifié : un push direct est refusé (GH013), une fusion est refusée tant
+# que la CI tourne. Seul l'administrateur peut contourner, et seulement par une
+# fusion de pull request explicitement forcée (`--admin`).
 #
-# Il n'existe donc AUCUNE barrière côté serveur : rien ne peut empêcher un push
-# sur `main`, ni refuser une fusion dont la CI est rouge. Ce fichier ne prétend
-# pas en créer une. Il fait la seule chose qui reste possible : rendre l'échec
+# Ce gardien reste en place, parce qu'une règle de branche empêche une fusion
+# ROUGE, pas une `main` qui devient rouge sans fusion : une action, une image,
+# une dépendance ou un service extérieur qui bouge casse `main` sans qu'aucun
+# commit n'y arrive. Il fait ce que le ruleset ne fait pas : rendre cet échec
 # impossible à ignorer, et borner le temps pendant lequel `main` reste cassée
 # sans que personne ne le sache.
 #
@@ -25,13 +30,12 @@
 #     à Linux ont été trouvés le 20/08/2026, tous invisibles sous Windows.
 #
 # Ce qu'il ne protège PAS, et qu'il ne faut pas croire :
-#   - il n'empêche rien. Le code cassé est déjà sur `main` quand il s'exécute.
-#   - `git push --no-verify` contourne le hook local, et ce gardien ne le voit
-#     pas davantage.
-#   - il ne bloque aucune fusion, puisque rien ne le peut sur ce plan.
+#   - il n'empêche rien. Le code cassé est déjà sur `main` quand il s'exécute ;
+#     l'empêchement, c'est le ruleset.
+#   - une fusion forcée par l'administrateur (`--admin`) passe le ruleset ; le
+#     gardien la verra seulement si la CI de `main` échoue ensuite.
 #
-# La seule protection réelle demande GitHub Pro, ou un hébergeur dont les
-# branches protégées sont gratuites sur les dépôts privés. Décision D29.
+# Décisions D29 (révisée le 28/09/2026) et D84.
 name: Gardien de main
 
 on:

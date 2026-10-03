@@ -29,11 +29,44 @@ const DELAI_MAX_MS = 5 * 60 * 1000
  * répertoire courant — les deux en silence, avec un code de sortie 0.
  * Note : `%VAR%` reste développé même entre guillemets ; cmd.exe n'offre aucun
  * moyen de l'empêcher. Ne pas passer de `%` littéral à un outil sous Windows.
+ *
+ * Deux lecteurs relisent la chaîne produite, et elle ne doit tromper aucun des deux :
+ *
+ * - le découpage du runtime C de Microsoft (celui de Node, de .NET et de la
+ *   plupart des outils) : des barres obliques inverses ne sont spéciales que
+ *   devant un guillemet. Elles y sont donc doublées, comme en fin d'argument
+ *   (juste avant le guillemet fermant). L'ancien code ne remplaçait que `"` par
+ *   `\"` : `C:\dossier x\` devenait `"C:\dossier x\"`, où le dernier `\"` se
+ *   lisait comme un guillemet littéral et avalait la suite de la ligne
+ *   (CodeQL js/incomplete-sanitization, 28/09/2026) ;
+ * - cmd.exe, qui ignore les barres inverses et bascule entre « dans » et « hors
+ *   guillemets » à CHAQUE `"`. Un guillemet interne s'écrit donc `""` (deux
+ *   bascules : cmd.exe reste entre guillemets, et le runtime C y lit un `"`
+ *   littéral). Avec `\"`, un `&` placé après un guillemet interne se
+ *   retrouvait hors guillemets pour cmd.exe, donc exécuté comme séparateur de
+ *   commandes.
+ *
+ * Parcours caractère par caractère plutôt que par expressions régulières :
+ * coût linéaire garanti, et chaque règle se lit à une ligne.
  */
-function echapperArgumentWindows(arg: string): string {
+export function echapperArgumentWindows(arg: string): string {
   if (arg === '') return '""'
   if (!/[\s"^&|<>()%!]/.test(arg)) return arg
-  return `"${arg.replace(/"/g, '\\"')}"`
+
+  let resultat = '"'
+  let barresEnAttente = 0
+  for (const caractere of arg) {
+    if (caractere === '\\') {
+      barresEnAttente++
+    } else if (caractere === '"') {
+      resultat += '\\'.repeat(barresEnAttente * 2) + '""'
+      barresEnAttente = 0
+    } else {
+      resultat += '\\'.repeat(barresEnAttente) + caractere
+      barresEnAttente = 0
+    }
+  }
+  return `${resultat}${'\\'.repeat(barresEnAttente * 2)}"`
 }
 
 /**
